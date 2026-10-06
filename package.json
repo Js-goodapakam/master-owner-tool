@@ -1,0 +1,15 @@
+{
+  "name": "friday-master-owner",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": ["Client", "Server", "Server/shared"],
+  "scripts": {
+    "dev": "concurrently \"npm run dev -w @friday/api\" \"npm run dev -w @friday/web\"",
+    "build": "npm run build -w @friday/api && npm run build -w @friday/web",
+    "test": "npm run test -w @friday/api",
+    "lint": "npm run lint -w @friday/api && npm run lint -w @friday/web",
+    "db:migrate": "npm run db:migrate -w @friday/api",
+    "db:seed": "npm run db:seed -w @friday/api"
+  },
+  "devDependencies": {"concurrently": "^9.1.2"}
+}

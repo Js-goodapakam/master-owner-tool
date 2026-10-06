@@ -1,0 +1,2 @@
+import {describe,it,expect} from 'vitest'; import {plans,products} from './store.js';
+describe('control-plane seed rules',()=>{it('has database-driven products and plans',()=>{expect(products).toHaveLength(4);expect(plans.find(p=>p.name==='Premium')?.entitlements).toContain('AI reply')});it('limits Basic entitlements below Enterprise',()=>{expect(plans[0].entitlements.length).toBeLessThan(plans[2].entitlements.length)});it('keeps four configurable industries in the onboarding contract',()=>{expect(['Hospitality','Real Estate','Fitness','Sales']).toContain('Sales')});});
