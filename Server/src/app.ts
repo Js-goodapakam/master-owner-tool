@@ -1,20 +1,446 @@
-import express from 'express'; import cors from 'cors'; import { z } from 'zod'; import { authenticate,authorize } from './auth.js'; import { addAudit,audit,customers,plans,products,ids } from './store.js'; import { MockDeploymentProvider,MockInfrastructureProvider } from './providers.js';
-export const app=express(); app.use(cors({origin:(origin,callback)=>{const allowed=process.env.CORS_ORIGIN?.split(',')||['http://localhost:5173','http://localhost:5174']; callback(null,!origin||allowed.includes(origin));}})); app.use(express.json());
-app.get('/health',(_q,r)=>r.json({status:'ok',mode:process.env.DATABASE_URL?'database':'demo'}));
-app.post('/api/auth/login',async(q,r)=>{if(!process.env.SUPABASE_URL||!process.env.SUPABASE_ANON_KEY)return r.status(501).json({error:'AUTH_NOT_CONFIGURED',message:'Set Supabase Auth environment variables; local demo uses X-Demo-Role.'});const {email,password}=q.body||{};const response=await fetch(`${process.env.SUPABASE_URL}/auth/v1/token?grant_type=password`,{method:'POST',headers:{apikey:process.env.SUPABASE_ANON_KEY,'Content-Type':'application/json'},body:JSON.stringify({email,password})});const payload=await response.json();return r.status(response.status).json(payload)});
-app.use('/api',authenticate);
-const customerSchema=z.object({companyName:z.string().min(2),legalName:z.string().min(2),email:z.string().email(),phone:z.string().optional(),industry:z.enum(['Hospitality','Real Estate','Fitness','Sales']),accountOwner:z.string().min(2),city:z.string().optional(),country:z.string().optional()});
-app.get('/api/dashboard',authorize('customer.view'),async(_q,r)=>{const provider=new MockInfrastructureProvider();r.json({metrics:[['Total Customers',customers.length],['Active Customers',customers.filter(x=>x.status==='ACTIVE').length],['Active Tenants',3],['Active Products',products.length],['Active Subscriptions',3],['Total Users',38],['Infrastructure Nodes',2],['System Health','Healthy']],activity:audit.slice(0,5),onboarding:customers.filter(x=>['ONBOARDING','KYC','TRIAL'].includes(x.status)),subscriptions:{active:2,trial:1,expiring:1,suspended:0,cancelled:0},health:await provider.health()});});
-app.get('/api/customers',authorize('customer.view'),(q,r)=>r.json(customers));
-app.post('/api/customers',authorize('customer.create'),(q,r)=>{const parsed=customerSchema.safeParse(q.body);if(!parsed.success)return r.status(400).json({error:'VALIDATION',details:parsed.error.flatten()});const item={id:ids(),customerId:`FRI-${1000+customers.length+1}`,status:'ONBOARDING' as const,createdAt:new Date().toISOString(),...parsed.data};customers.unshift(item);addAudit('customer.created','customer',item.id,undefined,item);r.status(201).json(item)});
-app.get('/api/customers/:id',authorize('customer.view'),(q,r)=>{const c=customers.find(x=>x.id===q.params.id);if(!c)return r.status(404).json({error:'NOT_FOUND'});r.json({customer:c,products:[products[1]],users:[{name:'Priya Menon',role:'Property Admin',status:'Active',lastLogin:'Today, 10:42'}],subscription:{plan:'Premium',status:c.status==='TRIAL'?'Trial':'Active',startDate:'2026-09-20',expiryDate:'2027-09-19',renewal:'Auto'},configuration:[{key:'branding.primaryColor',value:'#2798e8',scope:'Customer',environment:'PRODUCTION',status:'Active',updatedBy:'Ananya Rao',updatedDate:'2026-10-04'}],infrastructure:[{server:'Friday Production Node 01',environment:'PRODUCTION',status:'Healthy',services:'API, Worker'}],activity:audit.filter(a=>a.resourceId===c.id)})});
-app.patch('/api/customers/:id',authorize('customer.update'),(q,r)=>{const c=customers.find(x=>x.id===q.params.id);if(!c)return r.status(404).json({error:'NOT_FOUND'});const before={...c};Object.assign(c,q.body);addAudit('customer.updated','customer',c.id,before,c);r.json(c)});
-app.post('/api/onboarding',authorize('customer.create'),(q,r)=>{const step=z.number().int().min(1).max(11).parse(q.body.step); const existing=q.body.customerId&&customers.find(c=>c.id===q.body.customerId); if(existing){Object.assign(existing,q.body.data||{}); addAudit('onboarding.step_saved','customer',existing.id,undefined,{step});return r.json({customer:existing,step});} const p=customerSchema.safeParse(q.body.data);if(!p.success)return r.status(400).json({error:'VALIDATION',details:p.error.flatten()});const item={id:ids(),customerId:`FRI-${1000+customers.length+1}`,status:'ONBOARDING' as const,createdAt:new Date().toISOString(),...p.data};customers.unshift(item);addAudit('onboarding.started','customer',item.id,undefined,{step});r.status(201).json({customer:item,step})});
-app.get('/api/products',authorize('product.view'),(_q,r)=>r.json(products)); app.get('/api/plans',authorize('subscription.view'),(_q,r)=>r.json(plans));
-app.get('/api/subscriptions',authorize('subscription.view'),(_q,r)=>r.json(customers.map((c,i)=>({id:`s${i+1}`,customer:c.companyName,product:'Friday AI Desk',plan:i===1?'Premium':'Enterprise',status:c.status==='TRIAL'?'Trial':'Active',expiryDate:'2027-09-19'}))));
-app.post('/api/subscriptions',authorize('subscription.manage'),(q,r)=>{addAudit('subscription.activated','subscription',ids(),undefined,q.body);r.status(201).json({status:'Active',...q.body})});
-app.get('/api/infrastructure',authorize('infrastructure.view'),async(_q,r)=>r.json(await new MockInfrastructureProvider().list()));
-app.get('/api/deployments',authorize('deployment.view'),(_q,r)=>r.json([{id:'dep-1',application:'Friday AI Desk',customer:'Demo Hospitality',environment:'PRODUCTION',version:'2.1.0',status:'Success',started:'2026-10-05 15:20',completed:'2026-10-05 15:24',triggeredBy:'Infrastructure Admin',mock:true}]));
-app.post('/api/deployments',authorize('deployment.manage'),async(q,r)=>{const x=await new MockDeploymentProvider().deploy(q.body);addAudit('deployment.triggered','deployment',x.id,undefined,q.body);r.status(202).json({...x,mock:true,message:'Mock deployment queued; no server action was performed.'})});
-const configuration=[{id:'cfg1',key:'feature.ai_reply',value:'enabled',scope:'Customer',environment:'PRODUCTION',status:'Active',updatedBy:'Ananya Rao',updatedDate:'2026-10-04'}];app.get('/api/configuration',authorize('configuration.view'),(_q,r)=>r.json(configuration));app.patch('/api/configuration/:id',authorize('configuration.manage'),(q,r)=>{const c=configuration.find(x=>x.id===q.params.id);if(!c)return r.status(404).json({error:'NOT_FOUND'});const before={...c};Object.assign(c,q.body,{updatedBy:q.actor?.role,updatedDate:new Date().toISOString()});addAudit('configuration.changed','configuration',c.id,before,c);r.json(c)});
-app.get('/api/audit-logs',authorize('audit.view'),(_q,r)=>r.json(audit)); app.use((err:unknown,_q:express.Request,r:express.Response,_n:express.NextFunction)=>{console.error(err);r.status(500).json({error:'INTERNAL_ERROR',message:'Unexpected server error'})});
+import express from 'express';
+import cors from 'cors';
+import { z } from 'zod';
+import { authenticate, authorize } from './auth.js';
+import {
+  addAudit,
+  audit,
+  customers,
+  plans,
+  products,
+  ids,
+} from './store.js';
+import {
+  MockDeploymentProvider,
+  MockInfrastructureProvider,
+} from './providers.js';
+
+export const app = express();
+
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      const allowed = process.env.CORS_ORIGIN?.split(',') || [
+        'http://localhost:5173',
+        'http://localhost:5174',
+      ];
+
+      callback(null, !origin || allowed.includes(origin));
+    },
+  }),
+);
+
+app.use(express.json());
+
+app.get('/health', (_q, r) =>
+  r.json({
+    status: 'ok',
+    mode: process.env.DATABASE_URL ? 'database' : 'demo',
+  }),
+);
+
+app.post('/api/auth/login', async (q, r) => {
+  if (!process.env.SUPABASE_URL || !process.env.SUPABASE_ANON_KEY) {
+    return r.status(501).json({
+      error: 'AUTH_NOT_CONFIGURED',
+      message:
+        'Set Supabase Auth environment variables; local demo uses X-Demo-Role.',
+    });
+  }
+
+  const { email, password } = q.body || {};
+
+  const response = await fetch(
+    `${process.env.SUPABASE_URL}/auth/v1/token?grant_type=password`,
+    {
+      method: 'POST',
+      headers: {
+        apikey: process.env.SUPABASE_ANON_KEY,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ email, password }),
+    },
+  );
+
+  const payload = await response.json();
+
+  return r.status(response.status).json(payload);
+});
+
+app.use('/api', authenticate);
+
+const customerSchema = z.object({
+  companyName: z.string().min(2),
+  legalName: z.string().min(2),
+  email: z.string().email(),
+  phone: z.string().optional(),
+  industry: z.enum(['Hospitality', 'Real Estate', 'Fitness', 'Sales']),
+  accountOwner: z.string().min(2),
+  city: z.string().optional(),
+  country: z.string().optional(),
+});
+
+app.get('/api/dashboard', authorize('customer.view'), async (_q, r) => {
+  const provider = new MockInfrastructureProvider();
+
+  r.json({
+    metrics: [
+      ['Total Customers', customers.length],
+      [
+        'Active Customers',
+        customers.filter((x) => x.status === 'ACTIVE').length,
+      ],
+      ['Active Tenants', 3],
+      ['Active Products', products.length],
+      ['Active Subscriptions', 3],
+      ['Total Users', 38],
+      ['Infrastructure Nodes', 2],
+      ['System Health', 'Healthy'],
+    ],
+    activity: audit.slice(0, 5),
+    onboarding: customers.filter((x) =>
+      ['ONBOARDING', 'KYC', 'TRIAL'].includes(x.status),
+    ),
+    subscriptions: {
+      active: 2,
+      trial: 1,
+      expiring: 1,
+      suspended: 0,
+      cancelled: 0,
+    },
+    health: await provider.health(),
+  });
+});
+
+app.get('/api/customers', authorize('customer.view'), (_q, r) =>
+  r.json(customers),
+);
+
+app.post('/api/customers', authorize('customer.create'), (q, r) => {
+  const parsed = customerSchema.safeParse(q.body);
+
+  if (!parsed.success) {
+    return r.status(400).json({
+      error: 'VALIDATION',
+      details: parsed.error.flatten(),
+    });
+  }
+
+  const item = {
+    id: ids(),
+    customerId: `FRI-${1000 + customers.length + 1}`,
+    status: 'ONBOARDING' as const,
+    createdAt: new Date().toISOString(),
+    ...parsed.data,
+  };
+
+  customers.unshift(item);
+
+  addAudit(
+    'customer.created',
+    'customer',
+    item.id,
+    undefined,
+    item,
+  );
+
+  r.status(201).json(item);
+});
+
+app.get('/api/customers/:id', authorize('customer.view'), (q, r) => {
+  const c = customers.find((x) => x.id === q.params.id);
+
+  if (!c) {
+    return r.status(404).json({ error: 'NOT_FOUND' });
+  }
+
+  r.json({
+    customer: c,
+    products: [products[1]],
+    users: [
+      {
+        name: 'Priya Menon',
+        role: 'Property Admin',
+        status: 'Active',
+        lastLogin: 'Today, 10:42',
+      },
+    ],
+    subscription: {
+      plan: 'Premium',
+      status: c.status === 'TRIAL' ? 'Trial' : 'Active',
+      startDate: '2026-09-20',
+      expiryDate: '2027-09-19',
+      renewal: 'Auto',
+    },
+    configuration: [
+      {
+        key: 'branding.primaryColor',
+        value: '#2798e8',
+        scope: 'Customer',
+        environment: 'PRODUCTION',
+        status: 'Active',
+        updatedBy: 'Ananya Rao',
+        updatedDate: '2026-10-04',
+      },
+    ],
+    infrastructure: [
+      {
+        server: 'Friday Production Node 01',
+        environment: 'PRODUCTION',
+        status: 'Healthy',
+        services: 'API, Worker',
+      },
+    ],
+    activity: audit.filter((a) => a.resourceId === c.id),
+  });
+});
+
+app.patch('/api/customers/:id', authorize('customer.update'), (q, r) => {
+  const c = customers.find((x) => x.id === q.params.id);
+
+  if (!c) {
+    return r.status(404).json({ error: 'NOT_FOUND' });
+  }
+
+  const before = { ...c };
+
+  Object.assign(c, q.body);
+
+  addAudit(
+    'customer.updated',
+    'customer',
+    c.id,
+    before,
+    c,
+  );
+
+  r.json(c);
+});
+
+app.post('/api/onboarding', authorize('customer.create'), (q, r) => {
+  const step = z
+    .number()
+    .int()
+    .min(1)
+    .max(11)
+    .parse(q.body.step);
+
+  const existing =
+    q.body.customerId &&
+    customers.find((c) => c.id === q.body.customerId);
+
+  if (existing) {
+    Object.assign(existing, q.body.data || {});
+
+    addAudit(
+      'onboarding.step_saved',
+      'customer',
+      existing.id,
+      undefined,
+      { step },
+    );
+
+    return r.json({
+      customer: existing,
+      step,
+    });
+  }
+
+  const p = customerSchema.safeParse(q.body.data);
+
+  if (!p.success) {
+    return r.status(400).json({
+      error: 'VALIDATION',
+      details: p.error.flatten(),
+    });
+  }
+
+  const item = {
+    id: ids(),
+    customerId: `FRI-${1000 + customers.length + 1}`,
+    status: 'ONBOARDING' as const,
+    createdAt: new Date().toISOString(),
+    ...p.data,
+  };
+
+  customers.unshift(item);
+
+  addAudit(
+    'onboarding.started',
+    'customer',
+    item.id,
+    undefined,
+    { step },
+  );
+
+  r.status(201).json({
+    customer: item,
+    step,
+  });
+});
+
+app.get('/api/products', authorize('product.view'), (_q, r) =>
+  r.json(products),
+);
+
+app.get('/api/plans', authorize('subscription.view'), (_q, r) =>
+  r.json(plans),
+);
+
+app.get(
+  '/api/subscriptions',
+  authorize('subscription.view'),
+  (_q, r) =>
+    r.json(
+      customers.map((c, i) => ({
+        id: `s${i + 1}`,
+        customer: c.companyName,
+        product: 'Friday AI Desk',
+        plan: i === 1 ? 'Premium' : 'Enterprise',
+        status: c.status === 'TRIAL' ? 'Trial' : 'Active',
+        expiryDate: '2027-09-19',
+      })),
+    ),
+);
+
+app.post(
+  '/api/subscriptions',
+  authorize('subscription.manage'),
+  (q, r) => {
+    addAudit(
+      'subscription.activated',
+      'subscription',
+      ids(),
+      undefined,
+      q.body,
+    );
+
+    r.status(201).json({
+      status: 'Active',
+      ...q.body,
+    });
+  },
+);
+
+app.get(
+  '/api/infrastructure',
+  authorize('infrastructure.view'),
+  async (_q, r) =>
+    r.json(await new MockInfrastructureProvider().list()),
+);
+
+app.get(
+  '/api/deployments',
+  authorize('deployment.view'),
+  (_q, r) =>
+    r.json([
+      {
+        id: 'dep-1',
+        application: 'Friday AI Desk',
+        customer: 'Demo Hospitality',
+        environment: 'PRODUCTION',
+        version: '2.1.0',
+        status: 'Success',
+        started: '2026-10-05 15:20',
+        completed: '2026-10-05 15:24',
+        triggeredBy: 'Infrastructure Admin',
+        mock: true,
+      },
+    ]),
+);
+
+app.post(
+  '/api/deployments',
+  authorize('deployment.manage'),
+  async (q, r) => {
+    const x = await new MockDeploymentProvider().deploy(q.body);
+
+    addAudit(
+      'deployment.triggered',
+      'deployment',
+      x.id,
+      undefined,
+      q.body,
+    );
+
+    r.status(202).json({
+      ...x,
+      mock: true,
+      message:
+        'Mock deployment queued; no server action was performed.',
+    });
+  },
+);
+
+const configuration = [
+  {
+    id: 'cfg1',
+    key: 'feature.ai_reply',
+    value: 'enabled',
+    scope: 'Customer',
+    environment: 'PRODUCTION',
+    status: 'Active',
+    updatedBy: 'Ananya Rao',
+    updatedDate: '2026-10-04',
+  },
+];
+
+app.get(
+  '/api/configuration',
+  authorize('configuration.view'),
+  (_q, r) => r.json(configuration),
+);
+
+app.patch(
+  '/api/configuration/:id',
+  authorize('configuration.manage'),
+  (q, r) => {
+    const c = configuration.find((x) => x.id === q.params.id);
+
+    if (!c) {
+      return r.status(404).json({ error: 'NOT_FOUND' });
+    }
+
+    const before = { ...c };
+
+    Object.assign(c, q.body, {
+      updatedBy: q.actor?.role,
+      updatedDate: new Date().toISOString(),
+    });
+
+    addAudit(
+      'configuration.changed',
+      'configuration',
+      c.id,
+      before,
+      c,
+    );
+
+    r.json(c);
+  },
+);
+
+app.get(
+  '/api/audit-logs',
+  authorize('audit.view'),
+  (_q, r) => r.json(audit),
+);
+
+app.use(
+  (
+    err: unknown,
+    _q: express.Request,
+    r: express.Response,
+    _n: express.NextFunction,
+  ) => {
+    console.error(err);
+
+    r.status(500).json({
+      error: 'INTERNAL_ERROR',
+      message: 'Unexpected server error',
+    });
+  },
+);
+
+// Vercel / Node server default export
+export default app;
