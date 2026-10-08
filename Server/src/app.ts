@@ -11,6 +11,12 @@ import {
   ids,
 } from './store.js';
 import {
+  findCustomers,
+  findCustomerById,
+  createCustomer,
+  updateCustomer,
+} from './db/customers.js';
+import {
   MockDeploymentProvider,
   MockInfrastructureProvider,
 } from './providers.js';
@@ -74,12 +80,20 @@ const customerSchema = z.object({
   legalName: z.string().min(2),
   email: z.string().email(),
   phone: z.string().optional(),
-  industry: z.enum(['Hospitality', 'Real Estate', 'Fitness', 'Sales']),
+  industry: z.enum([
+    'Hospitality',
+    'Real Estate',
+    'Fitness',
+    'Sales',
+  ]),
   accountOwner: z.string().min(2),
   city: z.string().optional(),
   country: z.string().optional(),
 });
 
+/*
+ * Dashboard
+ */
 app.get('/api/dashboard', authorize('customer.view'), async (_q, r) => {
   const provider = new MockInfrastructureProvider();
 
@@ -112,181 +126,269 @@ app.get('/api/dashboard', authorize('customer.view'), async (_q, r) => {
   });
 });
 
-app.get('/api/customers', authorize('customer.view'), (_q, r) =>
-  r.json(customers),
+/*
+ * Customers
+ */
+
+/**
+ * GET /api/customers
+ *
+ * Reads customers from PostgreSQL.
+ */
+app.get(
+  '/api/customers',
+  authorize('customer.view'),
+  async (_q, r) => {
+    const result = await findCustomers();
+
+    r.json(result);
+  },
 );
 
-app.post('/api/customers', authorize('customer.create'), (q, r) => {
-  const parsed = customerSchema.safeParse(q.body);
+/**
+ * POST /api/customers
+ *
+ * Creates a customer in PostgreSQL.
+ */
+app.post(
+  '/api/customers',
+  authorize('customer.create'),
+  async (q, r) => {
+    const parsed = customerSchema.safeParse(q.body);
 
-  if (!parsed.success) {
-    return r.status(400).json({
-      error: 'VALIDATION',
-      details: parsed.error.flatten(),
-    });
-  }
+    if (!parsed.success) {
+      return r.status(400).json({
+        error: 'VALIDATION',
+        details: parsed.error.flatten(),
+      });
+    }
 
-  const item = {
-    id: ids(),
-    customerId: `FRI-${1000 + customers.length + 1}`,
-    status: 'ONBOARDING' as const,
-    createdAt: new Date().toISOString(),
-    ...parsed.data,
-  };
-
-  customers.unshift(item);
-
-  addAudit(
-    'customer.created',
-    'customer',
-    item.id,
-    undefined,
-    item,
-  );
-
-  r.status(201).json(item);
-});
-
-app.get('/api/customers/:id', authorize('customer.view'), (q, r) => {
-  const c = customers.find((x) => x.id === q.params.id);
-
-  if (!c) {
-    return r.status(404).json({ error: 'NOT_FOUND' });
-  }
-
-  r.json({
-    customer: c,
-    products: [products[1]],
-    users: [
-      {
-        name: 'Priya Menon',
-        role: 'Property Admin',
-        status: 'Active',
-        lastLogin: 'Today, 10:42',
-      },
-    ],
-    subscription: {
-      plan: 'Premium',
-      status: c.status === 'TRIAL' ? 'Trial' : 'Active',
-      startDate: '2026-09-20',
-      expiryDate: '2027-09-19',
-      renewal: 'Auto',
-    },
-    configuration: [
-      {
-        key: 'branding.primaryColor',
-        value: '#2798e8',
-        scope: 'Customer',
-        environment: 'PRODUCTION',
-        status: 'Active',
-        updatedBy: 'Ananya Rao',
-        updatedDate: '2026-10-04',
-      },
-    ],
-    infrastructure: [
-      {
-        server: 'Friday Production Node 01',
-        environment: 'PRODUCTION',
-        status: 'Healthy',
-        services: 'API, Worker',
-      },
-    ],
-    activity: audit.filter((a) => a.resourceId === c.id),
-  });
-});
-
-app.patch('/api/customers/:id', authorize('customer.update'), (q, r) => {
-  const c = customers.find((x) => x.id === q.params.id);
-
-  if (!c) {
-    return r.status(404).json({ error: 'NOT_FOUND' });
-  }
-
-  const before = { ...c };
-
-  Object.assign(c, q.body);
-
-  addAudit(
-    'customer.updated',
-    'customer',
-    c.id,
-    before,
-    c,
-  );
-
-  r.json(c);
-});
-
-app.post('/api/onboarding', authorize('customer.create'), (q, r) => {
-  const step = z
-    .number()
-    .int()
-    .min(1)
-    .max(11)
-    .parse(q.body.step);
-
-  const existing =
-    q.body.customerId &&
-    customers.find((c) => c.id === q.body.customerId);
-
-  if (existing) {
-    Object.assign(existing, q.body.data || {});
+    const item = await createCustomer(parsed.data);
 
     addAudit(
-      'onboarding.step_saved',
+      'customer.created',
       'customer',
-      existing.id,
+      item.id,
+      undefined,
+      item,
+    );
+
+    r.status(201).json(item);
+  },
+);
+
+/**
+ * GET /api/customers/:id
+ *
+ * Reads one customer from PostgreSQL.
+ */
+app.get(
+  '/api/customers/:id',
+  authorize('customer.view'),
+  async (q, r) => {
+    const customerId = String(q.params.id);
+
+    const c = await findCustomerById(customerId);
+
+    if (!c) {
+      return r.status(404).json({
+        error: 'NOT_FOUND',
+      });
+    }
+
+    r.json({
+      customer: c,
+
+      products: [products[1]],
+
+      users: [
+        {
+          name: 'Priya Menon',
+          role: 'Property Admin',
+          status: 'Active',
+          lastLogin: 'Today, 10:42',
+        },
+      ],
+
+      subscription: {
+        plan: 'Premium',
+        status: c.status === 'TRIAL' ? 'Trial' : 'Active',
+        startDate: '2026-09-20',
+        expiryDate: '2027-09-19',
+        renewal: 'Auto',
+      },
+
+      configuration: [
+        {
+          key: 'branding.primaryColor',
+          value: '#2798e8',
+          scope: 'Customer',
+          environment: 'PRODUCTION',
+          status: 'Active',
+          updatedBy: 'Ananya Rao',
+          updatedDate: '2026-10-04',
+        },
+      ],
+
+      infrastructure: [
+        {
+          server: 'Friday Production Node 01',
+          environment: 'PRODUCTION',
+          status: 'Healthy',
+          services: 'API, Worker',
+        },
+      ],
+
+      activity: audit.filter(
+        (a) => a.resourceId === customerId,
+      ),
+    });
+  },
+);
+
+/**
+ * PATCH /api/customers/:id
+ *
+ * Updates a customer in PostgreSQL.
+ */
+app.patch(
+  '/api/customers/:id',
+  authorize('customer.update'),
+  async (q, r) => {
+    const customerId = String(q.params.id);
+
+    const existing = await findCustomerById(customerId);
+
+    if (!existing) {
+      return r.status(404).json({
+        error: 'NOT_FOUND',
+      });
+    }
+
+    const before = { ...existing };
+
+    const parsed = customerSchema.partial().safeParse(q.body);
+
+    if (!parsed.success) {
+      return r.status(400).json({
+        error: 'VALIDATION',
+        details: parsed.error.flatten(),
+      });
+    }
+
+    const updated = await updateCustomer(
+      customerId,
+      parsed.data,
+    );
+
+    if (!updated) {
+      return r.status(404).json({
+        error: 'NOT_FOUND',
+      });
+    }
+
+    addAudit(
+      'customer.updated',
+      'customer',
+      customerId,
+      before,
+      updated,
+    );
+
+    r.json(updated);
+  },
+);
+
+/*
+ * Onboarding
+ */
+app.post(
+  '/api/onboarding',
+  authorize('customer.create'),
+  async (q, r) => {
+    const step = z
+      .number()
+      .int()
+      .min(1)
+      .max(11)
+      .parse(q.body.step);
+
+    const existing =
+      q.body.customerId &&
+      customers.find((c) => c.id === q.body.customerId);
+
+    if (existing) {
+      Object.assign(existing, q.body.data || {});
+
+      addAudit(
+        'onboarding.step_saved',
+        'customer',
+        existing.id,
+        undefined,
+        { step },
+      );
+
+      return r.json({
+        customer: existing,
+        step,
+      });
+    }
+
+    const p = customerSchema.safeParse(q.body.data);
+
+    if (!p.success) {
+      return r.status(400).json({
+        error: 'VALIDATION',
+        details: p.error.flatten(),
+      });
+    }
+
+    const item = {
+      id: ids(),
+      customerId: `FRI-${1000 + customers.length + 1}`,
+      status: 'ONBOARDING' as const,
+      createdAt: new Date().toISOString(),
+      ...p.data,
+    };
+
+    customers.unshift(item);
+
+    addAudit(
+      'onboarding.started',
+      'customer',
+      item.id,
       undefined,
       { step },
     );
 
-    return r.json({
-      customer: existing,
+    r.status(201).json({
+      customer: item,
       step,
     });
-  }
-
-  const p = customerSchema.safeParse(q.body.data);
-
-  if (!p.success) {
-    return r.status(400).json({
-      error: 'VALIDATION',
-      details: p.error.flatten(),
-    });
-  }
-
-  const item = {
-    id: ids(),
-    customerId: `FRI-${1000 + customers.length + 1}`,
-    status: 'ONBOARDING' as const,
-    createdAt: new Date().toISOString(),
-    ...p.data,
-  };
-
-  customers.unshift(item);
-
-  addAudit(
-    'onboarding.started',
-    'customer',
-    item.id,
-    undefined,
-    { step },
-  );
-
-  r.status(201).json({
-    customer: item,
-    step,
-  });
-});
-
-app.get('/api/products', authorize('product.view'), (_q, r) =>
-  r.json(products),
+  },
 );
 
-app.get('/api/plans', authorize('subscription.view'), (_q, r) =>
-  r.json(plans),
+/*
+ * Products
+ */
+app.get(
+  '/api/products',
+  authorize('product.view'),
+  (_q, r) => r.json(products),
 );
 
+/*
+ * Plans
+ */
+app.get(
+  '/api/plans',
+  authorize('subscription.view'),
+  (_q, r) => r.json(plans),
+);
+
+/*
+ * Subscriptions
+ */
 app.get(
   '/api/subscriptions',
   authorize('subscription.view'),
@@ -322,6 +424,9 @@ app.post(
   },
 );
 
+/*
+ * Infrastructure
+ */
 app.get(
   '/api/infrastructure',
   authorize('infrastructure.view'),
@@ -329,6 +434,9 @@ app.get(
     r.json(await new MockInfrastructureProvider().list()),
 );
 
+/*
+ * Deployments
+ */
 app.get(
   '/api/deployments',
   authorize('deployment.view'),
@@ -372,6 +480,9 @@ app.post(
   },
 );
 
+/*
+ * Configuration
+ */
 const configuration = [
   {
     id: 'cfg1',
@@ -395,10 +506,14 @@ app.patch(
   '/api/configuration/:id',
   authorize('configuration.manage'),
   (q, r) => {
-    const c = configuration.find((x) => x.id === q.params.id);
+    const c = configuration.find(
+      (x) => x.id === q.params.id,
+    );
 
     if (!c) {
-      return r.status(404).json({ error: 'NOT_FOUND' });
+      return r.status(404).json({
+        error: 'NOT_FOUND',
+      });
     }
 
     const before = { ...c };
@@ -420,12 +535,18 @@ app.patch(
   },
 );
 
+/*
+ * Audit logs
+ */
 app.get(
   '/api/audit-logs',
   authorize('audit.view'),
   (_q, r) => r.json(audit),
 );
 
+/*
+ * Global error handler
+ */
 app.use(
   (
     err: unknown,
