@@ -26,22 +26,16 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 24
+          cache: npm
 
-      - name: Check repository structure
-        run: |
-          test -f Client/package.json
-          test -f Server/package.json
+      - name: Install workspace dependencies
+        run: npm ci
 
-      - name: Install and build frontend
-        working-directory: Client
-        run: |
-          npm ci
-          npm run build
+      - name: Build all workspaces
+        run: npm run build
 
-      - name: Install and build backend
-        working-directory: Server
-        run: |
-          npm ci
-          npm run lint
-          npm run build
+      - name: Lint all workspaces
+        run: npm run lint
 
+      - name: Run backend tests
+        run: npm test
