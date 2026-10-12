@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ChangeEvent, type FormEvent } from 'react';
 import { createRoot } from 'react-dom/client';
+import Login from './Login';
 
 import {
   Activity,
@@ -7,9 +8,11 @@ import {
   DatabaseBackup,
   FileClock,
   LayoutDashboard,
+  LogOut,
   Package,
   PlugZap,
   Rocket,
+  Search,
   Server,
   Settings,
   Settings2,
@@ -33,21 +36,23 @@ import {
 
 import './styles.css';
 import './auth.css';
+import './UsersAccess.css';
 
 import Dashboard from './Dashboard';
+import NewOnboarding from './NewOnboarding';
 
 
 /* =========================================================
-   FRIDAY MASTER NAVIGATION
+   FRIDAY OWNER NAVIGATION
 ========================================================= */
 
 const nav = [
   {
-    name: 'Dashboard',
+    name: 'Home',
     icon: LayoutDashboard,
   },
   {
-    name: 'Customer Onboarding',
+    name: 'New Onboarding',
     icon: UserPlus,
   },
   {
@@ -55,7 +60,7 @@ const nav = [
     icon: Users,
   },
   {
-    name: 'Products',
+    name: 'Products & Plans',
     icon: Package,
   },
   {
@@ -71,19 +76,19 @@ const nav = [
     icon: Rocket,
   },
   {
-    name: 'Configuration',
+    name: 'Customer Settings',
     icon: Settings2,
   },
   {
-    name: 'Integrations',
+    name: 'Connected Integrations',
     icon: PlugZap,
   },
   {
-    name: 'Monitoring',
+    name: 'Live Monitoring',
     icon: Activity,
   },
   {
-    name: 'Backup & Recovery',
+    name: 'Backup & Restore',
     icon: DatabaseBackup,
   },
   {
@@ -95,7 +100,7 @@ const nav = [
     icon: FileClock,
   },
   {
-    name: 'Master Settings',
+    name: 'Owner Settings',
     icon: Settings,
   },
 ];
@@ -111,15 +116,23 @@ function Customers({
   open: (id: string) => void;
 }) {
   const [rows, setRows] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   useEffect(() => {
+    let active = true;
     api<any[]>('/customers')
-      .then(setRows)
-      .catch(() => setRows([]));
+      .then((result) => { if (active) setRows(result); })
+      .catch((err: unknown) => {
+        if (active) setError(err instanceof Error ? err.message : 'Could not load customers.');
+      })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
   }, []);
 
   return (
     <Card title="Customers">
+      {loading ? <Loading /> : error ? <ErrorState message={error} /> : null}
       <Table
         headers={[
           'Customer',
@@ -149,7 +162,7 @@ function Customers({
 
             <td>
               <Button onClick={() => open(x.id)}>
-                Customer 360
+                View Customer
               </Button>
             </td>
           </tr>
@@ -178,14 +191,14 @@ function Onboarding() {
 
   const steps = [
     'Customer Details',
-    'Company Details',
+    'Business Details',
     'KYC / Documents',
     'Product Selection',
     'Plan Selection',
-    'Tenant Creation',
+    'Create Customer Account',
     'Product Configuration',
-    'Customer Admin',
-    'Infrastructure Assignment',
+    'Customer Administrator',
+    'Hosting Setup',
     'Review',
     'Activate',
   ];
@@ -217,11 +230,11 @@ function Onboarding() {
     <Card>
       <div className="wizard-head">
         <div>
-          <h2>Customer onboarding</h2>
+          <h2>New Customer Request</h2>
 
           <p>
-            Progressive saving is enabled. Every step is
-            validated by the API.
+            Review the signup details and prepare the account for trial activation.
+            Only steps supported by the connected service can be saved.
           </p>
         </div>
 
@@ -252,7 +265,7 @@ function Onboarding() {
         <div className="form">
 
           <Input
-            placeholder="Company name"
+            placeholder="Company or Business Name *"
             value={form.companyName}
             onChange={(e) =>
               setForm({
@@ -263,7 +276,7 @@ function Onboarding() {
           />
 
           <Input
-            placeholder="Legal name"
+            placeholder="Registered Business Name (if applicable)"
             value={form.legalName}
             onChange={(e) =>
               setForm({
@@ -274,7 +287,7 @@ function Onboarding() {
           />
 
           <Input
-            placeholder="Admin email"
+            placeholder="Customer Administrator Email Address *"
             value={form.email}
             onChange={(e) =>
               setForm({
@@ -304,7 +317,7 @@ function Onboarding() {
           </Select>
 
           <Input
-            placeholder="Account owner"
+            placeholder="Friday Team Member Handling This Request"
             value={form.accountOwner}
             onChange={(e) =>
               setForm({
@@ -357,6 +370,7 @@ function Customer360({
   back: () => void;
 }) {
   const [d, setD] = useState<any>();
+  const [activeTab, setActiveTab] = useState('Overview');
 
   useEffect(() => {
     api<any>(`/customers/${id}`)
@@ -368,6 +382,25 @@ function Customer360({
   }
 
   const c = d.customer;
+  const tabs = ['Overview', 'Products', 'Users', 'Subscription', 'Configuration', 'Infrastructure', 'Activity'];
+
+  const content = activeTab === 'Overview' ? <>
+    <div className="cols">
+      <Card title="Company information"><p><b>Legal name:</b> {c.legalName}</p><p><b>Location:</b> {c.city || '—'}, {c.country || '—'}</p><p><b>Account owner:</b> {c.accountOwner}</p></Card>
+      <Card title="Subscription"><p><b>{d.subscription.plan}</b> · {d.subscription.status}</p><p>Expiry: {d.subscription.expiryDate}</p><p>Renewal: {d.subscription.renewal}</p></Card>
+    </div>
+    <Card title="Assigned products">{d.products.map((p: any) => <p key={p.id} className="health"><span>{p.name}<small>{p.version}</small></span><Badge>{p.status}</Badge></p>)}</Card>
+  </> : activeTab === 'Products' ? <Card title="Assigned products" subtitle="Products and their current tenant entitlement status."><Table headers={['Product', 'Version', 'Modules', 'Features', 'Status']}>
+    {d.products.map((p: any) => <tr key={p.id}><td>{p.name}</td><td>{p.version}</td><td>{p.modules?.join(', ') || '—'}</td><td>{p.features?.join(', ') || '—'}</td><td><Badge>{p.status}</Badge></td></tr>)}
+  </Table></Card> : activeTab === 'Users' ? <Card title="Customer users" subtitle="Users with access to this customer workspace."><Table headers={['Name', 'Role', 'Status', 'Last login']}>
+    {d.users.map((user: any) => <tr key={`${user.name}-${user.role}`}><td>{user.name}</td><td>{user.role}</td><td><Badge>{user.status}</Badge></td><td>{user.lastLogin}</td></tr>)}
+  </Table></Card> : activeTab === 'Subscription' ? <Card title="Subscription details"><div className="customer-detail-grid"><div><small>Plan</small><b>{d.subscription.plan}</b></div><div><small>Status</small><b>{d.subscription.status}</b></div><div><small>Start date</small><b>{d.subscription.startDate}</b></div><div><small>Expiry date</small><b>{d.subscription.expiryDate}</b></div><div><small>Renewal</small><b>{d.subscription.renewal}</b></div></div></Card> : activeTab === 'Configuration' ? <Card title="Customer configuration" subtitle="Configuration values currently applied to this customer."><Table headers={['Key', 'Value', 'Scope', 'Environment', 'Status', 'Updated by', 'Updated date']}>
+    {d.configuration.map((item: any) => <tr key={item.key}><td>{item.key}</td><td>{item.value}</td><td>{item.scope}</td><td>{item.environment}</td><td><Badge>{item.status}</Badge></td><td>{item.updatedBy}</td><td>{item.updatedDate}</td></tr>)}
+  </Table></Card> : activeTab === 'Infrastructure' ? <Card title="Infrastructure" subtitle="Current hosting and service health for this customer."><Table headers={['Server', 'Environment', 'Status', 'Services']}>
+    {d.infrastructure.map((item: any) => <tr key={item.server}><td>{item.server}</td><td>{item.environment}</td><td><Badge>{item.status}</Badge></td><td>{item.services}</td></tr>)}
+  </Table></Card> : <Card title="Customer activity" subtitle="Auditable changes for this customer."><Table headers={['Actor', 'Action', 'Resource', 'Time']}>
+    {d.activity.length === 0 ? <tr><td colSpan={4}>No recorded activity for this customer.</td></tr> : d.activity.map((item: any) => <tr key={item.id}><td>{item.actor}</td><td>{item.action}</td><td>{item.resourceType} · {item.resourceId}</td><td>{new Date(item.timestamp).toLocaleString('en-IN')}</td></tr>)}
+  </Table></Card>;
 
   return (
     <>
@@ -392,84 +425,13 @@ function Customer360({
       </div>
 
       <div className="tabs">
-        {[
-          'Overview',
-          'Products',
-          'Users',
-          'Subscription',
-          'Configuration',
-          'Infrastructure',
-          'Activity',
-        ].map((x) => (
-          <button key={x}>
+        {tabs.map((x) => (
+          <button key={x} className={activeTab === x ? 'active' : ''} onClick={() => setActiveTab(x)} aria-current={activeTab === x ? 'page' : undefined}>
             {x}
           </button>
         ))}
       </div>
-
-      <div className="cols">
-
-        <Card title="Company information">
-
-          <p>
-            <b>Legal name:</b>{' '}
-            {c.legalName}
-          </p>
-
-          <p>
-            <b>Location:</b>{' '}
-            {c.city}, {c.country}
-          </p>
-
-          <p>
-            <b>Account owner:</b>{' '}
-            {c.accountOwner}
-          </p>
-
-        </Card>
-
-        <Card title="Subscription">
-
-          <p>
-            <b>
-              {d.subscription.plan}
-            </b>{' '}
-            · {d.subscription.status}
-          </p>
-
-          <p>
-            Expiry: {d.subscription.expiryDate}
-          </p>
-
-          <p>
-            Renewal: {d.subscription.renewal}
-          </p>
-
-        </Card>
-
-      </div>
-
-      <Card title="Assigned products">
-
-        {d.products.map((p: any) => (
-          <p
-            key={p.id}
-            className="health"
-          >
-            <span>
-              {p.name}
-              <small>
-                {p.version}
-              </small>
-            </span>
-
-            <Badge>
-              {p.status}
-            </Badge>
-          </p>
-        ))}
-
-      </Card>
+      {content}
     </>
   );
 }
@@ -500,6 +462,12 @@ function Collection({
     return <Loading />;
   }
 
+  const valueFor = (row: Record<string, unknown>, header: string) => {
+    const key = Object.keys(row).find((candidate) => candidate.toLowerCase() === header.toLowerCase());
+    const value = key ? row[key] : undefined;
+    return value === undefined || value === null || value === '' ? '—' : String(value);
+  };
+
   return (
     <Card title={title}>
 
@@ -510,15 +478,7 @@ function Collection({
 
             {headers.map((h) => (
               <td key={h}>
-                {String(
-                  x[
-                    h
-                      .toLowerCase()
-                      .replace(/ /g, '')
-                  ] ??
-                    x[h.toLowerCase()] ??
-                    '—'
-                )}
+                {valueFor(x, h)}
               </td>
             ))}
 
@@ -529,6 +489,110 @@ function Collection({
 
     </Card>
   );
+}
+
+function UsersAccess() {
+  const [rows, setRows] = useState<any[]>([]);
+  const [form, setForm] = useState({ name: '', email: '', role: 'Operations' });
+  const [message, setMessage] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState<any | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
+  // UI visibility only: the current header currently displays the signed-in demo
+  // profile as Owner. Prefer an app-supplied role if present, then fall back to
+  // that displayed demo role. This is NOT authorization; the backend must verify
+  // the role before allowing any deletion.
+  const currentRole = (
+    localStorage.getItem('friday-owner-role') ||
+    'Owner'
+  ).trim();
+  const canDeleteUsers = ['Owner', 'Super Admin', 'Admin'].includes(currentRole);
+
+  useEffect(() => {
+    api<any[]>('/users-access')
+      .then(setRows)
+      .catch((err: Error) => setMessage(err.message));
+  }, []);
+
+  const invite = async (event: FormEvent) => {
+    event.preventDefault();
+    setSaving(true);
+    setMessage('');
+    try {
+      const user = await api<any>('/users-access', { method: 'POST', body: JSON.stringify(form) });
+      setRows((current) => [user, ...current]);
+      setForm({ name: '', email: '', role: 'Operations' });
+      setMessage(`Invitation created for ${user.email}.`);
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : 'Could not create this user.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const requestDelete = (user: any) => {
+    if (!canDeleteUsers) {
+      setMessage('Delete User is restricted to Owner, Super Admin, and Admin.');
+      return;
+    }
+    if (user.role === 'Owner' || user.isPrimaryOwner === true || user.is_primary_owner === true) {
+      setMessage('The primary Owner account cannot be deleted.');
+      return;
+    }
+    setPendingDelete(user);
+  };
+
+  const confirmDelete = async () => {
+    if (!pendingDelete) return;
+    // No DELETE endpoint has been verified in the supplied backend contract.
+    // Do not remove the row locally or report success until a real endpoint exists.
+    setDeleting(true);
+    setMessage('Deletion is not connected yet: the backend must provide a verified DELETE /users-access/:id endpoint with server-side role checks, primary-Owner protection, session revocation, and audit logging.');
+    setDeleting(false);
+    setPendingDelete(null);
+  };
+
+  return <div className="owner-users-page">
+    <Card title="Owner users & access" subtitle="Invite internal operators and assign their Owner Tool role.">
+      <form className="owner-user-form" onSubmit={invite}>
+        <Input required placeholder="Full name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+        <Input required type="email" placeholder="Work email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+        <Select value={form.role} onChange={(e: ChangeEvent<HTMLSelectElement>) => setForm({ ...form, role: e.target.value })}>
+          {['Owner', 'Super Admin', 'Admin', 'Operations', 'Support', 'Finance', 'Infrastructure Admin', 'Viewer'].map((role) => <option key={role}>{role}</option>)}
+        </Select>
+        <Button type="submit" disabled={saving}>{saving ? 'Creating…' : 'Create user'}</Button>
+      </form>
+      {message && <p className="owner-user-message" role="status">{message}</p>}
+    </Card>
+    <Card title="Access directory" subtitle="Delete controls are shown only for Owner, Super Admin, and Admin when the signed-in role is supplied by the app.">
+      {!canDeleteUsers && <p className="owner-user-message" role="note">Delete User is restricted to Owner, Super Admin, and Admin. A server-verified role is not yet wired to this screen.</p>}
+      <Table headers={['Name', 'Email', 'Role', 'Status', 'Last login', 'Actions']}>
+        {rows.map((user) => <tr key={user.id}>
+          <td>{user.name}</td>
+          <td>{user.email}</td>
+          <td><Badge>{user.role}</Badge></td>
+          <td>{user.status}</td>
+          <td>{user.lastLogin || '—'}</td>
+          <td>
+            {canDeleteUsers && user.role !== 'Owner' && user.isPrimaryOwner !== true && user.is_primary_owner !== true
+              ? <Button type="button" onClick={() => requestDelete(user)} disabled={deleting}>Delete User</Button>
+              : <span>—</span>}
+          </td>
+        </tr>)}
+      </Table>
+    </Card>
+    {pendingDelete && <div className="owner-delete-backdrop" role="presentation">
+      <section className="owner-delete-dialog" role="dialog" aria-modal="true" aria-labelledby="owner-delete-title">
+        <h3 id="owner-delete-title">Confirm user deletion</h3>
+        <p>You're requesting deletion of <strong>{pendingDelete.name || pendingDelete.email}</strong>. This cannot proceed until the backend delete operation is implemented.</p>
+        <div className="owner-delete-actions">
+          <Button type="button" disabled={deleting} onClick={() => setPendingDelete(null)}>Cancel</Button>
+          <Button type="button" disabled={deleting} onClick={confirmDelete}>{deleting ? 'Checking…' : 'Confirm deletion'}</Button>
+        </div>
+      </section>
+    </div>}
+  </div>;
 }
 
 
@@ -547,13 +611,13 @@ function App() {
   const [customer, setCustomer] =
     useState('');
 
-  let content =
-    page === 'Dashboard' ? (
-      <Dashboard />
-    ) :
+let content =
+  page === 'Dashboard' ? (
+    <Dashboard />
+  ) :
 
     page === 'Customer Onboarding' ? (
-      <Onboarding />
+      <NewOnboarding />
     ) :
 
     page === 'Customers' ? (
@@ -648,14 +712,46 @@ function App() {
       />
     ) :
 
+    page === 'Connected Integrations' ? (
+      <Collection
+        endpoint="/integrations"
+        title="Connected integrations"
+        headers={['integration', 'provider', 'scope', 'status', 'lastSync']}
+      />
+    ) :
+
+    page === 'Live Monitoring' ? (
+      <Collection
+        endpoint="/monitoring"
+        title="Live monitoring"
+        headers={['service', 'environment', 'status', 'uptime', 'checkedAt']}
+      />
+    ) :
+
+    page === 'Backup & Restore' ? (
+      <Collection
+        endpoint="/backups"
+        title="Backup & restore"
+        headers={['resource', 'schedule', 'lastBackup', 'status', 'retention']}
+      />
+    ) :
+
+    page === 'Users & Access' ? (
+      <UsersAccess />
+    ) :
+
+    page === 'Owner Settings' ? (
+      <Collection
+        endpoint="/owner-settings"
+        title="Owner settings"
+        headers={['setting', 'value', 'scope', 'updatedBy']}
+      />
+    ) :
+
     (
       <Card title={page}>
         <p>
-          This control-plane module is scaffolded
-          with its backing schema and is ready for
-          a provider integration. It deliberately
-          does not access product operational data
-          directly.
+          No operational records are available for this module yet.
         </p>
       </Card>
     );
@@ -695,335 +791,157 @@ function App() {
           <span>
             FRIDAY
             <br />
-            <b>MASTER</b>
+            <b>OWNER</b>
           </span>
 
         </div>
 
-
-        <button
-          className="collapse"
-          onClick={() =>
-            setCollapsed(!collapsed)
-          }
-          type="button"
-          aria-label={
-            collapsed
-              ? 'Expand sidebar'
-              : 'Collapse sidebar'
-          }
-        >
-          ☰
-        </button>
-
-
         <nav>
-
-          {nav.map(
-            ({
-              name,
-              icon: Icon,
-            }) => (
-
-              <button
-                className={
-                  page === name
-                    ? 'active'
-                    : ''
-                }
-                onClick={() => {
-                  setPage(name);
-                  setCustomer('');
-                }}
-                key={name}
-                type="button"
-                title={
-                  collapsed
-                    ? name
-                    : undefined
-                }
-              >
-
-                <span className="nav-icon">
-                  <Icon
-                    size={18}
-                    strokeWidth={1.8}
-                  />
-                </span>
-
-                <em>
-                  {name}
-                </em>
-
-              </button>
-
-            )
-          )}
-
+          {nav.map(({ name, icon: Icon }) => (
+            <button
+              key={name}
+              type="button"
+              className={
+                (
+                  name === 'Home'
+                    ? page === 'Dashboard' || page === 'Home'
+                    : name === 'New Onboarding'
+                    ? page === 'Customer Onboarding'
+                    : name === 'Products & Plans'
+                    ? page === 'Products' || page === 'Products & Plans'
+                    : name === 'Customer Settings'
+                    ? page === 'Configuration' || page === 'Customer Settings'
+                    : page === name
+                )
+                  ? 'active'
+                  : ''
+              }
+              onClick={() => {
+                setPage(
+                  name === 'Home'
+                    ? 'Dashboard'
+                    : name === 'New Onboarding'
+                    ? 'Customer Onboarding'
+                    : name === 'Products & Plans'
+                    ? 'Products'
+                    : name === 'Customer Settings'
+                    ? 'Configuration'
+                    : name
+                );
+                setCustomer('');
+                window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+                document.querySelector('main')?.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+                document.querySelector('aside')?.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+              }}
+              title={collapsed ? name : undefined}
+            >
+              <span className="nav-icon">
+                <Icon size={18} strokeWidth={1.8} />
+              </span>
+              <em>{name}</em>
+            </button>
+          ))}
         </nav>
 
       </aside>
-
 
       {/* =================================================
           MAIN CONTENT
       ================================================= */}
 
       <main>
+        <header className="topbar">
 
-        <header>
-
-          <div>
-            <small>
-              FRIDAY INNOVATIONS / CONTROL PLANE
-            </small>
-
+          <div className="topbar-title">
             <h1>
               {customer
-                ? 'Customer 360'
+                ? 'View Customer'
                 : page}
             </h1>
           </div>
 
+          {page !== 'Home' && page !== 'Dashboard' && (
+            <div className="global-search">
+              <Search size={18} />
+              <input
+                type="search"
+                aria-label="Search all modules"
+              />
+            </div>
+          )}
 
-          <div className="env">
-            DEV
-          </div>
+          <div className="topbar-account-actions">
+            <div className="topbar-profile">
+              <div className="topbar-avatar">
+                JS
+              </div>
+              <div className="topbar-user-details">
+                <span>Jaya Sankara</span>
+                <small>Owner</small>
+              </div>
+            </div>
 
-
-          <div className="user">
-            SA
-            <br />
-            <small>
-              Super Admin
-            </small>
+            <button
+              type="button"
+              className="topbar-signout"
+              aria-label="Sign out"
+              title="Sign out"
+              onClick={() => {
+                localStorage.removeItem('friday-access-token');
+                localStorage.removeItem('friday-refresh-token');
+                window.location.reload();
+              }}
+            >
+              <LogOut size={18} />
+              <span>Sign out</span>
+            </button>
           </div>
 
         </header>
 
         {content}
-
       </main>
-
     </div>
   );
 }
 
-
 /* =========================================================
-   SIGN IN
+   ROOT / AUTHENTICATION
 ========================================================= */
 
-function SignIn({
-  done,
-}: {
-  done: () => void;
-}) {
-
-  const [email, setEmail] =
-    useState('');
-
-  const [password, setPassword] =
-    useState('');
-
-  const [error, setError] =
-    useState('');
-
-
-  const submit = async (
-    e: any
-  ) => {
-
-    e.preventDefault();
-
-    setError('');
-
-    try {
-
-      await api('/auth/login', {
-        method: 'POST',
-        body: JSON.stringify({
-          email,
-          password,
-        }),
-      });
-
-      done();
-
-    } catch (x: any) {
-
-      setError(x.message);
-
-    }
-  };
-
-
-  return (
-    <div className="signin">
-
-      <div className="signin-art">
-
-        <div className="signin-brand">
-
-          <i>F</i>
-
-          <span>
-            FRIDAY
-            <br />
-            <b>MASTER</b>
-          </span>
-
-        </div>
-
-
-        <div>
-
-          <small>
-            FRIDAY INNOVATIONS
-          </small>
-
-          <h1>
-            Run your business
-            <br />
-            from one control plane.
-          </h1>
-
-          <p>
-            Secure access to customers,
-            entitlements, infrastructure,
-            and every Friday product.
-          </p>
-
-        </div>
-
-
-        <div className="signin-orb one" />
-        <div className="signin-orb two" />
-
-      </div>
-
-
-      <div className="signin-panel">
-
-        <form onSubmit={submit}>
-
-          <div className="signin-mobile-brand">
-            <i>F</i>{' '}
-            FRIDAY MASTER
-          </div>
-
-
-          <small>
-            WELCOME BACK
-          </small>
-
-          <h2>
-            Sign in to your workspace
-          </h2>
-
-          <p>
-            Use your Friday MASTER account.
-          </p>
-
-
-          <label>
-            Work email
-
-            <Input
-              type="email"
-              value={email}
-              onChange={(e) =>
-                setEmail(e.target.value)
-              }
-              placeholder="you@fridayinnovations.com"
-              required
-            />
-
-          </label>
-
-
-          <label>
-            Password
-
-            <Input
-              type="password"
-              value={password}
-              onChange={(e) =>
-                setPassword(e.target.value)
-              }
-              placeholder="••••••••"
-              required
-            />
-
-          </label>
-
-
-          {error && (
-            <div className="error">
-              {error}
-            </div>
-          )}
-
-
-          <Button type="submit">
-            Sign in
-          </Button>
-
-
-          <button
-            type="button"
-            className="demo-button"
-            onClick={done}
-          >
-            Continue in local demo mode
-          </button>
-
-
-          <small className="signin-note">
-            Supabase Auth is used when configured.
-            Demo mode contains no production access.
-          </small>
-
-        </form>
-
-      </div>
-
-    </div>
-  );
-}
-
-
-/* =========================================================
-   ROOT
-========================================================= */
+type FridaySession = {
+  access_token: string;
+  refresh_token?: string;
+  token_type?: string;
+  expires_in?: number;
+  user?: { id: string; email?: string };
+};
 
 function Root() {
+  const [signed, setSigned] = useState(
+    () => Boolean(localStorage.getItem('friday-access-token')),
+  );
 
-  const [signed, setSigned] =
-    useState(
-      () =>
-        localStorage.getItem(
-          'friday-demo-session'
-        ) === 'active'
-    );
+  const done = (session: FridaySession) => {
+    localStorage.setItem('friday-access-token', session.access_token);
 
-
-  const done = () => {
-
-    localStorage.setItem(
-      'friday-demo-session',
-      'active'
-    );
+    if (session.refresh_token) {
+      localStorage.setItem('friday-refresh-token', session.refresh_token);
+    }
 
     setSigned(true);
   };
 
+  useEffect(() => {
+    const token = localStorage.getItem('friday-access-token');
+    if (!token) setSigned(false);
+  }, []);
 
-  return signed ? (
-    <App />
-  ) : (
-    <SignIn done={done} />
-  );
+  if (!signed) {
+    return <Login onSuccess={done} />;
+  }
+
+  return <App />;
 }
 
 

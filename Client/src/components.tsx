@@ -92,14 +92,14 @@ export const Select = ({
 export const Loading = () => (
   <div className="state state-loading">
     <LoaderCircle className="spin" size={22} />
-    <span>Loading control-plane data...</span>
+    <span>Loading information...</span>
   </div>
 );
 
 export const Empty = () => (
   <div className="state state-empty">
     <CheckCircle2 size={22} />
-    <span>Nothing to show yet.</span>
+    <span>No records found.</span>
   </div>
 );
 

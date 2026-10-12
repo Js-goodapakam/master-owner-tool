@@ -15,4 +15,16 @@ export const customers:Customer[]=[
  {id:'c4',customerId:'FRI-1004',companyName:'Demo Sales',legalName:'Demo Sales Technologies',email:'admin@demosales.test',industry:'Sales',status:'ACTIVE',accountOwner:'Vikram Shah',createdAt:'2026-10-04T09:15:00Z',city:'Delhi',country:'India'}
 ];
 export const audit:AuditLog[]=[{id:'a1',actor:'Ananya Rao',action:'customer.created',resourceType:'customer',resourceId:'c3',timestamp:'2026-10-02T12:10:00Z'},{id:'a2',actor:'System',action:'subscription.activated',resourceType:'subscription',resourceId:'s1',timestamp:'2026-10-04T09:15:00Z'}];
+// These are verified customer signups waiting for an Owner to begin onboarding.
+// Passwords and OTP values intentionally never enter the Owner control plane.
+export const signupRequests = [
+ {id:'signup-1',name:'Northstar Hotels',email:'admin@northstar.example',mobile:'+91 98765 24001',signupDate:'2026-10-09'},
+ {id:'signup-2',name:'Apex Realty',email:'ops@apexrealty.example',mobile:'+91 98765 24002',signupDate:'2026-10-10'},
+ {id:'signup-3',name:'Pulse Fitness',email:'owner@pulsefitness.example',mobile:'+91 98765 24003',signupDate:'2026-10-11'},
+];
+export const ownerUsers = [
+ {id:'usr-1',name:'Jaya Sankara',email:'jaya@friday.example',role:'Owner',status:'Active',lastLogin:'Today, 11:18'},
+ {id:'usr-2',name:'Ananya Rao',email:'ananya@friday.example',role:'Operations',status:'Active',lastLogin:'Today, 10:42'},
+ {id:'usr-3',name:'Vikram Shah',email:'vikram@friday.example',role:'Infrastructure Admin',status:'Active',lastLogin:'Yesterday, 18:11'},
+];
 export const addAudit=(action:string,resourceType:string,resourceId:string,before?:unknown,after?:unknown)=>audit.unshift({id:ids(),actor:'Demo Super Admin',action,resourceType,resourceId,before,after,timestamp:new Date().toISOString()});

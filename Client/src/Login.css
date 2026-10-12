@@ -1,0 +1,541 @@
+/* =========================================================
+   FRIDAY OWNER LOGIN — REVISED CSS
+========================================================= */
+
+html,
+body,
+#root {
+  width: 100%;
+  min-width: 0;
+  min-height: 100%;
+  margin: 0;
+}
+
+html,
+body {
+  overflow-x: hidden;
+}
+
+.friday-login-page {
+  --fl-page-top: #07131d;
+  --fl-page-mid: #0a0d1e;
+  --fl-page-bottom: #111027;
+  --fl-card: rgba(15, 17, 28, .86);
+  --fl-card-border: rgba(119, 131, 161, .18);
+  --fl-field: rgba(30, 31, 43, .82);
+  --fl-field-border: rgba(126, 138, 166, .22);
+  --fl-focus-blue: #1677ff;
+  --fl-text: #f4f6fb;
+  --fl-label: #60759e;
+
+  position: relative;
+  width: 100%;
+  min-width: 0;
+  min-height: 100vh;
+  min-height: 100dvh;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  isolation: isolate;
+  box-sizing: border-box;
+  color: var(--fl-text);
+  font-family: Inter, "Segoe UI", Arial, sans-serif;
+
+  background:
+    radial-gradient(
+      ellipse 55% 75% at 100% 0%,
+      rgba(91, 48, 183, .30),
+      transparent 70%
+    ),
+    radial-gradient(
+      ellipse 45% 60% at 0% 5%,
+      rgba(0, 157, 157, .15),
+      transparent 72%
+    ),
+    linear-gradient(
+      135deg,
+      var(--fl-page-top),
+      var(--fl-page-mid) 48%,
+      var(--fl-page-bottom)
+    );
+}
+
+.friday-login-page *,
+.friday-login-page *::before,
+.friday-login-page *::after {
+  box-sizing: border-box;
+}
+
+/* Background effects */
+
+.fl-background-glow {
+  position: absolute;
+  pointer-events: none;
+  z-index: -3;
+  border-radius: 50%;
+  filter: blur(50px);
+}
+
+.fl-glow-left {
+  width: 480px;
+  height: 340px;
+  left: -250px;
+  bottom: -190px;
+  background: rgba(0, 149, 255, .18);
+}
+
+.fl-glow-right {
+  width: 520px;
+  height: 360px;
+  right: -260px;
+  bottom: -210px;
+  background: rgba(90, 38, 235, .18);
+}
+
+/* Circular Friday background mark */
+
+.fl-background-mark {
+  position: absolute;
+  z-index: -2;
+  width: min(350px, 31vw);
+  aspect-ratio: 1;
+  right: 3.5vw;
+  top: 21%;
+  opacity: .22;
+  filter: drop-shadow(0 0 22px rgba(50, 103, 255, .28));
+  pointer-events: none;
+}
+
+.fl-mark-outer {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  padding: 13%;
+  background: radial-gradient(
+    circle at 35% 27%,
+    rgba(86, 127, 255, .78),
+    rgba(12, 31, 67, .96) 55%,
+    rgba(1, 12, 28, .98) 78%
+  );
+  box-shadow:
+    inset 0 0 35px rgba(91, 125, 255, .36),
+    0 0 28px rgba(54, 102, 255, .25);
+}
+
+.fl-mark-middle {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  overflow: hidden;
+  background: radial-gradient(
+    circle at 36% 32%,
+    #174db7,
+    #0c2b69 65%,
+    #071b42
+  );
+}
+
+.fl-mark-core {
+  position: absolute;
+  width: 51%;
+  height: 51%;
+  left: 23%;
+  top: 23%;
+  border-radius: 50%;
+  background: #0b2658;
+}
+
+.fl-mark-cut {
+  position: absolute;
+  width: 55%;
+  height: 55%;
+  left: 24%;
+  top: 24%;
+  background: linear-gradient(135deg, #0e4fd3, #1b69ff);
+  clip-path: polygon(50% 50%, 50% 0, 100% 0, 100% 100%);
+  border-radius: 0 100% 0 0;
+}
+
+/* Bottom decorative waves */
+
+.fl-bottom-wave {
+  position: absolute;
+  z-index: -2;
+  pointer-events: none;
+  border-radius: 50%;
+  border-top: 1px solid rgba(41, 151, 255, .20);
+  transform: rotate(12deg);
+}
+
+.fl-wave-one {
+  width: 700px;
+  height: 270px;
+  left: -245px;
+  bottom: -205px;
+}
+
+.fl-wave-two {
+  width: 740px;
+  height: 290px;
+  left: -265px;
+  bottom: -220px;
+  opacity: .62;
+}
+
+.fl-wave-three {
+  width: 780px;
+  height: 310px;
+  left: -285px;
+  bottom: -235px;
+  opacity: .40;
+}
+
+/* Login layout */
+
+.fl-login-shell {
+  position: relative;
+  z-index: 1;
+  width: 440px;
+  max-width: calc(100% - 32px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 28px;
+  transform: scale(1);
+  transform-origin: center center;
+}
+
+.fl-brand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  height: 44px;
+}
+
+.fl-brand-logo {
+  width: 39px;
+  height: 39px;
+  object-fit: contain;
+}
+
+.fl-brand-word {
+  font-size: 34px;
+  line-height: 1;
+  font-weight: 700;
+  letter-spacing: -1.5px;
+}
+
+.fl-ai-badge {
+  align-self: flex-start;
+  margin-top: -1px;
+  padding: 4px 6px;
+  border: 1px solid rgba(77, 115, 255, .9);
+  border-radius: 5px;
+  color: #7ba5ff;
+  font-size: 10px;
+  line-height: 1;
+}
+
+/* Login card */
+
+.fl-login-card {
+  width: 400px;
+  max-width: 100%;
+  padding: 42px 38px;
+  border: 1px solid var(--fl-card-border);
+  border-radius: 17px;
+  background: var(--fl-card);
+  box-shadow:
+    0 25px 60px rgba(0, 0, 0, .28),
+    inset 0 1px 0 rgba(255, 255, 255, .025);
+  backdrop-filter: blur(17px);
+}
+
+.fl-login-card h1 {
+  margin: 0;
+  font-size: 21px;
+  line-height: 1.25;
+  font-weight: 500;
+  letter-spacing: -.35px;
+  color: var(--fl-text);
+}
+
+.fl-subtitle {
+  margin: 11px 0 32px;
+  max-width: 340px;
+  color: #a7b5d0;
+  font-size: 15px;
+  line-height: 1.55;
+}
+
+/* Labels and input fields */
+
+.fl-login-card label {
+  display: block;
+  margin: 0 0 9px;
+  color: var(--fl-label);
+  font-size: 10px;
+  line-height: 1;
+  font-weight: 700;
+  letter-spacing: 1.35px;
+  text-transform: uppercase;
+}
+
+.fl-field {
+  height: 54px;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 25px;
+  padding: 0 14px;
+  border: 1px solid var(--fl-field-border);
+  border-radius: 13px;
+  background: var(--fl-field);
+  transition:
+    border-color .18s,
+    box-shadow .18s,
+    background .18s;
+}
+
+.fl-field:focus-within {
+  border-color: var(--fl-focus-blue);
+  box-shadow:
+    0 0 0 1px rgba(22, 119, 255, .25),
+    0 0 16px rgba(22, 119, 255, .16);
+  background: rgba(30, 33, 46, .92);
+}
+
+.fl-field-icon {
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
+  display: grid;
+  place-items: center;
+  color: #677590;
+}
+
+.fl-field-icon svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.45;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.fl-field:focus-within .fl-field-icon {
+  color: var(--fl-focus-blue);
+}
+
+.fl-field input {
+  min-width: 0;
+  flex: 1;
+  width: 100%;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #f0f3fa;
+  font: inherit;
+  font-size: 14px;
+  line-height: 1;
+  caret-color: #08d8cf;
+}
+
+.fl-field input::placeholder {
+  color: #66718a;
+}
+
+/* Password visibility control */
+
+.fl-visibility {
+  width: 22px;
+  height: 22px;
+  padding: 1px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  background: transparent;
+  color: #66718a;
+  cursor: pointer;
+}
+
+.fl-visibility:hover,
+.fl-visibility:focus-visible {
+  color: #1677ff;
+}
+
+.fl-visibility:focus {
+  outline: none;
+}
+
+.fl-visibility:focus-visible {
+  outline: 2px solid rgba(22, 119, 255, .25);
+  outline-offset: 2px;
+}
+
+.fl-visibility svg {
+  width: 19px;
+  height: 19px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.fl-field:focus-within .fl-visibility {
+  color: #8795af;
+}
+
+.fl-field:focus-within .fl-visibility:hover {
+  color: #1677ff;
+}
+
+/* Login button */
+
+.fl-login-button {
+  width: 100%;
+  height: 54px;
+  margin-top: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 17px;
+  border: 0;
+  border-radius: 12px;
+  color: #071015;
+  background: linear-gradient(
+    100deg,
+    #1556d8,
+    #1677ff 55%,
+    #3b82f6
+  );
+  box-shadow: 0 9px 23px rgba(7, 201, 193, .19);
+  cursor: pointer;
+  font: 600 14px Inter, "Segoe UI", Arial, sans-serif;
+  transition:
+    transform .16s,
+    filter .16s,
+    box-shadow .16s;
+}
+
+.fl-login-button:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.06);
+  box-shadow: 0 12px 28px rgba(7, 201, 193, .25);
+}
+
+.fl-login-button:active {
+  transform: translateY(0);
+}
+
+.fl-login-button:disabled {
+  opacity: .7;
+  cursor: wait;
+}
+
+.fl-button-arrow {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* Status and error messages */
+
+.fl-status {
+  min-height: 0;
+  margin: 0 0 12px;
+  text-align: center;
+  color: #83b4ff;
+  font-size: 12px;
+}
+
+.fl-error {
+  color: #ff8888;
+}
+
+/* Browser autofill styling */
+
+.fl-field input:-webkit-autofill,
+.fl-field input:-webkit-autofill:hover,
+.fl-field input:-webkit-autofill:focus {
+  -webkit-text-fill-color: #f0f3fa;
+  -webkit-box-shadow: 0 0 0 1000px rgba(30, 31, 43, .82) inset;
+  transition: background-color 9999s ease-in-out 0s;
+}
+
+/* Tablet and mobile */
+
+@media (max-width: 700px) {
+  .fl-login-shell {
+    width: min(440px, calc(100vw - 32px));
+  }
+
+  .fl-login-card {
+    width: 100%;
+    padding: 31px 28px 30px;
+  }
+
+  .fl-background-mark {
+    width: 300px;
+    right: -90px;
+    top: 18%;
+    opacity: .18;
+  }
+}
+
+@media (max-width: 430px) {
+  .fl-login-shell {
+    gap: 27px;
+    transform: none;
+    transform-origin: center center;
+  }
+
+  .fl-brand-word {
+    font-size: 32px;
+  }
+
+  .fl-brand-logo {
+    width: 37px;
+    height: 37px;
+  }
+
+  .fl-login-card {
+    padding: 29px 22px 27px;
+  }
+
+  .fl-login-card h1 {
+    font-size: 20px;
+  }
+
+  .fl-subtitle {
+    font-size: 14px;
+    margin-bottom: 28px;
+  }
+
+  .fl-field {
+    height: 52px;
+    margin-bottom: 21px;
+  }
+
+  .fl-login-button {
+    height: 52px;
+  }
+}
+
+/* Keep the approved login layout readable on narrow screens. */
+@media (max-width: 430px) {
+  .fl-login-shell { width: min(440px, calc(100vw - 28px)); }
+  .fl-login-card { padding: 28px 22px; }
+  .fl-login-card h1 { font-size: 20px; }
+}

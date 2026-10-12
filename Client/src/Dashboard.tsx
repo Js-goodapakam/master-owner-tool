@@ -6,8 +6,8 @@ import {
   CalendarDays,
   CheckCircle2,
   ChevronRight,
+  CircleDollarSign,
   Clock3,
-  Database,
   HeartPulse,
   Package,
   Rocket,
@@ -55,16 +55,19 @@ type DashboardData = {
     infrastructure: string;
     deployment: string;
   };
+  customerGrowth: { period: string; label: string; newCustomers: number; totalCustomers: number }[];
+  productAdoption: { product: string; customers: number; modules: number }[];
+  deployments: { id: string; application: string; customer: string; environment: string; version: string; status: string; completed: string }[];
+  renewals: { customer: string; product: string; plan: string; status: string; expiryDate: string }[];
 };
 
 const metric = (data: DashboardData, name: string) =>
   String(data.metrics.find(([label]) => label === name)?.[1] ?? '—');
 
 const relativeTime = (timestamp: string) => {
-  const seconds = Math.max(
-    0,
-    Math.floor((Date.now() - new Date(timestamp).getTime()) / 1000),
-  );
+  const parsed = new Date(timestamp).getTime();
+  if (!Number.isFinite(parsed)) return 'Time unavailable';
+  const seconds = Math.max(0, Math.floor((Date.now() - parsed) / 1000));
   if (seconds < 60) return `${seconds}s ago`;
   const minutes = Math.floor(seconds / 60);
   if (minutes < 60) return `${minutes}m ago`;
@@ -85,64 +88,35 @@ const label = (value: string) =>
 
 function KPIGrid({ data }: { data: DashboardData }) {
   const items = [
-    ['Total Customers', metric(data, 'Total Customers'), 'From control-plane data', <UserPlus size={22} />, 'blue'],
-    ['Active Customers', metric(data, 'Active Customers'), 'Currently active', <Users size={22} />, 'green'],
-    ['Active Tenants', metric(data, 'Active Tenants'), 'Currently active', <Building2 size={22} />, 'purple'],
-    ['Active Subscriptions', metric(data, 'Active Subscriptions'), 'From control-plane data', <Package size={22} />, 'orange'],
-    ['Total Users', metric(data, 'Total Users'), 'Across managed customers', <Users size={22} />, 'blue'],
-    ['Infrastructure Nodes', metric(data, 'Infrastructure Nodes'), 'Configured nodes', <Server size={22} />, 'purple'],
-    ['Ongoing Deployments', metric(data, 'Ongoing Deployments'), 'From dashboard API', <Rocket size={22} />, 'purple'],
-    ['System Health', metric(data, 'System Health'), 'Current API status', <HeartPulse size={22} />, 'green'],
+    ['Customers', metric(data, 'Total Customers'), 'Total customer accounts', <UserPlus size={20} />, 'blue'],
+    ['Active accounts', metric(data, 'Active Customers'), 'Live or trial customers', <Users size={20} />, 'green'],
+    ['Subscriptions', metric(data, 'Active Subscriptions'), 'Billing plans currently active', <CircleDollarSign size={20} />, 'orange'],
+    ['Customer users', metric(data, 'Total Users'), 'Users across all workspaces', <Users size={20} />, 'purple'],
+  ] as const;
+  const operations = [
+    ['Tenants online', metric(data, 'Active Tenants'), <Building2 size={17} />],
+    ['Hosting nodes', metric(data, 'Hosting Nodes'), <Server size={17} />],
+    ['Deployments running', metric(data, 'Ongoing Deployments'), <Rocket size={17} />],
+    ['Platform health', metric(data, 'System Health'), <HeartPulse size={17} />],
   ] as const;
 
   return (
-    <div className="master-kpi-grid">
-      {items.map(([title, value, note, icon, tone]) => (
-        <div className={`master-kpi ${tone}`} key={title}>
-          <div className="master-kpi-icon">{icon}</div>
-          <div className="master-kpi-content">
-            <div className="master-kpi-title">{title}</div>
-            <div className="master-kpi-value">{value}</div>
-            <div className="master-kpi-note">{note}</div>
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function Unavailable({
-  icon,
-  title,
-  description,
-}: {
-  icon: React.ReactNode;
-  title: string;
-  description: string;
-}) {
-  return (
-    <section className="master-panel">
-      <div className="master-panel-header">
-        <div className="master-panel-title">
-          <div className="master-panel-icon blue">{icon}</div>
-          <div><h3>{title}</h3><p>{description}</p></div>
-        </div>
+    <section className="owner-overview" aria-label="Owner overview">
+      <div className="owner-kpi-grid">
+        {items.map(([title, value, note, icon, tone]) => <div className={`owner-kpi ${tone}`} key={title}><div className="owner-kpi-top"><span>{title}</span><i>{icon}</i></div><strong>{value}</strong><small>{note}</small></div>)}
       </div>
-      <div className="state state-empty">
-        <Database size={22} />
-        <span>Data not available from the current dashboard API.</span>
-      </div>
+      <div className="owner-operations"><div className="owner-operations-head"><span>Platform operations</span><small>Live control-plane snapshot</small></div><div className="owner-operations-grid">{operations.map(([title, value, icon]) => <div key={title}><i>{icon}</i><span>{title}</span><b className={title === 'Platform health' && value === 'Healthy' ? 'is-healthy' : ''}>{value}</b></div>)}</div></div>
     </section>
   );
 }
 
-function CustomerGrowth() {
+function CustomerGrowth({ data }: { data: DashboardData }) {
+  const highest = Math.max(1, ...data.customerGrowth.map((item) => item.totalCustomers));
   return (
-    <Unavailable
-      icon={<BarChart3 size={19} />}
-      title="Customer Growth"
-      description="Historical customer growth requires a time-series API."
-    />
+    <section className="master-panel master-growth-panel">
+      <div className="master-panel-header"><div className="master-panel-title"><div className="master-panel-icon blue"><BarChart3 size={19} /></div><div><h3>Customer Growth</h3><p>Customer records created over time</p></div></div></div>
+      {data.customerGrowth.length === 0 ? <div className="state state-empty">No customer growth data yet.</div> : <div className="growth-chart" aria-label="Customer growth chart">{data.customerGrowth.map((item) => <div className="growth-column" key={`${item.period}-${item.totalCustomers}`}><span className="growth-value">{item.totalCustomers}</span><div className="growth-bar-wrap"><span className="growth-bar" style={{ height: `${Math.max(12, item.totalCustomers / highest * 100)}%` }} /></div><small>{item.label}</small></div>)}</div>}
+    </section>
   );
 }
 
@@ -152,8 +126,8 @@ function SubscriptionOverview({ data }: { data: DashboardData }) {
   const rows = [
     ['Active', s.active, 'active-dot'],
     ['Trial', s.trial, 'trial-dot'],
-    ['Expiring Soon', s.expiring, 'expiry-dot'],
-    ['Suspended', s.suspended, 'suspended-dot'],
+    ['Ending Soon', s.expiring, 'expiry-dot'],
+    ['Temporarily Blocked', s.suspended, 'suspended-dot'],
     ['Cancelled', s.cancelled, 'cancelled-dot'],
   ] as const;
 
@@ -162,7 +136,7 @@ function SubscriptionOverview({ data }: { data: DashboardData }) {
       <div className="master-panel-header">
         <div className="master-panel-title">
           <div className="master-panel-icon blue"><Clock3 size={19} /></div>
-          <div><h3>Subscription Overview</h3><p>Live subscription status from the control plane</p></div>
+          <div><h3>Plans & Subscriptions</h3><p>Current plan status</p></div>
         </div>
       </div>
       <div className="subscription-content">
@@ -184,9 +158,9 @@ function SubscriptionOverview({ data }: { data: DashboardData }) {
 
 function SystemHealth({ data }: { data: DashboardData }) {
   const services = [
-    ['API Services', data.health.api],
+    ['Application', data.health.api],
     ['Database', data.health.database],
-    ['Infrastructure', data.health.infrastructure],
+    ['Hosting', data.health.infrastructure],
     ['Deployments', data.health.deployment],
   ];
 
@@ -195,7 +169,7 @@ function SystemHealth({ data }: { data: DashboardData }) {
       <div className="master-panel-header">
         <div className="master-panel-title">
           <div className="master-panel-icon blue"><Activity size={19} /></div>
-          <div><h3>System Health</h3><p>Live status from the control plane</p></div>
+          <div><h3>Live System Status</h3><p>Current service status</p></div>
         </div>
       </div>
       <div className="health-services">
@@ -203,7 +177,7 @@ function SystemHealth({ data }: { data: DashboardData }) {
           <div className="health-service" key={name}>
             <strong>{name}</strong>
             <span className="health-status"><i />{status}</span>
-            <span className="uptime">{status}</span>
+            <span className="uptime">Status</span>
             <ChevronRight size={14} />
           </div>
         ))}
@@ -212,13 +186,12 @@ function SystemHealth({ data }: { data: DashboardData }) {
   );
 }
 
-function Products() {
+function Products({ data }: { data: DashboardData }) {
   return (
-    <Unavailable
-      icon={<Package size={19} />}
-      title="Products"
-      description="Product-level customer and user analytics require product aggregation data."
-    />
+    <section className="master-panel">
+      <div className="master-panel-header"><div className="master-panel-title"><div className="master-panel-icon blue"><Package size={19} /></div><div><h3>Product Adoption</h3><p>Assigned customer workspaces by product</p></div></div></div>
+      <div className="adoption-list">{data.productAdoption.map((item) => <div className="adoption-row" key={item.product}><div><strong>{item.product}</strong><small>{item.modules} modules available</small></div><b>{item.customers} customers</b></div>)}</div>
+    </section>
   );
 }
 
@@ -228,7 +201,7 @@ function RecentActivity({ data }: { data: DashboardData }) {
       <div className="master-panel-header">
         <div className="master-panel-title">
           <div className="master-panel-icon blue"><Activity size={19} /></div>
-          <div><h3>Recent Activity</h3><p>Latest control-plane events</p></div>
+          <div><h3>Recent Changes</h3><p>Latest activity in Friday Master</p></div>
         </div>
         <button className="master-view-all">View All</button>
       </div>
@@ -256,16 +229,16 @@ function OngoingOnboarding({ data }: { data: DashboardData }) {
       <div className="master-panel-header">
         <div className="master-panel-title">
           <div className="master-panel-icon blue"><UserPlus size={19} /></div>
-          <div><h3>Ongoing Onboarding</h3><p>Customers currently in onboarding or trial</p></div>
+          <div><h3>New Customer Requests</h3><p>Signups waiting for review or trial setup</p></div>
         </div>
         <button className="master-view-all">View All</button>
       </div>
       <div className="master-table-wrap">
         <table className="master-table">
-          <thead><tr><th>Customer</th><th>Industry</th><th>Status</th><th>Account Owner</th><th>Created</th></tr></thead>
+          <thead><tr><th>Customer</th><th>Industry</th><th>Status</th><th>Handled By</th><th>Request Date</th></tr></thead>
           <tbody>
             {data.onboarding.length === 0 ? (
-              <tr><td colSpan={5}>No onboarding records.</td></tr>
+              <tr><td colSpan={5}>No customer requests found.</td></tr>
             ) : data.onboarding.map(row => (
               <tr key={row.id}>
                 <td><strong>{row.companyName}</strong></td>
@@ -282,23 +255,15 @@ function OngoingOnboarding({ data }: { data: DashboardData }) {
   );
 }
 
-function LatestDeployments() {
+function LatestDeployments({ data }: { data: DashboardData }) {
   return (
-    <Unavailable
-      icon={<Rocket size={19} />}
-      title="Latest Deployments"
-      description="Deployment history is not included in the current dashboard API response."
-    />
+    <section className="master-panel"><div className="master-panel-header"><div className="master-panel-title"><div className="master-panel-icon blue"><Rocket size={19} /></div><div><h3>Latest Deployments</h3><p>Most recently completed releases</p></div></div></div><div className="adoption-list">{data.deployments.length === 0 ? <div className="state state-empty">No deployments recorded.</div> : data.deployments.map((item) => <div className="adoption-row" key={item.id}><div><strong>{item.application} · {item.version}</strong><small>{item.customer} · {dateText(item.completed)}</small></div><b>{item.status}</b></div>)}</div></section>
   );
 }
 
-function UpcomingRenewals() {
+function UpcomingRenewals({ data }: { data: DashboardData }) {
   return (
-    <Unavailable
-      icon={<CalendarDays size={19} />}
-      title="Upcoming Renewals"
-      description="Renewal dates are not included in the current dashboard API response."
-    />
+    <section className="master-panel"><div className="master-panel-header"><div className="master-panel-title"><div className="master-panel-icon blue"><CalendarDays size={19} /></div><div><h3>Subscription Schedule</h3><p>Current subscription renewal dates</p></div></div></div><div className="adoption-list">{data.renewals.map((item) => <div className="adoption-row" key={item.customer}><div><strong>{item.customer}</strong><small>{item.plan} · {item.status}</small></div><b>{item.expiryDate}</b></div>)}</div></section>
   );
 }
 
@@ -341,7 +306,7 @@ export default function Dashboard() {
     return (
       <div className="master-dashboard">
         <section className="master-panel">
-          <div className="state state-error"><span>Unable to load live dashboard data: {error}</span></div>
+          <div className="state state-error"><span>Could not load dashboard information: {error}</span></div>
         </section>
       </div>
     );
@@ -351,7 +316,7 @@ export default function Dashboard() {
     return (
       <div className="master-dashboard">
         <section className="master-panel">
-          <div className="state state-loading"><span>Loading live control-plane data...</span></div>
+          <div className="state state-loading"><span>Loading dashboard information...</span></div>
         </section>
       </div>
     );
@@ -362,8 +327,8 @@ export default function Dashboard() {
       <section className="master-welcome">
         <div>
           <span>FRIDAY MASTER</span>
-          <h2>Good morning, <b>Jaya</b></h2>
-          <p>Here&apos;s what&apos;s happening across your Friday ecosystem.</p>
+          <h2>Welcome to <b>Friday Master</b></h2>
+          <p>Customer, revenue and platform health at a glance.</p>
         </div>
         <div className="master-date">
           <CalendarDays size={19} />
@@ -375,20 +340,20 @@ export default function Dashboard() {
       <KPIGrid data={data} />
 
       <div className="master-analytics-grid">
-        <CustomerGrowth />
+        <CustomerGrowth data={data} />
         <SubscriptionOverview data={data} />
         <SystemHealth data={data} />
       </div>
 
       <div className="master-main-grid">
-        <Products />
+        <Products data={data} />
         <RecentActivity data={data} />
       </div>
 
       <div className="master-bottom-grid">
         <OngoingOnboarding data={data} />
-        <LatestDeployments />
-        <UpcomingRenewals />
+        <LatestDeployments data={data} />
+        <UpcomingRenewals data={data} />
       </div>
 
       <FridayAI />
