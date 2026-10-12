@@ -1,1 +1,47 @@
 
+name: Friday Owner CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validate Friday Owner
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Check repository structure
+        run: |
+          test -f Client/package.json
+          test -f Server/package.json
+
+      - name: Install and build frontend
+        working-directory: Client
+        run: |
+          npm ci
+          npm run build
+
+      - name: Install and build backend
+        working-directory: Server
+        run: |
+          npm ci
+          npm run lint
+          npm run build
+
