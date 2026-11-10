@@ -407,6 +407,37 @@ app.post('/api/onboarding', authorize('customer.create'), (q, r) => {
   });
 });
 
+app.post('/api/customers/:id/engagestay', authorize('customer.update'), async (q, r) => {
+  const customer = customers.find(item => item.id === q.params.id);
+  if (!customer) return r.status(404).json({ error: 'NOT_FOUND' });
+  const action = q.body?.action;
+  if (!['approve', 'configure', 'suspend', 'reactivate'].includes(action)) {
+    return r.status(400).json({ error: 'Invalid lifecycle action.' });
+  }
+  const origin = process.env.ENGAGE_STAY_API_ORIGIN;
+  const token = process.env.ENGAGE_OWNER_SERVICE_TOKEN;
+  if (!origin || !token) return r.status(503).json({ error: 'EngageStay integration is not configured.' });
+  try {
+    const result = await fetch(new URL('/api/internal/managed-workspaces/' + encodeURIComponent(customer.id), origin), {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+      redirect: 'error',
+      signal: AbortSignal.timeout(10000),
+      body: JSON.stringify({
+        action, name: customer.companyName, city: customer.city, email: customer.email,
+        adminName: q.body.adminName, password: q.body.password,
+        plan: q.body.plan, modules: q.body.modules,
+      }),
+    });
+    const workspace = await result.json();
+    if (!result.ok) return r.status(result.status).json({ error: workspace.error || 'EngageStay rejected the action.' });
+    addAudit('engagestay.' + action, 'customer', customer.id, undefined, workspace);
+    return r.json(workspace);
+  } catch {
+    return r.status(502).json({ error: 'Unable to reach EngageStay. Check the workspace before retrying.' });
+  }
+});
+
 app.get('/api/products', authorize('product.view'), (_q, r) =>
   r.json(products),
 );
