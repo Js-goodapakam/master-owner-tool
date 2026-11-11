@@ -12,5 +12,42 @@ create table if not exists customer_configurations (id uuid primary key default 
 create table if not exists infrastructure (id uuid primary key default gen_random_uuid(), customer_id uuid references customers(id), provider text not null, server text not null, environment text not null, region text, hostname text, status text, cpu text, ram text, storage text, database_name text, ssl_status text, last_health_check timestamptz, created_at timestamptz not null default now()); create table if not exists infrastructure_services (id uuid primary key default gen_random_uuid(), infrastructure_id uuid not null references infrastructure(id) on delete cascade, name text not null, status text not null); create table if not exists deployments (id uuid primary key default gen_random_uuid(), customer_id uuid references customers(id), product_id uuid references products(id), environment text not null, version text, status text not null, started_at timestamptz, completed_at timestamptz, triggered_by uuid references users(id), provider_payload jsonb); create table if not exists integrations (id uuid primary key default gen_random_uuid(), customer_id uuid references customers(id), name text not null, type text, status text, configuration jsonb not null default '{}');
 create table if not exists kyc_documents (id uuid primary key default gen_random_uuid(), customer_id uuid not null references customers(id) on delete cascade, document_type text not null, storage_path text not null, verification_status text not null default 'PENDING', verification_date timestamptz, remarks text, uploaded_at timestamptz not null default now()); create table if not exists audit_logs (id uuid primary key default gen_random_uuid(), actor_id uuid references users(id), action text not null, resource_type text not null, resource_id text not null, before_value jsonb, after_value jsonb, created_at timestamptz not null default now());
 create index if not exists idx_customers_status on customers(status); create index if not exists idx_tenants_customer on tenants(customer_id); create index if not exists idx_audit_resource on audit_logs(resource_type,resource_id);
-alter table customers enable row level security; alter table tenants enable row level security; alter table customer_configurations enable row level security; alter table kyc_documents enable row level security;
-create policy customer_isolation on customers for all using (id::text = coalesce(auth.jwt()->>'customer_id',id::text)); create policy tenant_isolation on tenants for all using (customer_id::text = coalesce(auth.jwt()->>'customer_id',customer_id::text)); create policy config_isolation on customer_configurations for all using (customer_id::text = coalesce(auth.jwt()->>'customer_id',customer_id::text)); create policy kyc_isolation on kyc_documents for all using (customer_id::text = coalesce(auth.jwt()->>'customer_id',customer_id::text));
+-- The Owner API is the only application path to this control-plane data. All
+-- public tables have RLS enabled with no browser-facing policies; the server's
+-- service key bypasses RLS after it has performed its own authorization check.
+alter table organizations enable row level security; alter table customers enable row level security; alter table tenants enable row level security; alter table users enable row level security; alter table roles enable row level security; alter table permissions enable row level security; alter table role_permissions enable row level security; alter table user_roles enable row level security; alter table products enable row level security; alter table product_modules enable row level security; alter table product_features enable row level security; alter table plans enable row level security; alter table plan_entitlements enable row level security; alter table subscriptions enable row level security; alter table customer_products enable row level security; alter table customer_configurations enable row level security; alter table industry_profiles enable row level security; alter table infrastructure enable row level security; alter table infrastructure_services enable row level security; alter table deployments enable row level security; alter table integrations enable row level security; alter table kyc_documents enable row level security; alter table audit_logs enable row level security;
+
+-- Friday Owner identity and RBAC. These tables deliberately have no anon or
+-- authenticated policies; only the server-side service key may read/write them.
+create table if not exists owner_profiles (
+  user_id uuid primary key references auth.users(id) on delete cascade,
+  email text not null unique,
+  full_name text not null,
+  role_key text not null check (role_key in ('owner','super_admin','admin','operations','support','finance','infrastructure_admin','viewer')),
+  account_type text not null default 'internal_employee',
+  must_change_password boolean not null default true,
+  is_primary_owner boolean not null default false,
+  is_active boolean not null default true,
+  last_password_change_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create unique index if not exists owner_profiles_one_primary_owner on owner_profiles ((is_primary_owner)) where is_primary_owner;
+create table if not exists owner_role_permissions (
+  role_key text not null check (role_key in ('owner','super_admin','admin','operations','support','finance','infrastructure_admin','viewer')),
+  permission_key text not null,
+  primary key (role_key, permission_key)
+);
+alter table owner_profiles enable row level security;
+alter table owner_role_permissions enable row level security;
+
+insert into owner_role_permissions (role_key, permission_key) values
+  ('owner','customer.view'),('owner','customer.create'),('owner','customer.update'),('owner','customer.delete'),('owner','product.view'),('owner','product.manage'),('owner','subscription.view'),('owner','subscription.manage'),('owner','infrastructure.view'),('owner','infrastructure.manage'),('owner','deployment.view'),('owner','deployment.manage'),('owner','configuration.view'),('owner','configuration.manage'),('owner','audit.view'),
+  ('super_admin','customer.view'),('super_admin','customer.create'),('super_admin','customer.update'),('super_admin','customer.delete'),('super_admin','product.view'),('super_admin','product.manage'),('super_admin','subscription.view'),('super_admin','subscription.manage'),('super_admin','infrastructure.view'),('super_admin','infrastructure.manage'),('super_admin','deployment.view'),('super_admin','deployment.manage'),('super_admin','configuration.view'),('super_admin','configuration.manage'),('super_admin','audit.view'),
+  ('admin','customer.view'),('admin','customer.create'),('admin','customer.update'),('admin','customer.delete'),('admin','product.view'),('admin','product.manage'),('admin','subscription.view'),('admin','subscription.manage'),('admin','infrastructure.view'),('admin','infrastructure.manage'),('admin','deployment.view'),('admin','deployment.manage'),('admin','configuration.view'),('admin','configuration.manage'),('admin','audit.view'),
+  ('operations','customer.view'),('operations','customer.create'),('operations','customer.update'),('operations','product.view'),('operations','subscription.view'),('operations','subscription.manage'),('operations','configuration.view'),('operations','configuration.manage'),('operations','audit.view'),
+  ('support','customer.view'),('support','product.view'),('support','configuration.view'),
+  ('finance','customer.view'),('finance','subscription.view'),('finance','subscription.manage'),('finance','audit.view'),
+  ('infrastructure_admin','infrastructure.view'),('infrastructure_admin','infrastructure.manage'),('infrastructure_admin','deployment.view'),('infrastructure_admin','deployment.manage'),('infrastructure_admin','audit.view'),
+  ('viewer','customer.view'),('viewer','product.view'),('viewer','subscription.view'),('viewer','infrastructure.view'),('viewer','deployment.view'),('viewer','configuration.view'),('viewer','audit.view')
+on conflict do nothing;

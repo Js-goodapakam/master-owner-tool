@@ -1,4 +1,9 @@
-const base = (import.meta.env.VITE_API_URL || 'http://localhost:4000/api').replace(/\/$/, '');
+// Production serves the Owner API on the same origin. Keeping the local URL only
+// for Vite development prevents a deployed web app from trying to call localhost.
+const base = (
+  import.meta.env.VITE_API_URL ||
+  (import.meta.env.DEV ? 'http://localhost:4000/api' : '/api')
+).replace(/\/$/, '');
 
 export async function api<T>(
   path: string,
