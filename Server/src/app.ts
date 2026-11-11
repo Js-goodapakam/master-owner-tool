@@ -505,6 +505,13 @@ app.post('/api/customers', authorize('customer.create'), (q, r) => {
     }
     const row = (await customerResponse.json() as CustomerDatabaseRow[])[0];
     const item = toCustomer(row);
+    const requestedProduct = typeof q.body?.product === 'string' ? q.body.product.trim().toLowerCase().replace(/\s+/g, '_') : '';
+    const productCode = requestedProduct === 'engage_stay' || requestedProduct === 'engage_fit' || requestedProduct === 'engage_realty' || requestedProduct === 'engage_crm' ? requestedProduct : null;
+    if (productCode) {
+      const productResponse = await supabaseAdmin(`rest/v1/products?select=id&product_code=eq.${encodeURIComponent(productCode)}&limit=1`);
+      const product = productResponse.ok ? (await productResponse.json() as Array<{ id: string }>)[0] : null;
+      if (product) await supabaseAdmin('/rest/v1/customer_products', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ customer_id: item.id, product_id: product.id, status: 'ONBOARDING' }) });
+    }
     await recordPlatformAudit(q, 'customer.created', 'customer', item.id, undefined, item);
     return r.status(201).json(item);
   })().catch((error) => {
