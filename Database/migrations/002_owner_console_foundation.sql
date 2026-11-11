@@ -117,7 +117,7 @@ alter table provisioning_jobs enable row level security;
 -- Product records describe availability; they do not claim a live integration.
 insert into products (product_code, name, description, category, icon_key, version, status, commercial_status, adapter_status)
 values
-  ('engage_stay', 'Engage Stay', 'Hospitality property management and channel management.', 'Hospitality', 'building-2', 'unreleased', 'ACTIVE', 'PLANNED', 'NOT_CONNECTED'),
+  ('engage_stay', 'Engage Stay', 'Hospitality property management and channel management.', 'Hospitality', 'building-2', 'unreleased', 'ACTIVE', 'PLANNED', 'CONFIGURED'),
   ('engage_fit', 'Engage Fit', 'Fitness, gym, membership and branch management.', 'Fitness', 'dumbbell', 'unreleased', 'ACTIVE', 'PLANNED', 'NOT_CONNECTED'),
   ('engage_realty', 'Engage Realty', 'Real-estate project, property, sales and customer management.', 'Real Estate', 'house', 'unreleased', 'ACTIVE', 'PLANNED', 'NOT_CONNECTED'),
   ('engage_crm', 'Engage CRM', 'General-purpose customer relationship management.', 'CRM', 'contact-round', 'unreleased', 'ACTIVE', 'PLANNED', 'NOT_CONNECTED')
