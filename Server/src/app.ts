@@ -656,10 +656,36 @@ app.post('/api/customers/:id/engagestay', authorize('customer.update'), async (q
   const origin = process.env.ENGAGE_STAY_API_ORIGIN;
   const token = process.env.ENGAGE_OWNER_SERVICE_TOKEN;
   if (!origin || !token) return r.status(503).json({ error: 'EngageStay integration is not configured.' });
+  const requestedKey = q.header('idempotency-key');
+  const idempotencyKey = requestedKey && /^[A-Za-z0-9._:-]{8,128}$/.test(requestedKey)
+    ? requestedKey
+    : `owner-${randomUUID()}`;
+  let jobId: string | null = null;
+  let correlationId: string = randomUUID();
+  if (supabaseConfigured()) {
+    const productResponse = await supabaseAdmin('rest/v1/products?select=id&product_code=eq.engage_stay&limit=1');
+    if (!productResponse.ok) return r.status(502).json({ error: 'PRODUCT_REGISTRY_UNAVAILABLE' });
+    const product = (await productResponse.json() as Array<{ id: string }>)[0];
+    if (!product) return r.status(503).json({ error: 'ENGAGESTAY_NOT_REGISTERED' });
+    const existingResponse = await supabaseAdmin(`rest/v1/provisioning_jobs?select=id,status,result_payload,correlation_id&product_id=eq.${encodeURIComponent(product.id)}&idempotency_key=eq.${encodeURIComponent(idempotencyKey)}&limit=1`);
+    if (!existingResponse.ok) return r.status(502).json({ error: 'PROVISIONING_STATE_UNAVAILABLE' });
+    const existing = (await existingResponse.json() as Array<{ id: string; status: string; result_payload: unknown; correlation_id: string }>)[0];
+    if (existing?.status === 'SUCCEEDED') return r.json({ ...(existing.result_payload as object || {}), idempotentReplay: true, correlationId: existing.correlation_id });
+    if (existing?.status === 'RUNNING' || existing?.status === 'PENDING') return r.status(409).json({ error: 'OPERATION_IN_PROGRESS', correlationId: existing.correlation_id });
+    if (existing) {
+      jobId = existing.id;
+      correlationId = existing.correlation_id;
+      await supabaseAdmin(`rest/v1/provisioning_jobs?id=eq.${encodeURIComponent(jobId)}`, { method: 'PATCH', body: JSON.stringify({ status: 'RUNNING', attempt_count: 1, updated_at: new Date().toISOString(), failure_code: null, failure_detail: null }) });
+    } else {
+      const createJob = await supabaseAdmin('/rest/v1/provisioning_jobs', { method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ customer_id: customer.id, product_id: product.id, idempotency_key: idempotencyKey, operation: `engagestay.${action}`, status: 'RUNNING', request_payload: { action }, attempt_count: 1, correlation_id: correlationId, created_by: (q as any).actor?.id || null }) });
+      if (!createJob.ok) return r.status(502).json({ error: 'PROVISIONING_JOB_CREATE_FAILED' });
+      jobId = (await createJob.json() as Array<{ id: string }>)[0]?.id || null;
+    }
+  }
   try {
     const result = await fetch(new URL('/api/internal/managed-workspaces/' + encodeURIComponent(customer.id), origin), {
       method: 'POST',
-      headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+      headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json', 'X-Correlation-ID': correlationId, 'Idempotency-Key': idempotencyKey },
       redirect: 'error',
       signal: AbortSignal.timeout(10000),
       body: JSON.stringify({
@@ -669,10 +695,15 @@ app.post('/api/customers/:id/engagestay', authorize('customer.update'), async (q
       }),
     });
     const workspace = await result.json();
-    if (!result.ok) return r.status(result.status).json({ error: workspace.error || 'EngageStay rejected the action.' });
+    if (!result.ok) {
+      if (jobId) await supabaseAdmin(`rest/v1/provisioning_jobs?id=eq.${encodeURIComponent(jobId)}`, { method: 'PATCH', body: JSON.stringify({ status: 'FAILED', failure_code: workspace.error || 'ENGAGESTAY_REJECTED', failure_detail: workspace.message || null, updated_at: new Date().toISOString() }) });
+      return r.status(result.status).json({ error: workspace.error || 'EngageStay rejected the action.', correlationId });
+    }
+    if (jobId) await supabaseAdmin(`rest/v1/provisioning_jobs?id=eq.${encodeURIComponent(jobId)}`, { method: 'PATCH', body: JSON.stringify({ status: 'SUCCEEDED', result_payload: workspace, updated_at: new Date().toISOString() }) });
     await recordPlatformAudit(q, 'engagestay.' + action, 'customer', customer.id, undefined, workspace);
-    return r.json(workspace);
+    return r.json({ ...workspace, correlationId, idempotencyKey });
   } catch {
+    if (jobId) await supabaseAdmin(`rest/v1/provisioning_jobs?id=eq.${encodeURIComponent(jobId)}`, { method: 'PATCH', body: JSON.stringify({ status: 'FAILED', failure_code: 'ENGAGESTAY_UNREACHABLE', failure_detail: 'The EngageStay API could not be reached.', updated_at: new Date().toISOString() }) });
     return r.status(502).json({ error: 'Unable to reach EngageStay. Check the workspace before retrying.' });
   }
 });
