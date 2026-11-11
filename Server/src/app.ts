@@ -733,15 +733,18 @@ app.post(
 app.get(
   '/api/infrastructure',
   authorize('infrastructure.view'),
-  async (_q, r) =>
-    r.json(await new MockInfrastructureProvider().list()),
+  async (_q, r) => {
+    if (supabaseConfigured()) return r.json([]);
+    return r.json(await new MockInfrastructureProvider().list());
+  },
 );
 
 app.get(
   '/api/deployments',
   authorize('deployment.view'),
-  (_q, r) =>
-    r.json([
+  (_q, r) => {
+    if (supabaseConfigured()) return r.json([]);
+    return r.json([
       {
         id: 'dep-1',
         application: 'Friday AI Desk',
@@ -754,13 +757,20 @@ app.get(
         triggeredBy: 'Infrastructure Admin',
         mock: true,
       },
-    ]),
+    ]);
+  },
 );
 
 app.post(
   '/api/deployments',
   authorize('deployment.manage'),
   async (q, r) => {
+    if (supabaseConfigured()) {
+      return r.status(501).json({
+        error: 'DEPLOYMENT_PROVIDER_NOT_CONNECTED',
+        message: 'Deployment mutation is unavailable until a verified provider adapter is configured.',
+      });
+    }
     const x = await new MockDeploymentProvider().deploy(q.body);
 
     addAudit(
