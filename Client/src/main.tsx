@@ -1,6 +1,7 @@
 import { useEffect, useState, type ChangeEvent, type FormEvent } from 'react';
 import { createRoot } from 'react-dom/client';
 import Login from './Login';
+import logo from './assets/friday-f-logo.png';
 
 import {
   Activity,
@@ -362,6 +363,55 @@ function Onboarding() {
    CUSTOMER 360
 ========================================================= */
 
+function EngageStayControls({ id }: { id: string }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [workspace, setWorkspace] = useState<{ property_id: number; status: string; plan: string; modules: string[] }>();
+
+  return <Card title="EngageStay workspace">
+    {workspace && <p role="status">Property {workspace.property_id} · {workspace.status} · {workspace.plan} · {workspace.modules.join(', ')}</p>}
+    {error && <p role="alert">{error}</p>}
+    <form onSubmit={async event => {
+      event.preventDefault();
+      const form = event.currentTarget;
+      const fields = new FormData(form);
+      const action = (event.nativeEvent as SubmitEvent).submitter?.getAttribute('value');
+      if (!action || busy) return;
+      setBusy(true);
+      setError('');
+      try {
+        setWorkspace(await api<NonNullable<typeof workspace>>(`/customers/${encodeURIComponent(id)}/engagestay`, {
+          method: 'POST',
+          body: JSON.stringify({
+            action, adminName: fields.get('adminName'),
+            password: action === 'approve' ? fields.get('password') : undefined,
+            plan: fields.get('plan'),
+            modules: String(fields.get('modules') || '').split(',').map(value => value.trim()).filter(Boolean),
+          }),
+        }));
+      } catch (cause) {
+        setError(cause instanceof Error ? cause.message : 'EngageStay could not complete the request.');
+      } finally {
+        const password = form.elements.namedItem('password') as HTMLInputElement;
+        password.value = '';
+        setBusy(false);
+      }
+    }}>
+      <fieldset disabled={busy}>
+        <legend>Workspace setup and access</legend>
+        <label>Administrator name <input name="adminName" autoComplete="off" /></label>
+        <label>Initial password <input name="password" type="password" autoComplete="new-password" /></label>
+        <label>Plan <input name="plan" /></label>
+        <label>Modules (comma-separated) <input name="modules" /></label>
+        <button type="submit" value="approve">Approve and provision</button>
+        <button type="submit" value="configure">Save access</button>
+        <button type="submit" value="suspend">Suspend</button>
+        <button type="submit" value="reactivate">Reactivate</button>
+      </fieldset>
+    </form>
+  </Card>;
+}
+
 function Customer360({
   id,
   back,
@@ -431,6 +481,7 @@ function Customer360({
           </button>
         ))}
       </div>
+      {activeTab === 'Overview' && <EngageStayControls key={id} id={id} />}
       {content}
     </>
   );
@@ -784,8 +835,8 @@ let content =
         <div className="brand">
 
           <img
-            src="/src/assets/friday-f-logo.png"
-            alt="FRIDAY"
+            src={logo}
+            alt="Engagehubs"
           />
 
           <span>

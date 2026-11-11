@@ -1,5 +1,6 @@
-﻿import type { NextFunction, Request, Response as ExpressResponse } from 'express';
+import type { NextFunction, Request, Response as ExpressResponse } from 'express';
 import type { Permission } from '@friday/shared';
+import { isValidLocalDemoSession } from './localAuth.js';
 
 const roleDisplayNames: Record<string, string> = {
   owner: 'Owner',
@@ -21,6 +22,10 @@ const demoPermissions: Record<string, Permission[]> = {
     'infrastructure.view', 'infrastructure.manage',
     'deployment.view', 'deployment.manage',
     'configuration.view', 'configuration.manage', 'audit.view',
+    'users.view', 'users.create', 'users.delete',
+    'module.view', 'module.manage', 'entitlement.view', 'entitlement.manage',
+    'provisioning.view', 'provisioning.manage', 'billing.view', 'billing.manage',
+    'support.view', 'support.manage', 'report.view', 'report.export',
   ],
   Owner: [
     'customer.view', 'customer.create', 'customer.update', 'customer.delete',
@@ -29,6 +34,10 @@ const demoPermissions: Record<string, Permission[]> = {
     'infrastructure.view', 'infrastructure.manage',
     'deployment.view', 'deployment.manage',
     'configuration.view', 'configuration.manage', 'audit.view',
+    'users.view', 'users.create', 'users.delete',
+    'module.view', 'module.manage', 'entitlement.view', 'entitlement.manage',
+    'provisioning.view', 'provisioning.manage', 'billing.view', 'billing.manage',
+    'support.view', 'support.manage', 'report.view', 'report.export',
   ],
   Admin: [
     'customer.view', 'customer.create', 'customer.update', 'customer.delete',
@@ -37,6 +46,10 @@ const demoPermissions: Record<string, Permission[]> = {
     'infrastructure.view', 'infrastructure.manage',
     'deployment.view', 'deployment.manage',
     'configuration.view', 'configuration.manage', 'audit.view',
+    'users.view', 'users.create',
+    'module.view', 'module.manage', 'entitlement.view', 'entitlement.manage',
+    'provisioning.view', 'provisioning.manage', 'support.view', 'support.manage',
+    'report.view',
   ],
   Operations: [
     'customer.view', 'customer.create', 'customer.update',
@@ -223,6 +236,18 @@ export async function authenticate(
       .header('authorization')
       ?.replace(/^Bearer\s+/i, '');
 
+    if (token && isValidLocalDemoSession(req, token)) {
+      req.actor = {
+        id: 'demo-user',
+        role: 'Owner',
+        roleKey: 'owner',
+        permissions: demoPermissions.Owner,
+        mustChangePassword: false,
+        isPrimaryOwner: true,
+      };
+      return next();
+    }
+
     if (
       token &&
       process.env.SUPABASE_URL &&
@@ -281,19 +306,6 @@ export async function authenticate(
             : undefined,
         mustChangePassword: profile.must_change_password,
         isPrimaryOwner: profile.is_primary_owner,
-      };
-
-      return next();
-    }
-
-    // Demo authentication is available only outside production.
-    if (process.env.FRIDAY_ENV !== 'PROD') {
-      const role = String(req.header('x-demo-role') || 'Super Admin');
-
-      req.actor = {
-        id: 'demo-user',
-        role,
-        permissions: demoPermissions[role] || [],
       };
 
       return next();

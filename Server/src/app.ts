@@ -1,7 +1,9 @@
 import express from 'express';
 import cors from 'cors';
 import { z } from 'zod';
+import { randomUUID } from 'node:crypto';
 import { authenticate, authorize } from './auth.js';
+import { createLocalDemoSession, isLocalDemoEnabled, isLoopbackRequest } from './localAuth.js';
 import {
   addAudit,
   audit,
@@ -35,7 +37,6 @@ app.use(
 app.use(express.json());
 
 // Supabase privileged operations are server-only. Never expose these keys to the browser.
-const employeeTemporaryPassword = 'friday@123';
 const roleKeys: Record<string, string> = {
   Owner: 'owner',
   'Super Admin': 'super_admin',
@@ -74,8 +75,158 @@ async function ownerProfileById(userId: string) {
   const rows = await response.json() as Array<Record<string, any>>;
   return rows[0] || null;
 }
+
+type RegistryProductRow = {
+  id: string;
+  product_code: string;
+  name: string;
+  description: string | null;
+  version: string | null;
+  status: string;
+  category: string | null;
+  commercial_status: string;
+  adapter_status: string;
+};
+
+type RegistryModuleRow = {
+  product_id: string;
+  name: string;
+  status: string;
+  implementation_state: string;
+};
+
+type RegistryFeatureRow = {
+  product_id: string;
+  name: string;
+  status: string;
+  implementation_state: string;
+};
+
+/**
+ * The product registry is platform data. In a connected environment it must
+ * come from Supabase; the in-memory data may only be used by the explicitly
+ * local demo configuration.
+ */
+async function loadProductRegistry() {
+  if (!supabaseConfigured()) return products;
+
+  const [productResponse, moduleResponse, featureResponse] = await Promise.all([
+    supabaseAdmin('rest/v1/products?select=id,product_code,name,description,version,status,category,commercial_status,adapter_status&order=name'),
+    supabaseAdmin('rest/v1/product_modules?select=product_id,name,status,implementation_state&order=name'),
+    supabaseAdmin('rest/v1/product_features?select=product_id,name,status,implementation_state&order=name'),
+  ]);
+
+  if (!productResponse.ok || !moduleResponse.ok || !featureResponse.ok) {
+    throw new Error('Could not load the platform product registry.');
+  }
+
+  const registryProducts = await productResponse.json() as RegistryProductRow[];
+  const registryModules = await moduleResponse.json() as RegistryModuleRow[];
+  const registryFeatures = await featureResponse.json() as RegistryFeatureRow[];
+
+  return registryProducts.map((product) => ({
+    id: product.id,
+    code: product.product_code,
+    name: product.name,
+    description: product.description || '',
+    version: product.version || 'unreleased',
+    // A product is only operational when the adapter has been verified. This
+    // prevents the UI from overstating the state of a planned application.
+    status: product.adapter_status === 'HEALTHY' ? product.status : product.adapter_status,
+    commercialStatus: product.commercial_status,
+    category: product.category,
+    modules: registryModules
+      .filter((module) => module.product_id === product.id)
+      .map((module) => `${module.name} (${module.status.toLowerCase()})`),
+    features: registryFeatures
+      .filter((feature) => feature.product_id === product.id)
+      .map((feature) => `${feature.name} (${feature.status.toLowerCase()})`),
+  }));
+}
 function can(req: express.Request, permission: string): boolean {
   return Boolean((req as any).actor?.permissions?.includes(permission));
+}
+
+type CustomerDatabaseRow = {
+  id: string;
+  customer_code: string;
+  company_name: string;
+  legal_name: string | null;
+  display_name: string | null;
+  email: string;
+  phone: string | null;
+  industry: string | null;
+  status: string;
+  account_owner: string | null;
+  created_at: string;
+  city: string | null;
+  country: string | null;
+};
+
+function toCustomer(row: CustomerDatabaseRow) {
+  return {
+    id: row.id,
+    customerId: row.customer_code,
+    companyName: row.display_name || row.company_name,
+    legalName: row.legal_name || row.company_name,
+    email: row.email,
+    phone: row.phone || undefined,
+    industry: row.industry || 'Other',
+    status: row.status,
+    accountOwner: row.account_owner || 'Unassigned',
+    createdAt: row.created_at,
+    city: row.city || undefined,
+    country: row.country || undefined,
+  };
+}
+
+async function loadCustomers() {
+  if (!supabaseConfigured()) return customers;
+  const response = await supabaseAdmin(
+    'rest/v1/customers?select=id,customer_code,company_name,legal_name,display_name,email,phone,industry,status,account_owner,created_at,city,country&order=created_at.desc',
+  );
+  if (!response.ok) throw new Error('Could not load the customer registry.');
+  return (await response.json() as CustomerDatabaseRow[]).map(toCustomer);
+}
+
+async function loadCustomer(customerId: string) {
+  if (!supabaseConfigured()) return customers.find((customer) => customer.id === customerId) || null;
+  const response = await supabaseAdmin(
+    `rest/v1/customers?select=id,customer_code,company_name,legal_name,display_name,email,phone,industry,status,account_owner,created_at,city,country&id=eq.${encodeURIComponent(customerId)}&limit=1`,
+  );
+  if (!response.ok) throw new Error('Could not load the customer record.');
+  const rows = await response.json() as CustomerDatabaseRow[];
+  return rows[0] ? toCustomer(rows[0]) : null;
+}
+
+async function recordPlatformAudit(
+  req: express.Request,
+  action: string,
+  resourceType: string,
+  resourceId: string,
+  beforeValue?: unknown,
+  afterValue?: unknown,
+) {
+  if (!supabaseConfigured()) {
+    addAudit(action, resourceType, resourceId, beforeValue, afterValue);
+    return;
+  }
+  const operatorId = (req as any).actor?.id;
+  const response = await supabaseAdmin('/rest/v1/audit_logs', {
+    method: 'POST',
+    headers: { Prefer: 'return=minimal' },
+    body: JSON.stringify({
+      operator_id: operatorId && operatorId !== 'demo-user' ? operatorId : null,
+      action,
+      resource_type: resourceType,
+      resource_id: resourceId,
+      before_value: beforeValue || null,
+      after_value: afterValue || null,
+      correlation_id: randomUUID(),
+      result: 'SUCCESS',
+    }),
+  });
+  if (!response.ok) throw new Error('The requested operation succeeded but its audit record could not be written.');
 }
 
 app.get('/health', (_q, r) =>
@@ -85,7 +236,55 @@ app.get('/health', (_q, r) =>
   }),
 );
 
+// This exposes configuration state only; credentials are never returned to the
+// browser. It lets the control plane show an honest integration status rather
+// than claiming that EngageStay is connected when no service connection exists.
+app.get('/api/public/integration-status', async (_q, r) => {
+  const origin = process.env.ENGAGE_STAY_API_ORIGIN;
+  const token = process.env.ENGAGE_OWNER_SERVICE_TOKEN;
+  if (!origin || !token) {
+    return r.json({ configured: false, reachable: false, message: 'EngageStay service URL and shared token are required.' });
+  }
+  try {
+    const response = await fetch(new URL('/api/health', origin), { signal: AbortSignal.timeout(5000) });
+    return r.json({
+      configured: true,
+      reachable: response.ok,
+      origin: new URL(origin).origin,
+      message: response.ok ? 'EngageStay service is reachable.' : `EngageStay health check returned ${response.status}.`,
+    });
+  } catch {
+    return r.json({ configured: true, reachable: false, origin: new URL(origin).origin, message: 'EngageStay service could not be reached.' });
+  }
+});
+
 app.post('/api/auth/login', async (q, r) => {
+  if (isLocalDemoEnabled()) {
+    if (!isLoopbackRequest(q)) {
+      return r.status(403).json({ error: 'LOCAL_ONLY' });
+    }
+
+    const { email, password } = q.body || {};
+
+    if (typeof email !== 'string' || typeof password !== 'string') {
+      return r.status(400).json({
+        error: 'VALIDATION',
+        message: 'Email and password are required.'
+      });
+    }
+
+    const session = createLocalDemoSession(q, email, password);
+
+    if (!session) {
+      return r.status(401).json({
+        error: 'INVALID_CREDENTIALS',
+        message: 'Invalid local credentials.'
+      });
+    }
+
+    return r.status(200).json(session);
+  }
+
   if (!process.env.SUPABASE_URL || !process.env.SUPABASE_ANON_KEY) {
     return r.status(501).json({ error: 'AUTH_NOT_CONFIGURED', message: 'Set Supabase Auth environment variables; local demo uses X-Demo-Role.' });
   }
@@ -167,18 +366,13 @@ const customerSchema = z.object({
   city: z.string().optional(),
   country: z.string().optional(),
 });
+const customerUpdateSchema = customerSchema.partial().extend({
+  status: z.enum(['PROSPECT', 'ONBOARDING', 'KYC', 'TRIAL', 'ACTIVE', 'UPGRADE', 'DOWNGRADE', 'RENEWAL', 'SUSPENDED', 'CANCELLED', 'ARCHIVED']).optional(),
+});
 
 app.get('/api/dashboard', authorize('customer.view'), async (_q, r) => {
-  const provider = new MockInfrastructureProvider();
-  const infrastructure = await provider.list() as Array<{ status?: string }>;
-  const subscriptionRows = customers.map((customer, index) => ({
-    customer: customer.companyName,
-    product: 'Friday AI Desk',
-    plan: index === 1 ? 'Premium' : 'Enterprise',
-    status: customer.status === 'TRIAL' ? 'Trial' : 'Active',
-    expiryDate: '2027-09-19',
-  }));
-  const growth = customers
+  const [customerRows, registry] = await Promise.all([loadCustomers(), loadProductRegistry()]);
+  const growth = customerRows
     .slice()
     .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
     .map((customer, index) => ({
@@ -190,47 +384,46 @@ app.get('/api/dashboard', authorize('customer.view'), async (_q, r) => {
 
   r.json({
     metrics: [
-      ['Total Customers', customers.length],
+      ['Total Customers', customerRows.length],
       [
         'Active Customers',
-        customers.filter((x) => x.status === 'ACTIVE').length,
+        customerRows.filter((x) => x.status === 'ACTIVE').length,
       ],
-      ['Active Tenants', customers.filter((x) => ['ACTIVE', 'TRIAL'].includes(x.status)).length],
-      ['Active Products', products.length],
-      ['Active Subscriptions', subscriptionRows.filter((x) => x.status === 'Active').length],
-      ['Total Users', 38],
-      ['Hosting Nodes', infrastructure.length],
-      ['Ongoing Deployments', 0],
-      ['System Health', 'Healthy'],
+      ['Active Tenants', 'Not yet measured'],
+      ['Registered Products', registry.length],
+      ['Active Subscriptions', 'Not yet measured'],
+      ['Platform Users', 'Not yet measured'],
+      ['Hosting Nodes', 'Not monitored'],
+      ['Ongoing Deployments', 'Not monitored'],
+      ['System Health', 'Not monitored'],
     ],
-    activity: audit.slice(0, 5),
-    onboarding: customers.filter((x) =>
+    activity: supabaseConfigured() ? [] : audit.slice(0, 5),
+    onboarding: customerRows.filter((x) =>
       ['ONBOARDING', 'KYC', 'TRIAL'].includes(x.status),
     ),
     subscriptions: {
-      active: subscriptionRows.filter((x) => x.status === 'Active').length,
-      trial: subscriptionRows.filter((x) => x.status === 'Trial').length,
-      expiring: 0,
-      suspended: 0,
-      cancelled: 0,
+      active: 'Not yet measured', trial: 'Not yet measured', expiring: 'Not yet measured', suspended: 'Not yet measured', cancelled: 'Not yet measured',
     },
-    health: await provider.health(),
+    health: { api: 'Not monitored', database: 'Not monitored', infrastructure: 'Not monitored', deployment: 'Not monitored' },
     customerGrowth: growth,
-    productAdoption: products.map((product, index) => ({
+    productAdoption: registry.map((product) => ({
       product: product.name,
-      customers: Math.max(0, customers.length - index),
+      customers: 'Not yet measured',
       modules: product.modules.length,
     })),
-    deployments: [
-      { id: 'dep-1', application: 'Friday AI Desk', customer: 'Demo Hospitality', environment: 'PRODUCTION', version: '2.1.0', status: 'Success', completed: '2026-10-05T15:24:00Z' },
-    ],
-    renewals: subscriptionRows.slice(0, 3),
+    deployments: [],
+    renewals: [],
   });
 });
 
-app.get('/api/customers', authorize('customer.view'), (_q, r) =>
-  r.json(customers),
-);
+app.get('/api/customers', authorize('customer.view'), (_q, r) => {
+  void loadCustomers()
+    .then((items) => r.json(items))
+    .catch((error) => {
+      console.error('Customer registry query failed:', error);
+      if (!r.headersSent) r.status(502).json({ error: 'CUSTOMER_REGISTRY_UNAVAILABLE' });
+    });
+});
 
 app.get('/api/signup-requests', authorize('customer.create'), (_q, r) =>
   r.json(signupRequests),
@@ -254,76 +447,122 @@ app.post('/api/customers', authorize('customer.create'), (q, r) => {
     });
   }
 
-  const item = {
+  if (!supabaseConfigured()) {
+    const item = {
     id: ids(),
     customerId: `FRI-${1000 + customers.length + 1}`,
     status: 'ONBOARDING' as const,
     createdAt: new Date().toISOString(),
     ...parsed.data,
-  };
+    };
 
-  customers.unshift(item);
+    customers.unshift(item);
 
-  addAudit(
-    'customer.created',
-    'customer',
-    item.id,
-    undefined,
-    item,
-  );
+    void recordPlatformAudit(q, 'customer.created', 'customer', item.id, undefined, item);
+    return r.status(201).json(item);
+  }
 
-  r.status(201).json(item);
+  void (async () => {
+    const normalizedName = parsed.data.legalName.trim().replace(/\s+/g, ' ').toLowerCase();
+    const existing = await supabaseAdmin(`rest/v1/organizations?select=id&normalized_name=eq.${encodeURIComponent(normalizedName)}&limit=1`);
+    if (!existing.ok) throw new Error('Could not validate the organization registry.');
+    if ((await existing.json() as Array<{ id: string }>).length) {
+      return r.status(409).json({ error: 'DUPLICATE_ORGANIZATION', message: 'An organization with this legal name already exists. Add products through the existing customer record.' });
+    }
+
+    const organizationResponse = await supabaseAdmin('/rest/v1/organizations', {
+      method: 'POST',
+      headers: { Prefer: 'return=representation' },
+      body: JSON.stringify({ name: parsed.data.legalName.trim(), normalized_name: normalizedName }),
+    });
+    if (!organizationResponse.ok) throw new Error('Could not create the organization.');
+    const organization = (await organizationResponse.json() as Array<{ id: string }>)[0];
+    if (!organization?.id) throw new Error('Organization creation did not return an identifier.');
+
+    const customerCode = `EH-${Date.now()}-${randomUUID().slice(0, 8).toUpperCase()}`;
+    const customerResponse = await supabaseAdmin('/rest/v1/customers', {
+      method: 'POST',
+      headers: { Prefer: 'return=representation' },
+      body: JSON.stringify({
+        organization_id: organization.id,
+        customer_code: customerCode,
+        company_name: parsed.data.companyName.trim(),
+        legal_name: parsed.data.legalName.trim(),
+        display_name: parsed.data.companyName.trim(),
+        email: parsed.data.email.trim().toLowerCase(),
+        phone: parsed.data.phone || null,
+        industry: parsed.data.industry,
+        account_owner: parsed.data.accountOwner.trim(),
+        city: parsed.data.city || null,
+        country: parsed.data.country || null,
+        status: 'ONBOARDING',
+        updated_by: (q as any).actor?.id || null,
+      }),
+    });
+    if (!customerResponse.ok) {
+      await supabaseAdmin(`rest/v1/organizations?id=eq.${encodeURIComponent(organization.id)}`, { method: 'DELETE' });
+      throw new Error('Could not create the customer record.');
+    }
+    const row = (await customerResponse.json() as CustomerDatabaseRow[])[0];
+    const item = toCustomer(row);
+    await recordPlatformAudit(q, 'customer.created', 'customer', item.id, undefined, item);
+    return r.status(201).json(item);
+  })().catch((error) => {
+    console.error('Customer creation failed:', error);
+    if (!r.headersSent) r.status(500).json({ error: 'CUSTOMER_CREATE_FAILED', message: 'The customer could not be created.' });
+  });
 });
 
 app.get('/api/customers/:id', authorize('customer.view'), (q, r) => {
-  const c = customers.find((x) => x.id === q.params.id);
-
-  if (!c) {
-    return r.status(404).json({ error: 'NOT_FOUND' });
-  }
+  void loadCustomer(String(q.params.id)).then((c) => {
+  if (!c) return r.status(404).json({ error: 'NOT_FOUND' });
 
   r.json({
     customer: c,
-    products: [products[1]],
-    users: [
-      {
-        name: 'Priya Menon',
-        role: 'Property Admin',
-        status: 'Active',
-        lastLogin: 'Today, 10:42',
-      },
-    ],
-    subscription: {
-      plan: 'Premium',
-      status: c.status === 'TRIAL' ? 'Trial' : 'Active',
-      startDate: '2026-09-20',
-      expiryDate: '2027-09-19',
-      renewal: 'Auto',
-    },
-    configuration: [
-      {
-        key: 'branding.primaryColor',
-        value: '#2798e8',
-        scope: 'Customer',
-        environment: 'PRODUCTION',
-        status: 'Active',
-        updatedBy: 'Ananya Rao',
-        updatedDate: '2026-10-04',
-      },
-    ],
-    infrastructure: [
-      {
-        server: 'Friday Production Node 01',
-        environment: 'PRODUCTION',
-        status: 'Healthy',
-        services: 'API, Worker',
-      },
-    ],
-    activity: audit.filter((a) => a.resourceId === c.id),
+    products: [],
+    users: [],
+    subscription: null,
+    configuration: [],
+    infrastructure: [],
+    activity: supabaseConfigured() ? [] : audit.filter((a) => a.resourceId === c.id),
+  });
+  }).catch((error) => {
+    console.error('Customer detail query failed:', error);
+    if (!r.headersSent) r.status(502).json({ error: 'CUSTOMER_REGISTRY_UNAVAILABLE' });
   });
 });
 
 app.patch('/api/customers/:id', authorize('customer.update'), (q, r) => {
+  if (supabaseConfigured()) {
+    const parsed = customerUpdateSchema.safeParse(q.body);
+    if (!parsed.success) return r.status(400).json({ error: 'VALIDATION', details: parsed.error.flatten() });
+    return void (async () => {
+      const existing = await loadCustomer(String(q.params.id));
+      if (!existing) return r.status(404).json({ error: 'NOT_FOUND' });
+      const input = parsed.data;
+      const update: Record<string, unknown> = { updated_at: new Date().toISOString(), updated_by: (q as any).actor?.id || null };
+      if (input.companyName !== undefined) { update.company_name = input.companyName.trim(); update.display_name = input.companyName.trim(); }
+      if (input.legalName !== undefined) update.legal_name = input.legalName.trim();
+      if (input.email !== undefined) update.email = input.email.trim().toLowerCase();
+      if (input.phone !== undefined) update.phone = input.phone || null;
+      if (input.industry !== undefined) update.industry = input.industry;
+      if (input.accountOwner !== undefined) update.account_owner = input.accountOwner.trim();
+      if (input.city !== undefined) update.city = input.city || null;
+      if (input.country !== undefined) update.country = input.country || null;
+      if (input.status !== undefined) update.status = input.status;
+      const response = await supabaseAdmin(`rest/v1/customers?id=eq.${encodeURIComponent(String(q.params.id))}`, {
+        method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify(update),
+      });
+      if (!response.ok) throw new Error('Could not update the customer record.');
+      const row = (await response.json() as CustomerDatabaseRow[])[0];
+      const result = toCustomer(row);
+      await recordPlatformAudit(q, 'customer.updated', 'customer', result.id, existing, result);
+      return r.json(result);
+    })().catch((error) => {
+      console.error('Customer update failed:', error);
+      if (!r.headersSent) r.status(500).json({ error: 'CUSTOMER_UPDATE_FAILED' });
+    });
+  }
   const c = customers.find((x) => x.id === q.params.id);
 
   if (!c) {
@@ -407,9 +646,50 @@ app.post('/api/onboarding', authorize('customer.create'), (q, r) => {
   });
 });
 
-app.get('/api/products', authorize('product.view'), (_q, r) =>
-  r.json(products),
-);
+app.post('/api/customers/:id/engagestay', authorize('customer.update'), async (q, r) => {
+  const customer = await loadCustomer(String(q.params.id));
+  if (!customer) return r.status(404).json({ error: 'NOT_FOUND' });
+  const action = q.body?.action;
+  if (!['approve', 'configure', 'suspend', 'reactivate'].includes(action)) {
+    return r.status(400).json({ error: 'Invalid lifecycle action.' });
+  }
+  const origin = process.env.ENGAGE_STAY_API_ORIGIN;
+  const token = process.env.ENGAGE_OWNER_SERVICE_TOKEN;
+  if (!origin || !token) return r.status(503).json({ error: 'EngageStay integration is not configured.' });
+  try {
+    const result = await fetch(new URL('/api/internal/managed-workspaces/' + encodeURIComponent(customer.id), origin), {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+      redirect: 'error',
+      signal: AbortSignal.timeout(10000),
+      body: JSON.stringify({
+        action, name: customer.companyName, city: customer.city, email: customer.email,
+        adminName: q.body.adminName, password: q.body.password,
+        plan: q.body.plan, modules: q.body.modules,
+      }),
+    });
+    const workspace = await result.json();
+    if (!result.ok) return r.status(result.status).json({ error: workspace.error || 'EngageStay rejected the action.' });
+    await recordPlatformAudit(q, 'engagestay.' + action, 'customer', customer.id, undefined, workspace);
+    return r.json(workspace);
+  } catch {
+    return r.status(502).json({ error: 'Unable to reach EngageStay. Check the workspace before retrying.' });
+  }
+});
+
+app.get('/api/products', authorize('product.view'), (_q, r) => {
+  void loadProductRegistry()
+    .then((registry) => r.json(registry))
+    .catch((error) => {
+      console.error('Product registry query failed:', error);
+      if (!r.headersSent) {
+        r.status(502).json({
+          error: 'PRODUCT_REGISTRY_UNAVAILABLE',
+          message: 'The platform product registry could not be loaded.',
+        });
+      }
+    });
+});
 
 app.get('/api/plans', authorize('subscription.view'), (_q, r) =>
   r.json(plans),
@@ -548,19 +828,52 @@ app.patch(
   },
 );
 
-app.get(
-  '/api/audit-logs',
-  authorize('audit.view'),
-  (_q, r) => r.json(audit),
-);
+app.get('/api/audit-logs', authorize('audit.view'), (_q, r) => {
+  if (!supabaseConfigured()) return r.json(audit);
+  void supabaseAdmin('rest/v1/audit_logs?select=id,operator_id,action,resource_type,resource_id,before_value,after_value,created_at,result,correlation_id&order=created_at.desc&limit=200')
+    .then(async (response) => {
+      if (!response.ok) throw new Error('Audit query failed.');
+      const rows = await response.json() as Array<Record<string, unknown>>;
+      r.json(rows.map((row) => ({
+        id: row.id,
+        actor: row.operator_id || 'System',
+        action: row.action,
+        resourceType: row.resource_type,
+        resourceId: row.resource_id,
+        before: row.before_value || undefined,
+        after: row.after_value || undefined,
+        timestamp: row.created_at,
+        result: row.result,
+        correlationId: row.correlation_id,
+      })));
+    })
+    .catch((error) => {
+      console.error('Audit log query failed:', error);
+      if (!r.headersSent) r.status(502).json({ error: 'AUDIT_LOG_UNAVAILABLE' });
+    });
+});
 
 // Owner-facing operational inventories. These are explicit control-plane records,
 // not direct access to a customer's application data.
-app.get('/api/integrations', authorize('configuration.view'), (_q, r) => r.json([
+app.get('/api/integrations', authorize('configuration.view'), async (_q, r) => {
+  const origin = process.env.ENGAGE_STAY_API_ORIGIN;
+  const token = process.env.ENGAGE_OWNER_SERVICE_TOKEN;
+  let engageStayStatus = 'Not configured';
+  let lastSync = '—';
+  if (origin && token) {
+    try {
+      const response = await fetch(new URL('/api/health', origin), { signal: AbortSignal.timeout(5000) });
+      engageStayStatus = response.ok ? 'Connected' : 'Action required';
+      lastSync = new Date().toISOString();
+    } catch { engageStayStatus = 'Unavailable'; }
+  }
+  r.json([
+  { id: 'int-engagestay', integration: 'EngageStay workspace control', provider: 'EngageStay', scope: 'Friday Owner', status: engageStayStatus, lastSync },
   { id: 'int-1', integration: 'WhatsApp Business', provider: 'Meta', scope: 'Friday Communication', status: 'Connected', lastSync: '2026-10-11 10:35' },
   { id: 'int-2', integration: 'CRM sync', provider: 'Friday AI CRM', scope: 'Friday AI Desk', status: 'Connected', lastSync: '2026-10-11 10:28' },
   { id: 'int-3', integration: 'Email delivery', provider: 'SendGrid', scope: 'Platform', status: 'Action required', lastSync: '2026-10-10 18:02' },
-]));
+]);
+});
 
 app.get('/api/monitoring', authorize('infrastructure.view'), (_q, r) => r.json([
   { id: 'mon-1', service: 'Owner API', environment: 'Production', status: 'Operational', uptime: '99.99%', checkedAt: new Date().toISOString() },
@@ -621,12 +934,35 @@ app.post('/api/users-access', async (q, r) => {
     if (!duplicate.ok) return r.status(502).json({ error: 'PROFILE_QUERY_FAILED', message: await duplicate.text() });
     if ((await duplicate.json() as unknown[]).length) return r.status(409).json({ error: 'DUPLICATE', message: 'An employee with this email already exists.' });
 
-    const createAuth = await supabaseAdmin('/auth/v1/admin/users', {
+    const inviteRedirect = process.env.OWNER_INVITE_REDIRECT_URL;
+    if (!inviteRedirect) {
+      return r.status(503).json({
+        error: 'INVITATION_NOT_CONFIGURED',
+        message: 'Employee invitations are unavailable until OWNER_INVITE_REDIRECT_URL is configured on the server.',
+      });
+    }
+
+    let redirectTo: URL;
+    try {
+      redirectTo = new URL(inviteRedirect);
+    } catch {
+      return r.status(503).json({
+        error: 'INVITATION_NOT_CONFIGURED',
+        message: 'OWNER_INVITE_REDIRECT_URL is not a valid URL.',
+      });
+    }
+
+    // Do not create an employee with a shared or server-generated password.
+    // Supabase sends a one-time invite link through its configured email flow.
+    const createAuth = await supabaseAdmin('/auth/v1/invite', {
       method: 'POST',
       body: JSON.stringify({
-        email: parsed.data.email.toLowerCase(), password: employeeTemporaryPassword,
-        email_confirm: true,
-        user_metadata: { full_name: parsed.data.name, account_type: 'internal_employee', must_change_password: true },
+        email: parsed.data.email.toLowerCase(),
+        data: {
+          full_name: parsed.data.name,
+          account_type: 'internal_employee',
+        },
+        redirect_to: redirectTo.toString(),
       }),
     });
     const authPayload = await createAuth.json().catch(() => ({})) as Record<string, any>;
@@ -654,7 +990,7 @@ app.post('/api/users-access', async (q, r) => {
     }
     const result = {
       id: authUser.id, name: parsed.data.name, email: parsed.data.email.toLowerCase(), role: parsed.data.role,
-      status: 'Password Change Required', lastLogin: 'Never', isPrimaryOwner: false,
+      status: 'Invitation pending', lastLogin: 'Never', isPrimaryOwner: false,
       must_change_password: true,
     };
     addAudit('owner_user.created', 'owner_user', authUser.id, undefined, { ...result, temporaryPassword: '[not logged]' });
