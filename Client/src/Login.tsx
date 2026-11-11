@@ -74,7 +74,7 @@ export default function Login({ onSuccess }: Props) {
 
       <section className="fl-login-shell">
         <header className="fl-brand" aria-label="Friday AI">
-          <img src={logo} alt="" className="fl-brand-logo" />
+          <img src={logo} alt="Engagehubs" className="fl-brand-logo" />
           <span className="fl-brand-word">Friday</span>
           <span className="fl-ai-badge">AI</span>
         </header>

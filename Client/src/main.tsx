@@ -1,6 +1,7 @@
 import { useEffect, useState, type ChangeEvent, type FormEvent } from 'react';
 import { createRoot } from 'react-dom/client';
 import Login from './Login';
+import logo from './assets/friday-f-logo.png';
 
 import {
   Activity,
@@ -834,8 +835,8 @@ let content =
         <div className="brand">
 
           <img
-            src="/src/assets/friday-f-logo.png"
-            alt="FRIDAY"
+            src={logo}
+            alt="Engagehubs"
           />
 
           <span>
