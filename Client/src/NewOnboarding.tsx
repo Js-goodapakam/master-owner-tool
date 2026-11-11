@@ -78,9 +78,7 @@ function OnboardingWizard({ signup, onBackToQueue }: { signup: SignupRequestRow;
     if (step < steps.length - 1) setStep(step + 1);
     else try {
       setSaving(true); setSaveError('');
-      await api('/onboarding', { method: 'POST', body: JSON.stringify({
-        step: 7,
-        data: {
+      await api('/customers', { method: 'POST', body: JSON.stringify({
           companyName: request.businessName, legalName: request.businessName,
           email: request.email, phone: request.mobile,
           industry: ['Hospitality', 'Real Estate', 'Fitness', 'Sales'].includes(industry) ? industry : 'Sales',
@@ -90,7 +88,6 @@ function OnboardingWizard({ signup, onBackToQueue }: { signup: SignupRequestRow;
           provisioning, notes,
           trialStart: environment === 'Trial' ? trialStart : null,
           trialEnd: environment === 'Trial' ? trialEnd : null,
-        },
       }) });
       setSaved(true);
     } catch (err) {
