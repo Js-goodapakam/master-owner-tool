@@ -655,17 +655,30 @@ app.post('/api/customers/:id/engagestay', authorize('customer.update'), async (q
   }
   const origin = process.env.ENGAGE_STAY_API_ORIGIN;
   const token = process.env.ENGAGE_OWNER_SERVICE_TOKEN;
-  if (!origin || !token) return r.status(503).json({ error: 'EngageStay integration is not configured.' });
+  if (!origin || !token) return r.status(503).json({ error: 'ENGAGE_STAY_NOT_CONFIGURED', message: 'Engage Stay service connection is not configured.' });
+  // An explicit idempotency key allows the receiving service to deduplicate retries.
+  // Never accept a password in the owner lifecycle API.
+  const input = z.object({
+    action: z.enum(['approve', 'configure', 'suspend', 'reactivate']),
+    adminName: z.string().trim().max(160).optional(),
+    plan: z.enum(['Basic', 'Premium', 'Enterprise']).optional(),
+    modules: z.array(z.string().trim().min(1).max(120)).max(100).optional(),
+  }).strict().safeParse(q.body);
+  if (!input.success) return r.status(400).json({ error: 'VALIDATION', details: input.error.flatten() });
+  const requestId = q.header('Idempotency-Key');
+  if (!requestId || !/^[a-zA-Z0-9_-]{12,128}$/.test(requestId)) {
+    return r.status(400).json({ error: 'IDEMPOTENCY_KEY_REQUIRED', message: 'Provide a stable Idempotency-Key (12-128 alphanumeric, underscore or hyphen characters) when retrying the same operation.' });
+  }
   try {
     const result = await fetch(new URL('/api/internal/managed-workspaces/' + encodeURIComponent(customer.id), origin), {
       method: 'POST',
-      headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+      headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json', 'Idempotency-Key': requestId },
       redirect: 'error',
       signal: AbortSignal.timeout(10000),
       body: JSON.stringify({
         action, name: customer.companyName, city: customer.city, email: customer.email,
-        adminName: q.body.adminName, password: q.body.password,
-        plan: q.body.plan, modules: q.body.modules,
+        adminName: input.data.adminName,
+        plan: input.data.plan, modules: input.data.modules,
       }),
     });
     const workspace = await result.json();
