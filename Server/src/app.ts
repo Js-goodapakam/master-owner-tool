@@ -521,12 +521,12 @@ app.post('/api/customers', authorize('customer.create'), (q, r) => {
 });
 
 app.get('/api/customers/:id', authorize('customer.view'), (q, r) => {
-  void loadCustomer(String(q.params.id)).then((c) => {
+  void loadCustomer(String(q.params.id)).then(async (c) => {
   if (!c) return r.status(404).json({ error: 'NOT_FOUND' });
 
   r.json({
     customer: c,
-    products: [],
+    products: supabaseConfigured() ? await (async () => { const x = await supabaseAdmin(`rest/v1/customer_products?select=products(id,name,version,status)&customer_id=eq.${encodeURIComponent(c.id)}`); return x.ok ? (await x.json() as Array<{ products: unknown }>).map((row) => row.products).filter(Boolean) : []; })() : [products[1]],
     users: [],
     subscription: null,
     configuration: [],
