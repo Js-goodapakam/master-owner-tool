@@ -581,7 +581,34 @@ app.post('/api/customers', authorize('customer.create'), (q, r) => {
     if (productCode) {
       const productResponse = await supabaseAdmin(`rest/v1/products?select=id&product_code=eq.${encodeURIComponent(productCode)}&limit=1`);
       const product = productResponse.ok ? (await productResponse.json() as Array<{ id: string }>)[0] : null;
-      if (product) await supabaseAdmin('/rest/v1/customer_products', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ customer_id: item.id, product_id: product.id, status: 'ONBOARDING' }) });
+      if (product) {
+        const tenantName = typeof q.body?.tenantName === 'string' ? q.body.tenantName.trim() : '';
+        const tenantSlug = typeof q.body?.tenantId === 'string' ? q.body.tenantId.trim().toLowerCase().replace(/[^a-z0-9-]/g, '-') : '';
+        let tenantId: string | null = null;
+        if (tenantName && tenantSlug) {
+          const tenantResponse = await supabaseAdmin('/rest/v1/tenants', { method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ customer_id: item.id, name: tenantName, slug: tenantSlug, status: 'ONBOARDING' }) });
+          if (!tenantResponse.ok) throw new Error('Could not create the requested tenant.');
+          tenantId = (await tenantResponse.json() as Array<{ id: string }>)[0]?.id || null;
+        }
+        const assignment = await supabaseAdmin('/rest/v1/customer_products', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ customer_id: item.id, product_id: product.id, tenant_id: tenantId, status: 'ONBOARDING' }) });
+        if (!assignment.ok) throw new Error('Could not assign the selected product.');
+        const adminEmail = typeof q.body?.adminEmail === 'string' ? q.body.adminEmail.trim().toLowerCase() : '';
+        const adminName = typeof q.body?.adminName === 'string' ? q.body.adminName.trim() : '';
+        if (adminEmail && adminName) {
+          const admin = await supabaseAdmin('/rest/v1/users', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ id: randomUUID(), customer_id: item.id, email: adminEmail, name: adminName, status: 'INVITED' }) });
+          if (!admin.ok) throw new Error('Could not create the initial administrator invitation.');
+        }
+        const config = { environment: q.body?.environment, deployment: q.body?.deployment, appUrl: q.body?.appUrl, modules: Array.isArray(q.body?.modules) ? q.body.modules : [], notes: q.body?.notes || null, trialStart: q.body?.trialStart || null, trialEnd: q.body?.trialEnd || null };
+        const configResponse = await supabaseAdmin('/rest/v1/customer_configurations', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ customer_id: item.id, product_id: product.id, config_key: 'onboarding', config_value: config, scope: 'TENANT', environment: q.body?.environment === 'Live' ? 'PRODUCTION' : 'TRIAL', updated_by: (q as any).actor?.id || null }) });
+        if (!configResponse.ok) throw new Error('Could not persist onboarding configuration.');
+      }
+    }
+    const signupRequestId = typeof q.body?.signupRequestId === 'string' ? q.body.signupRequestId : null;
+    if (signupRequestId && /^[0-9a-f-]{36}$/i.test(signupRequestId)) {
+      await Promise.all([
+        supabaseAdmin(`rest/v1/signup_requests?id=eq.${encodeURIComponent(signupRequestId)}`, { method: 'PATCH', body: JSON.stringify({ status: 'CONVERTED', updated_at: new Date().toISOString() }) }),
+        supabaseAdmin(`rest/v1/onboarding_sessions?signup_request_id=eq.${encodeURIComponent(signupRequestId)}`, { method: 'PATCH', body: JSON.stringify({ status: 'COMPLETED', customer_id: item.id, current_step: 7, updated_at: new Date().toISOString() }) }),
+      ]);
     }
     await recordPlatformAudit(q, 'customer.created', 'customer', item.id, undefined, item);
     return r.status(201).json(item);
@@ -692,6 +719,21 @@ app.post('/api/onboarding', authorize('customer.create'), (q, r) => {
     .min(1)
     .max(11)
     .parse(q.body.step);
+
+  if (supabaseConfigured()) return void (async () => {
+    const signupRequestId = typeof q.body.signupRequestId === 'string' && /^[0-9a-f-]{36}$/i.test(q.body.signupRequestId) ? q.body.signupRequestId : null;
+    const payload = q.body.data && typeof q.body.data === 'object' ? q.body.data : {};
+    const existing = signupRequestId ? await supabaseAdmin(`rest/v1/onboarding_sessions?select=id&signup_request_id=eq.${encodeURIComponent(signupRequestId)}&limit=1`) : null;
+    if (existing && !existing.ok) throw new Error('Could not read onboarding session.');
+    const prior = existing ? (await existing.json() as Array<{ id: string }>)[0] : null;
+    const response = prior
+      ? await supabaseAdmin(`rest/v1/onboarding_sessions?id=eq.${encodeURIComponent(prior.id)}`, { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ current_step: step, payload, updated_at: new Date().toISOString() }) })
+      : await supabaseAdmin('/rest/v1/onboarding_sessions', { method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ signup_request_id: signupRequestId, current_step: step, payload, created_by: (q as any).actor?.id || null }) });
+    if (!response.ok) throw new Error('Could not save onboarding step.');
+    const session = (await response.json() as Array<{ id: string; current_step: number }>)[0];
+    await recordPlatformAudit(q, 'onboarding.step_saved', 'onboarding_session', session.id, undefined, { step });
+    return r.json({ sessionId: session.id, step: session.current_step });
+  })().catch((error) => { console.error('Onboarding step save failed:', error); if (!r.headersSent) r.status(500).json({ error: 'ONBOARDING_SAVE_FAILED' }); });
 
   const existing =
     q.body.customerId &&
@@ -807,6 +849,15 @@ app.post('/api/customers/:id/engagestay', authorize('customer.update'), async (q
     if (jobId) await supabaseAdmin(`rest/v1/provisioning_jobs?id=eq.${encodeURIComponent(jobId)}`, { method: 'PATCH', body: JSON.stringify({ status: 'FAILED', failure_code: 'ENGAGESTAY_UNREACHABLE', failure_detail: 'The EngageStay API could not be reached.', updated_at: new Date().toISOString() }) });
     return r.status(502).json({ error: 'Unable to reach EngageStay. Check the workspace before retrying.' });
   }
+});
+
+app.get('/api/customers/:id/provisioning-jobs', authorize('customer.view'), async (q, r) => {
+  if (!supabaseConfigured()) return r.json([]);
+  const customer = await loadCustomer(String(q.params.id));
+  if (!customer) return r.status(404).json({ error: 'NOT_FOUND' });
+  const response = await supabaseAdmin(`rest/v1/provisioning_jobs?select=id,operation,status,attempt_count,correlation_id,failure_code,failure_detail,created_at,updated_at&customer_id=eq.${encodeURIComponent(customer.id)}&order=created_at.desc&limit=20`);
+  if (!response.ok) return r.status(502).json({ error: 'PROVISIONING_JOBS_UNAVAILABLE' });
+  return r.json(await response.json());
 });
 
 app.get('/api/products', authorize('product.view'), (_q, r) => {
@@ -954,6 +1005,18 @@ app.post('/api/customers/:id/entitlements', authorize('entitlement.manage'), asy
   const response = await supabaseAdmin('/rest/v1/entitlement_overrides', { method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ customer_id: customer.id, product_id: input.productId, entitlement_key: input.entitlementKey, value: input.value, reason: input.reason, expires_at: input.expiresAt || null, created_by: (q as any).actor?.id || null, approved_by: (q as any).actor?.id || null }) });
   if (!response.ok) return r.status(502).json({ error: 'ENTITLEMENT_CREATE_FAILED' });
   const row = (await response.json() as Array<any>)[0];
+  const product = await supabaseAdmin(`rest/v1/products?select=product_code& id=eq.${encodeURIComponent(input.productId)}&limit=1`.replace('& ', '&'));
+  const productCode = product.ok ? (await product.json() as Array<{ product_code: string }>)[0]?.product_code : undefined;
+  if (productCode === 'engage_stay') {
+    const origin = process.env.ENGAGE_STAY_API_ORIGIN;
+    const token = process.env.ENGAGE_OWNER_SERVICE_TOKEN;
+    if (!origin || !token) return r.status(503).json({ error: 'ENTITLEMENT_SAVED_SYNC_NOT_CONFIGURED', message: 'The override was saved, but Engage Stay synchronization is not configured.' });
+    const all = await supabaseAdmin(`rest/v1/entitlement_overrides?select=entitlement_key,value,expires_at&customer_id=eq.${encodeURIComponent(customer.id)}&product_id=eq.${encodeURIComponent(input.productId)}&or=(expires_at.is.null,expires_at.gt.${encodeURIComponent(new Date().toISOString())})`);
+    if (!all.ok) return r.status(502).json({ error: 'ENTITLEMENT_SAVED_SYNC_LOOKUP_FAILED' });
+    const effective = Object.fromEntries((await all.json() as Array<any>).map((item) => [item.entitlement_key, { value: item.value, expiresAt: item.expires_at || null }]));
+    const sync = await fetch(new URL(`/api/internal/managed-workspaces/${encodeURIComponent(customer.id)}`, origin), { method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'sync_entitlements', entitlements: effective }), signal: AbortSignal.timeout(10000) });
+    if (!sync.ok) return r.status(502).json({ error: 'ENTITLEMENT_SAVED_SYNC_FAILED', message: 'The override was saved but Engage Stay rejected the synchronization.' });
+  }
   await recordPlatformAudit(q, 'entitlement.override_created', 'entitlement_override', row.id, undefined, { customerId: customer.id, entitlementKey: input.entitlementKey, expiresAt: input.expiresAt || null });
   return r.status(201).json(row);
 });

@@ -367,6 +367,9 @@ function EngageStayControls({ id }: { id: string }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [workspace, setWorkspace] = useState<{ property_id: number; status: string; plan: string; modules: string[] }>();
+  const [jobs, setJobs] = useState<Array<{ id: string; operation: string; status: string; attempt_count: number; failure_code?: string; failure_detail?: string }>>([]);
+  const loadJobs = () => api<typeof jobs>(`/customers/${encodeURIComponent(id)}/provisioning-jobs`).then(setJobs).catch(() => setJobs([]));
+  useEffect(() => { void loadJobs(); }, [id]);
 
   return <Card title="EngageStay workspace">
     {workspace && <p role="status">Property {workspace.property_id} · {workspace.status} · {workspace.plan} · {workspace.modules.join(', ')}</p>}
@@ -382,6 +385,7 @@ function EngageStayControls({ id }: { id: string }) {
       try {
         setWorkspace(await api<NonNullable<typeof workspace>>(`/customers/${encodeURIComponent(id)}/engagestay`, {
           method: 'POST',
+          headers: { 'Idempotency-Key': `workspace-${id}-${action}-${Date.now()}` },
           body: JSON.stringify({
             action, adminName: fields.get('adminName'),
             password: action === 'approve' ? fields.get('password') : undefined,
@@ -389,6 +393,7 @@ function EngageStayControls({ id }: { id: string }) {
             modules: String(fields.get('modules') || '').split(',').map(value => value.trim()).filter(Boolean),
           }),
         }));
+        await loadJobs();
       } catch (cause) {
         setError(cause instanceof Error ? cause.message : 'EngageStay could not complete the request.');
       } finally {
@@ -409,6 +414,10 @@ function EngageStayControls({ id }: { id: string }) {
         <button type="submit" value="reactivate">Reactivate</button>
       </fieldset>
     </form>
+    <h4>Provisioning history</h4>
+    {jobs.length === 0 ? <p>No provisioning attempts recorded.</p> : <Table headers={['Operation', 'Status', 'Attempts', 'Error']}>
+      {jobs.map(job => <tr key={job.id}><td>{job.operation}</td><td><Badge>{job.status}</Badge></td><td>{job.attempt_count}</td><td>{job.failure_code ? `${job.failure_code}${job.failure_detail ? ` — ${job.failure_detail}` : ''}` : '—'}</td></tr>)}
+    </Table>}
   </Card>;
 }
 
