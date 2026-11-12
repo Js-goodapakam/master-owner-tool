@@ -412,6 +412,27 @@ function EngageStayControls({ id }: { id: string }) {
   </Card>;
 }
 
+function CustomerProfile({ customer, onSaved }: { customer: any; onSaved: () => Promise<void> }) {
+  const [form, setForm] = useState({ companyName: customer.companyName || '', legalName: customer.legalName || '', email: customer.email || '', phone: customer.phone || '', industry: customer.industry || 'Other', accountOwner: customer.accountOwner || '', city: customer.city || '', country: customer.country || '' });
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState('');
+  useEffect(() => setForm({ companyName: customer.companyName || '', legalName: customer.legalName || '', email: customer.email || '', phone: customer.phone || '', industry: customer.industry || 'Other', accountOwner: customer.accountOwner || '', city: customer.city || '', country: customer.country || '' }), [customer]);
+  return <Card title="Customer profile" subtitle="Platform account information. Changes are recorded in audit history.">
+    <form className="owner-user-form" onSubmit={async (event) => { event.preventDefault(); setSaving(true); setMessage(''); try { await api(`/customers/${encodeURIComponent(customer.id)}`, { method: 'PATCH', body: JSON.stringify(form) }); await onSaved(); setMessage('Saved.'); } catch (error) { setMessage(error instanceof Error ? error.message : 'Could not save customer profile.'); } finally { setSaving(false); } }}>
+      <Input required placeholder="Display name" value={form.companyName} onChange={(event) => setForm({ ...form, companyName: event.target.value })} />
+      <Input required placeholder="Legal business name" value={form.legalName} onChange={(event) => setForm({ ...form, legalName: event.target.value })} />
+      <Input required type="email" placeholder="Primary email" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} />
+      <Input placeholder="Phone" value={form.phone} onChange={(event) => setForm({ ...form, phone: event.target.value })} />
+      <Input placeholder="Industry" value={form.industry} onChange={(event) => setForm({ ...form, industry: event.target.value })} />
+      <Input placeholder="Account owner" value={form.accountOwner} onChange={(event) => setForm({ ...form, accountOwner: event.target.value })} />
+      <Input placeholder="City" value={form.city} onChange={(event) => setForm({ ...form, city: event.target.value })} />
+      <Input placeholder="Country" value={form.country} onChange={(event) => setForm({ ...form, country: event.target.value })} />
+      <Button type="submit" disabled={saving}>{saving ? 'Saving…' : 'Save profile'}</Button>
+    </form>
+    {message && <p className="owner-user-message" role="status">{message}</p>}
+  </Card>;
+}
+
 function Customer360({
   id,
   back,
@@ -422,9 +443,10 @@ function Customer360({
   const [d, setD] = useState<any>();
   const [activeTab, setActiveTab] = useState('Overview');
 
+  const load = async () => setD(await api<any>(`/customers/${id}`));
+
   useEffect(() => {
-    api<any>(`/customers/${id}`)
-      .then(setD);
+    void load();
   }, [id]);
 
   if (!d) {
@@ -435,6 +457,7 @@ function Customer360({
   const tabs = ['Overview', 'Products', 'Users', 'Subscription', 'Configuration', 'Infrastructure', 'Activity'];
 
   const content = activeTab === 'Overview' ? <>
+    <CustomerProfile customer={c} onSaved={load} />
     <div className="cols">
       <Card title="Company information"><p><b>Legal name:</b> {c.legalName}</p><p><b>Location:</b> {c.city || '—'}, {c.country || '—'}</p><p><b>Account owner:</b> {c.accountOwner}</p></Card>
       <Card title="Subscription"><p><b>{d.subscription.plan}</b> · {d.subscription.status}</p><p>Expiry: {d.subscription.expiryDate}</p><p>Renewal: {d.subscription.renewal}</p></Card>

@@ -594,7 +594,30 @@ app.post('/api/customers', authorize('customer.create'), (q, r) => {
 app.get('/api/customers/:id', authorize('customer.view'), (q, r) => {
   void loadCustomer(String(q.params.id)).then(async (c) => {
   if (!c) return r.status(404).json({ error: 'NOT_FOUND' });
-
+  if (supabaseConfigured()) {
+    const [productResponse, subscriptionResponse, userResponse, configurationResponse, activityResponse] = await Promise.all([
+      supabaseAdmin(`rest/v1/customer_products?select=status,products(id,name,version,status,product_modules(name,status,implementation_state))&customer_id=eq.${encodeURIComponent(c.id)}`),
+      supabaseAdmin(`rest/v1/subscriptions?select=status,starts_at,expires_at,renewal_mode,plans(name),products(name)&customer_id=eq.${encodeURIComponent(c.id)}&order=created_at.desc&limit=1`),
+      supabaseAdmin(`rest/v1/users?select=id,name,email,status,last_login_at&customer_id=eq.${encodeURIComponent(c.id)}&order=created_at.asc`),
+      supabaseAdmin(`rest/v1/customer_configurations?select=config_key,config_value,scope,environment,updated_at&customer_id=eq.${encodeURIComponent(c.id)}&order=updated_at.desc`),
+      supabaseAdmin(`rest/v1/audit_logs?select=id,operator_id,action,resource_type,resource_id,created_at,result&resource_id=eq.${encodeURIComponent(c.id)}&order=created_at.desc&limit=100`),
+    ]);
+    if (![productResponse, subscriptionResponse, userResponse, configurationResponse, activityResponse].every((response) => response.ok)) return r.status(502).json({ error: 'CUSTOMER_360_UNAVAILABLE' });
+    const productRows = await productResponse.json() as Array<{ status: string; products: any }>;
+    const subscriptionRow = (await subscriptionResponse.json() as Array<any>)[0];
+    const users = await userResponse.json() as Array<any>;
+    const configurations = await configurationResponse.json() as Array<any>;
+    const activity = await activityResponse.json() as Array<any>;
+    return r.json({
+      customer: c,
+      products: productRows.map((row) => ({ ...row.products, assignmentStatus: row.status, modules: (row.products?.product_modules || []).map((module: any) => `${module.name} (${String(module.status).toLowerCase()})`) })),
+      users: users.map((user) => ({ name: user.name || user.email, email: user.email, role: 'Managed by Engage Stay', status: user.status, lastLogin: user.last_login_at || 'Never' })),
+      subscription: subscriptionRow ? { plan: subscriptionRow.plans?.name || 'Custom', product: subscriptionRow.products?.name || 'Unknown product', status: subscriptionRow.status, startDate: subscriptionRow.starts_at || '—', expiryDate: subscriptionRow.expires_at || 'No expiry', renewal: subscriptionRow.renewal_mode || 'MANUAL' } : { plan: 'Not assigned', status: 'ONBOARDING', startDate: '—', expiryDate: '—', renewal: '—' },
+      configuration: configurations.map((item) => ({ key: item.config_key, value: JSON.stringify(item.config_value), scope: item.scope, environment: item.environment, status: 'Applied', updatedBy: 'System', updatedDate: item.updated_at })),
+      infrastructure: [],
+      activity: activity.map((item) => ({ id: item.id, actor: item.operator_id || 'System', action: item.action, resourceType: item.resource_type, resourceId: item.resource_id, timestamp: item.created_at, result: item.result })),
+    });
+  }
   r.json({
     customer: c,
     products: supabaseConfigured() ? await (async () => { const x = await supabaseAdmin(`rest/v1/customer_products?select=products(id,name,version,status)&customer_id=eq.${encodeURIComponent(c.id)}`); return x.ok ? (await x.json() as Array<{ products: unknown }>).map((row) => row.products).filter(Boolean) : []; })() : [products[1]],
