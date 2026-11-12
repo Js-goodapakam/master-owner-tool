@@ -433,6 +433,37 @@ function CustomerProfile({ customer, onSaved }: { customer: any; onSaved: () => 
   </Card>;
 }
 
+function CustomerCommercial({ customer, detail, onSaved }: { customer: any; detail: any; onSaved: () => Promise<void> }) {
+  const [plans, setPlans] = useState<any[]>([]); const [message, setMessage] = useState(''); const [busy, setBusy] = useState(false);
+  const subscription = detail.subscription;
+  useEffect(() => { void api<any[]>('/plans').then(setPlans).catch(() => setPlans([])); }, []);
+  const run = async (path: string, body: unknown) => { setBusy(true); setMessage(''); try { await api(path, { method: path.includes('/subscriptions/') ? 'PATCH' : 'POST', body: JSON.stringify(body) }); await onSaved(); setMessage('Saved.'); } catch (error) { setMessage(error instanceof Error ? error.message : 'Commercial action failed.'); } finally { setBusy(false); } };
+  const productPlans = plans.filter((plan) => !subscription.product || plan.product === subscription.product);
+  return <>
+    <Card title="Subscription lifecycle" subtitle="Activate a trial or live subscription and manage its lifecycle.">
+      <form className="owner-user-form" onSubmit={(event) => { event.preventDefault(); const fields = new FormData(event.currentTarget); void run('/subscriptions', { customerId: customer.id, planId: fields.get('planId'), status: fields.get('status'), expiresAt: fields.get('expiresAt') ? new Date(String(fields.get('expiresAt'))).toISOString() : undefined, renewalMode: fields.get('renewalMode') }); }}>
+        <Select name="planId" required defaultValue=""><option value="" disabled>Select plan</option>{productPlans.map((plan) => <option key={plan.id} value={plan.id}>{plan.name} · {plan.product}</option>)}</Select>
+        <Select name="status" defaultValue="TRIAL"><option value="TRIAL">Trial</option><option value="ACTIVE">Live</option></Select>
+        <Input name="expiresAt" type="datetime-local" aria-label="Subscription expiry" />
+        <Select name="renewalMode" defaultValue="MANUAL"><option value="MANUAL">Manual renewal</option><option value="AUTO_RENEW">Auto renew</option></Select>
+        <Button type="submit" disabled={busy || subscription.id}>Activate subscription</Button>
+      </form>
+      {subscription.id && <div className="owner-user-form"><Select value={subscription.planId || ''} onChange={(event: ChangeEvent<HTMLSelectElement>) => void run(`/subscriptions/${subscription.id}`, { action: 'CHANGE_PLAN', planId: event.target.value })}>{productPlans.map((plan) => <option key={plan.id} value={plan.id}>{plan.name}</option>)}</Select><Button disabled={busy} onClick={() => void run(`/subscriptions/${subscription.id}`, { action: 'SUSPEND' })}>Suspend</Button><Button disabled={busy} onClick={() => void run(`/subscriptions/${subscription.id}`, { action: 'REACTIVATE' })}>Reactivate</Button></div>}
+      {message && <p className="owner-user-message" role="status">{message}</p>}
+    </Card>
+    <Card title="Customer entitlement override" subtitle="Temporary exceptions are audited and stored server-side.">
+      <form className="owner-user-form" onSubmit={(event) => { event.preventDefault(); const fields = new FormData(event.currentTarget); try { void run(`/customers/${customer.id}/entitlements`, { productId: fields.get('productId'), entitlementKey: fields.get('entitlementKey'), value: String(fields.get('value')) === 'true', reason: fields.get('reason'), expiresAt: fields.get('expiresAt') ? new Date(String(fields.get('expiresAt'))).toISOString() : null }); } catch { setMessage('Invalid entitlement value.'); } }}>
+        <Select name="productId" required defaultValue=""><option value="" disabled>Select product</option>{detail.products.map((product: any) => <option key={product.id} value={product.id}>{product.name}</option>)}</Select>
+        <Input name="entitlementKey" required placeholder="Feature or limit key" />
+        <Select name="value" defaultValue="true"><option value="true">Enabled</option><option value="false">Disabled</option></Select>
+        <Input name="expiresAt" type="datetime-local" aria-label="Override expiry" />
+        <Input name="reason" required placeholder="Business reason" />
+        <Button type="submit" disabled={busy}>Apply override</Button>
+      </form>
+    </Card>
+  </>;
+}
+
 function Customer360({
   id,
   back,
@@ -467,7 +498,7 @@ function Customer360({
     {d.products.map((p: any) => <tr key={p.id}><td>{p.name}</td><td>{p.version}</td><td>{p.modules?.join(', ') || '—'}</td><td>{p.features?.join(', ') || '—'}</td><td><Badge>{p.status}</Badge></td></tr>)}
   </Table></Card> : activeTab === 'Users' ? <Card title="Customer users" subtitle="Users with access to this customer workspace."><Table headers={['Name', 'Role', 'Status', 'Last login']}>
     {d.users.map((user: any) => <tr key={`${user.name}-${user.role}`}><td>{user.name}</td><td>{user.role}</td><td><Badge>{user.status}</Badge></td><td>{user.lastLogin}</td></tr>)}
-  </Table></Card> : activeTab === 'Subscription' ? <Card title="Subscription details"><div className="customer-detail-grid"><div><small>Plan</small><b>{d.subscription.plan}</b></div><div><small>Status</small><b>{d.subscription.status}</b></div><div><small>Start date</small><b>{d.subscription.startDate}</b></div><div><small>Expiry date</small><b>{d.subscription.expiryDate}</b></div><div><small>Renewal</small><b>{d.subscription.renewal}</b></div></div></Card> : activeTab === 'Configuration' ? <Card title="Customer configuration" subtitle="Configuration values currently applied to this customer."><Table headers={['Key', 'Value', 'Scope', 'Environment', 'Status', 'Updated by', 'Updated date']}>
+  </Table></Card> : activeTab === 'Subscription' ? <><Card title="Subscription details"><div className="customer-detail-grid"><div><small>Plan</small><b>{d.subscription.plan}</b></div><div><small>Status</small><b>{d.subscription.status}</b></div><div><small>Start date</small><b>{d.subscription.startDate}</b></div><div><small>Expiry date</small><b>{d.subscription.expiryDate}</b></div><div><small>Renewal</small><b>{d.subscription.renewal}</b></div></div></Card><CustomerCommercial customer={c} detail={d} onSaved={load} /></> : activeTab === 'Configuration' ? <Card title="Customer configuration" subtitle="Configuration values currently applied to this customer."><Table headers={['Key', 'Value', 'Scope', 'Environment', 'Status', 'Updated by', 'Updated date']}>
     {d.configuration.map((item: any) => <tr key={item.key}><td>{item.key}</td><td>{item.value}</td><td>{item.scope}</td><td>{item.environment}</td><td><Badge>{item.status}</Badge></td><td>{item.updatedBy}</td><td>{item.updatedDate}</td></tr>)}
   </Table></Card> : activeTab === 'Infrastructure' ? <Card title="Infrastructure" subtitle="Current hosting and service health for this customer."><Table headers={['Server', 'Environment', 'Status', 'Services']}>
     {d.infrastructure.map((item: any) => <tr key={item.server}><td>{item.server}</td><td>{item.environment}</td><td><Badge>{item.status}</Badge></td><td>{item.services}</td></tr>)}

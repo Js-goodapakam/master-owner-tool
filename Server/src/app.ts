@@ -597,7 +597,7 @@ app.get('/api/customers/:id', authorize('customer.view'), (q, r) => {
   if (supabaseConfigured()) {
     const [productResponse, subscriptionResponse, userResponse, configurationResponse, activityResponse] = await Promise.all([
       supabaseAdmin(`rest/v1/customer_products?select=status,products(id,name,version,status,product_modules(name,status,implementation_state))&customer_id=eq.${encodeURIComponent(c.id)}`),
-      supabaseAdmin(`rest/v1/subscriptions?select=status,starts_at,expires_at,renewal_mode,plans(name),products(name)&customer_id=eq.${encodeURIComponent(c.id)}&order=created_at.desc&limit=1`),
+      supabaseAdmin(`rest/v1/subscriptions?select=id,product_id,plan_id,status,starts_at,expires_at,renewal_mode,plans(name),products(name)&customer_id=eq.${encodeURIComponent(c.id)}&order=created_at.desc&limit=1`),
       supabaseAdmin(`rest/v1/users?select=id,name,email,status,last_login_at&customer_id=eq.${encodeURIComponent(c.id)}&order=created_at.asc`),
       supabaseAdmin(`rest/v1/customer_configurations?select=config_key,config_value,scope,environment,updated_at&customer_id=eq.${encodeURIComponent(c.id)}&order=updated_at.desc`),
       supabaseAdmin(`rest/v1/audit_logs?select=id,operator_id,action,resource_type,resource_id,created_at,result&resource_id=eq.${encodeURIComponent(c.id)}&order=created_at.desc&limit=100`),
@@ -612,7 +612,7 @@ app.get('/api/customers/:id', authorize('customer.view'), (q, r) => {
       customer: c,
       products: productRows.map((row) => ({ ...row.products, assignmentStatus: row.status, modules: (row.products?.product_modules || []).map((module: any) => `${module.name} (${String(module.status).toLowerCase()})`) })),
       users: users.map((user) => ({ name: user.name || user.email, email: user.email, role: 'Managed by Engage Stay', status: user.status, lastLogin: user.last_login_at || 'Never' })),
-      subscription: subscriptionRow ? { plan: subscriptionRow.plans?.name || 'Custom', product: subscriptionRow.products?.name || 'Unknown product', status: subscriptionRow.status, startDate: subscriptionRow.starts_at || '—', expiryDate: subscriptionRow.expires_at || 'No expiry', renewal: subscriptionRow.renewal_mode || 'MANUAL' } : { plan: 'Not assigned', status: 'ONBOARDING', startDate: '—', expiryDate: '—', renewal: '—' },
+      subscription: subscriptionRow ? { id: subscriptionRow.id, productId: subscriptionRow.product_id, planId: subscriptionRow.plan_id, plan: subscriptionRow.plans?.name || 'Custom', product: subscriptionRow.products?.name || 'Unknown product', status: subscriptionRow.status, startDate: subscriptionRow.starts_at || '—', expiryDate: subscriptionRow.expires_at || 'No expiry', renewal: subscriptionRow.renewal_mode || 'MANUAL' } : { plan: 'Not assigned', status: 'ONBOARDING', startDate: '—', expiryDate: '—', renewal: '—' },
       configuration: configurations.map((item) => ({ key: item.config_key, value: JSON.stringify(item.config_value), scope: item.scope, environment: item.environment, status: 'Applied', updatedBy: 'System', updatedDate: item.updated_at })),
       infrastructure: [],
       activity: activity.map((item) => ({ id: item.id, actor: item.operator_id || 'System', action: item.action, resourceType: item.resource_type, resourceId: item.resource_id, timestamp: item.created_at, result: item.result })),
@@ -885,6 +885,77 @@ app.post('/api/subscriptions', authorize('subscription.manage'), async (q, r) =>
     console.error('Subscription activation failed:', error);
     return r.status(500).json({ error: 'SUBSCRIPTION_ACTIVATION_FAILED' });
   }
+});
+
+const subscriptionChangeSchema = z.object({
+  action: z.enum(['CHANGE_PLAN', 'SET_EXPIRY', 'SUSPEND', 'REACTIVATE']),
+  planId: z.string().uuid().optional(),
+  expiresAt: z.string().datetime().nullable().optional(),
+}).superRefine((value, context) => {
+  if (value.action === 'CHANGE_PLAN' && !value.planId) context.addIssue({ code: z.ZodIssueCode.custom, message: 'Plan is required.' });
+  if (value.action === 'SET_EXPIRY' && value.expiresAt === undefined) context.addIssue({ code: z.ZodIssueCode.custom, message: 'Expiry is required.' });
+});
+
+app.patch('/api/subscriptions/:id', authorize('subscription.manage'), async (q, r) => {
+  if (!supabaseConfigured()) return r.status(501).json({ error: 'DATABASE_REQUIRED' });
+  const parsed = subscriptionChangeSchema.safeParse(q.body);
+  if (!parsed.success) return r.status(400).json({ error: 'VALIDATION', details: parsed.error.flatten() });
+  const input = parsed.data;
+  try {
+    const source = await supabaseAdmin(`rest/v1/subscriptions?select=id,customer_id,product_id,plan_id,status,expires_at& id=eq.${encodeURIComponent(String(q.params.id))}&limit=1`.replace('& ', '&'));
+    if (!source.ok) return r.status(502).json({ error: 'SUBSCRIPTION_LOOKUP_FAILED' });
+    const existing = (await source.json() as Array<any>)[0];
+    if (!existing) return r.status(404).json({ error: 'SUBSCRIPTION_NOT_FOUND' });
+    const update: Record<string, unknown> = {};
+    let customerStatus: 'ACTIVE' | 'SUSPENDED' | undefined;
+    if (input.action === 'CHANGE_PLAN') {
+      const plan = await supabaseAdmin(`rest/v1/plans?select=id,product_id,status& id=eq.${encodeURIComponent(input.planId!)}&limit=1`.replace('& ', '&'));
+      const planRow = plan.ok ? (await plan.json() as Array<any>)[0] : null;
+      if (!planRow || planRow.product_id !== existing.product_id || planRow.status !== 'ACTIVE') return r.status(400).json({ error: 'INVALID_PLAN_CHANGE' });
+      update.plan_id = planRow.id;
+    }
+    if (input.action === 'SET_EXPIRY') update.expires_at = input.expiresAt;
+    if (input.action === 'SUSPEND') { update.status = 'SUSPENDED'; customerStatus = 'SUSPENDED'; }
+    if (input.action === 'REACTIVATE') { update.status = 'ACTIVE'; customerStatus = 'ACTIVE'; }
+    const changed = await supabaseAdmin(`rest/v1/subscriptions?id=eq.${encodeURIComponent(existing.id)}`, { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify(update) });
+    if (!changed.ok) return r.status(502).json({ error: 'SUBSCRIPTION_UPDATE_FAILED' });
+    if (customerStatus) await Promise.all([
+      supabaseAdmin(`rest/v1/customers?id=eq.${encodeURIComponent(existing.customer_id)}`, { method: 'PATCH', body: JSON.stringify({ status: customerStatus, updated_at: new Date().toISOString(), updated_by: (q as any).actor?.id || null }) }),
+      supabaseAdmin(`rest/v1/customer_products?customer_id=eq.${encodeURIComponent(existing.customer_id)}&product_id=eq.${encodeURIComponent(existing.product_id)}`, { method: 'PATCH', body: JSON.stringify({ status: customerStatus }) }),
+    ]);
+    const row = (await changed.json() as Array<any>)[0];
+    await recordPlatformAudit(q, `subscription.${input.action.toLowerCase()}`, 'subscription', existing.id, existing, row);
+    return r.json(row);
+  } catch (error) { console.error('Subscription change failed:', error); return r.status(500).json({ error: 'SUBSCRIPTION_CHANGE_FAILED' }); }
+});
+
+const entitlementOverrideSchema = z.object({
+  productId: z.string().uuid(),
+  entitlementKey: z.string().trim().min(2).max(120),
+  value: z.union([z.boolean(), z.number(), z.string(), z.record(z.unknown())]),
+  reason: z.string().trim().min(3).max(500),
+  expiresAt: z.string().datetime().nullable().optional(),
+});
+
+app.get('/api/customers/:id/entitlements', authorize('entitlement.view'), async (q, r) => {
+  if (!supabaseConfigured()) return r.json([]);
+  const response = await supabaseAdmin(`rest/v1/entitlement_overrides?select=id,product_id,entitlement_key,value,starts_at,expires_at,reason,created_at&customer_id=eq.${encodeURIComponent(String(q.params.id))}&order=created_at.desc`);
+  if (!response.ok) return r.status(502).json({ error: 'ENTITLEMENTS_UNAVAILABLE' });
+  return r.json(await response.json());
+});
+
+app.post('/api/customers/:id/entitlements', authorize('entitlement.manage'), async (q, r) => {
+  if (!supabaseConfigured()) return r.status(501).json({ error: 'DATABASE_REQUIRED' });
+  const parsed = entitlementOverrideSchema.safeParse(q.body);
+  if (!parsed.success) return r.status(400).json({ error: 'VALIDATION', details: parsed.error.flatten() });
+  const customer = await loadCustomer(String(q.params.id));
+  if (!customer) return r.status(404).json({ error: 'CUSTOMER_NOT_FOUND' });
+  const input = parsed.data;
+  const response = await supabaseAdmin('/rest/v1/entitlement_overrides', { method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ customer_id: customer.id, product_id: input.productId, entitlement_key: input.entitlementKey, value: input.value, reason: input.reason, expires_at: input.expiresAt || null, created_by: (q as any).actor?.id || null, approved_by: (q as any).actor?.id || null }) });
+  if (!response.ok) return r.status(502).json({ error: 'ENTITLEMENT_CREATE_FAILED' });
+  const row = (await response.json() as Array<any>)[0];
+  await recordPlatformAudit(q, 'entitlement.override_created', 'entitlement_override', row.id, undefined, { customerId: customer.id, entitlementKey: input.entitlementKey, expiresAt: input.expiresAt || null });
+  return r.status(201).json(row);
 });
 
 app.get(
