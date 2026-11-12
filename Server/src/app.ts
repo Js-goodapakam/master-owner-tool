@@ -800,25 +800,27 @@ app.get('/api/products', authorize('product.view'), (_q, r) => {
     });
 });
 
-app.get('/api/plans', authorize('subscription.view'), (_q, r) =>
-  r.json(plans),
-);
+app.get('/api/plans', authorize('subscription.view'), (_q, r) => {
+  if (!supabaseConfigured()) return r.json(plans);
+  void supabaseAdmin('rest/v1/plans?select=id,name,status,user_limit,storage_gb,api_limit,products(name,product_code)&order=name')
+    .then(async (response) => {
+      if (!response.ok) throw new Error('Plan catalogue query failed.');
+      const rows = await response.json() as Array<Record<string, any>>;
+      r.json(rows.map((row) => ({ id: row.id, name: row.name, status: row.status, product: row.products?.name || 'Unknown product', productCode: row.products?.product_code, userLimit: row.user_limit, storageGb: row.storage_gb, apiLimit: row.api_limit })));
+    })
+    .catch(() => { if (!r.headersSent) r.status(502).json({ error: 'PLAN_CATALOGUE_UNAVAILABLE' }); });
+});
 
-app.get(
-  '/api/subscriptions',
-  authorize('subscription.view'),
-  (_q, r) =>
-    r.json(
-      customers.map((c, i) => ({
-        id: `s${i + 1}`,
-        customer: c.companyName,
-        product: 'Friday AI Desk',
-        plan: i === 1 ? 'Premium' : 'Enterprise',
-        status: c.status === 'TRIAL' ? 'Trial' : 'Active',
-        expiryDate: '2027-09-19',
-      })),
-    ),
-);
+app.get('/api/subscriptions', authorize('subscription.view'), (_q, r) => {
+  if (!supabaseConfigured()) return r.json(customers.map((c, i) => ({ id: `s${i + 1}`, customer: c.companyName, product: 'Friday AI Desk', plan: i === 1 ? 'Premium' : 'Enterprise', status: c.status === 'TRIAL' ? 'Trial' : 'Active', expiryDate: '2027-09-19' })));
+  void supabaseAdmin('rest/v1/subscriptions?select=id,status,starts_at,expires_at,customers(company_name,display_name),products(name),plans(name)&order=created_at.desc')
+    .then(async (response) => {
+      if (!response.ok) throw new Error('Subscription query failed.');
+      const rows = await response.json() as Array<Record<string, any>>;
+      r.json(rows.map((row) => ({ id: row.id, customer: row.customers?.display_name || row.customers?.company_name || 'Unknown customer', product: row.products?.name || 'Unknown product', plan: row.plans?.name || 'Custom', status: row.status, expiryDate: row.expires_at || 'No expiry' })));
+    })
+    .catch(() => { if (!r.headersSent) r.status(502).json({ error: 'SUBSCRIPTION_REGISTRY_UNAVAILABLE' }); });
+});
 
 app.post(
   '/api/subscriptions',
