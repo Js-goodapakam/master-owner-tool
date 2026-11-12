@@ -723,7 +723,15 @@ function UsersAccess() {
    MAIN APPLICATION
 ========================================================= */
 
-function App() {
+type ActiveProduct = { id: string; code: string; name: string; description: string; status: string; commercialStatus?: string };
+
+function ApplicationSelector({ onSelect }: { onSelect: (product: ActiveProduct) => void }) {
+  const [products, setProducts] = useState<ActiveProduct[]>([]); const [error, setError] = useState('');
+  useEffect(() => { api<any[]>('/products').then(rows => setProducts(rows.map(row => ({ id: row.id, code: row.code, name: row.name, description: row.description || 'Application control plane', status: row.status, commercialStatus: row.commercialStatus })))).catch(e => setError(e.message)); }, []);
+  return <main className="application-selector"><header><img src={logo} alt="Engagehubs"/><div><span>ENGAGEHUBS CONTROL PLANE</span><h1>Select an application</h1><p>Choose an authorized product workspace. Technical environments are selected after entering the application.</p></div></header>{error ? <ErrorState message={error}/> : products.length === 0 ? <Loading/> : <section className="application-grid">{products.map(product => <article className="application-card" key={product.id}><div><Badge>{product.status}</Badge><h2>{product.name}</h2><p>{product.description}</p></div><footer><small>{product.commercialStatus === 'ACTIVE' ? 'Commercially available' : 'Setup required'}</small><Button type="button" disabled={product.status === 'NOT_CONNECTED'} onClick={() => onSelect(product)}>Enter application</Button></footer></article>)}</section>}<p className="application-note">Trial and Live are subscription states. Production and other technical environments are selected inside the product workspace.</p></main>;
+}
+
+function App({ product, backToApplications }: { product: ActiveProduct; backToApplications: () => void }) {
 
   const [page, setPage] =
     useState('Dashboard');
@@ -912,9 +920,9 @@ let content =
           />
 
           <span>
-            FRIDAY
+            ENGAGEHUBS
             <br />
-            <b>OWNER</b>
+            <b>{product.name.toUpperCase()} · OWNER</b>
           </span>
 
         </div>
@@ -976,10 +984,11 @@ let content =
         <header className="topbar">
 
           <div className="topbar-title">
+            <button className="workspace-switcher" type="button" onClick={backToApplications}>Applications</button>
             <h1>
               {customer
                 ? 'View Customer'
-                : page}
+                : `${product.name} · ${page}`}
             </h1>
           </div>
 
@@ -1044,6 +1053,7 @@ function Root() {
   const [signed, setSigned] = useState(
     () => Boolean(localStorage.getItem('friday-access-token')),
   );
+  const [activeProduct, setActiveProduct] = useState<ActiveProduct | null>(null);
 
   const done = (session: FridaySession) => {
     localStorage.setItem('friday-access-token', session.access_token);
@@ -1064,7 +1074,8 @@ function Root() {
     return <Login onSuccess={done} />;
   }
 
-  return <App />;
+  if (!activeProduct) return <ApplicationSelector onSelect={setActiveProduct} />;
+  return <App product={activeProduct} backToApplications={() => setActiveProduct(null)} />;
 }
 
 
