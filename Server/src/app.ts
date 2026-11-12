@@ -152,6 +152,20 @@ async function loadProductRegistry() {
       .map((feature) => `${feature.name} (${feature.status.toLowerCase()})`),
   }));
 }
+
+async function allowedProductCodes(actor: Express.Request['actor']): Promise<string[] | null> {
+  if (!actor || actor.roleKey === 'owner' || actor.roleKey === 'super_admin') return null;
+  if (!supabaseConfigured()) return [];
+  const response = await supabaseAdmin(`rest/v1/owner_product_access?select=products(product_code)&owner_user_id=eq.${encodeURIComponent(actor.id)}&is_active=eq.true`);
+  if (!response.ok) throw new Error('Could not load product access.');
+  return (await response.json() as Array<{ products?: { product_code?: string } }>).map(row => row.products?.product_code).filter((code): code is string => Boolean(code));
+}
+async function requireProductAccess(req: express.Request, response: express.Response, code: string): Promise<boolean> {
+  const allowed = await allowedProductCodes(req.actor);
+  if (allowed === null || allowed.includes(code)) return true;
+  response.status(403).json({ error: 'PRODUCT_ACCESS_DENIED', message: 'You are not authorized to access this application.' });
+  return false;
+}
 function can(req: express.Request, permission: string): boolean {
   return Boolean((req as any).actor?.permissions?.includes(permission));
 }
@@ -868,9 +882,9 @@ app.get('/api/customers/:id/provisioning-jobs', authorize('customer.view'), asyn
   return r.json(await response.json());
 });
 
-app.get('/api/products', authorize('product.view'), (_q, r) => {
+app.get('/api/products', authorize('product.view'), (q, r) => {
   void loadProductRegistry()
-    .then((registry) => r.json(registry))
+    .then(async (registry) => { const allowed = await allowedProductCodes((q as any).actor); r.json(allowed === null ? registry : registry.filter(product => allowed.includes((product as any).code))); })
     .catch((error) => {
       console.error('Product registry query failed:', error);
       if (!r.headersSent) {
@@ -880,6 +894,16 @@ app.get('/api/products', authorize('product.view'), (_q, r) => {
         });
       }
     });
+});
+
+app.get('/api/products/:code/context', authorize('product.view'), async (q, r) => {
+  const code = String(q.params.code);
+  if (!/^(engage_stay|engage_fit|engage_realty|engage_crm)$/.test(code)) return r.status(404).json({ error: 'PRODUCT_NOT_FOUND' });
+  if (!await requireProductAccess(q, r, code)) return;
+  const registry = await loadProductRegistry(); const product = registry.find(item => (item as any).code === code);
+  if (!product) return r.status(404).json({ error: 'PRODUCT_NOT_FOUND' });
+  const environments = supabaseConfigured() ? await supabaseAdmin(`rest/v1/product_environments?select=name,status&product_id=eq.${encodeURIComponent(product.id)}&order=name`).then(async response => response.ok ? await response.json() as Array<{ name: string; status: string }> : []) : [];
+  return r.json({ product, environments });
 });
 
 app.get('/api/plans', authorize('subscription.view'), (_q, r) => {
