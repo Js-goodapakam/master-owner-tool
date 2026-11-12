@@ -421,6 +421,15 @@ function EngageStayControls({ id }: { id: string }) {
   </Card>;
 }
 
+function CustomerDocuments({ id }: { id: string }) {
+  const [docs, setDocs] = useState<any[]>([]); const [busy, setBusy] = useState(false); const [message, setMessage] = useState('');
+  const load = () => api<any[]>(`/customers/${encodeURIComponent(id)}/documents`).then(setDocs).catch(e => setMessage(e.message));
+  useEffect(() => { void load(); }, [id]);
+  const upload = async (event: FormEvent<HTMLFormElement>) => { event.preventDefault(); const form = new FormData(event.currentTarget); const file = form.get('file') as File; if (!file) return; setBusy(true); setMessage(''); try { const dataBase64 = await new Promise<string>((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(String(reader.result)); reader.onerror = reject; reader.readAsDataURL(file); }); await api(`/customers/${encodeURIComponent(id)}/documents`, { method: 'POST', body: JSON.stringify({ category: form.get('category'), name: file.name, contentType: file.type, dataBase64 }) }); event.currentTarget.reset(); await load(); setMessage('Document uploaded.'); } catch (e) { setMessage(e instanceof Error ? e.message : 'Upload failed.'); } finally { setBusy(false); } };
+  const download = async (doc: any) => { setBusy(true); try { const token = localStorage.getItem('friday-access-token'); const response = await fetch(`/api/customers/${encodeURIComponent(id)}/documents/${encodeURIComponent(doc.id)}/download`, { headers: token ? { Authorization: `Bearer ${token}` } : {} }); if (!response.ok) throw Error('Download failed.'); const blob = await response.blob(); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = doc.original_name; a.click(); URL.revokeObjectURL(url); } catch (e) { setMessage(e instanceof Error ? e.message : 'Download failed.'); } finally { setBusy(false); } };
+  return <Card title="Customer documents" subtitle="Private KYC and business records. Access is authorized per customer."><form className="owner-user-form" onSubmit={upload}><Select name="category" defaultValue="KYC"><option>KYC</option><option>GST</option><option>PAN</option><option>INCORPORATION</option><option>ADDRESS</option><option>CONTRACT</option><option>OTHER</option></Select><input name="file" type="file" accept="application/pdf,image/jpeg,image/png,image/webp" required /><Button type="submit" disabled={busy}>{busy ? 'Working…' : 'Upload'}</Button></form>{message && <p role="status">{message}</p>}<Table headers={['Name','Category','Size','Version','Uploaded','Actions']}>{docs.map(doc => <tr key={doc.id}><td>{doc.original_name}</td><td>{doc.category}</td><td>{Math.ceil(doc.size_bytes / 1024)} KB</td><td>{doc.version}</td><td>{new Date(doc.created_at).toLocaleString()}</td><td><Button type="button" disabled={busy} onClick={() => void download(doc)}>Download</Button></td></tr>)}</Table></Card>;
+}
+
 function CustomerProfile({ customer, onSaved }: { customer: any; onSaved: () => Promise<void> }) {
   const [form, setForm] = useState({ companyName: customer.companyName || '', legalName: customer.legalName || '', email: customer.email || '', phone: customer.phone || '', industry: customer.industry || 'Other', accountOwner: customer.accountOwner || '', city: customer.city || '', country: customer.country || '' });
   const [saving, setSaving] = useState(false);
@@ -494,7 +503,7 @@ function Customer360({
   }
 
   const c = d.customer;
-  const tabs = ['Overview', 'Products', 'Users', 'Subscription', 'Configuration', 'Infrastructure', 'Activity'];
+  const tabs = ['Overview', 'Products', 'Users', 'Documents', 'Subscription', 'Configuration', 'Infrastructure', 'Activity'];
 
   const content = activeTab === 'Overview' ? <>
     <CustomerProfile customer={c} onSaved={load} />
@@ -507,7 +516,7 @@ function Customer360({
     {d.products.map((p: any) => <tr key={p.id}><td>{p.name}</td><td>{p.version}</td><td>{p.modules?.join(', ') || '—'}</td><td>{p.features?.join(', ') || '—'}</td><td><Badge>{p.status}</Badge></td></tr>)}
   </Table></Card> : activeTab === 'Users' ? <Card title="Customer users" subtitle="Users with access to this customer workspace."><Table headers={['Name', 'Role', 'Status', 'Last login']}>
     {d.users.map((user: any) => <tr key={`${user.name}-${user.role}`}><td>{user.name}</td><td>{user.role}</td><td><Badge>{user.status}</Badge></td><td>{user.lastLogin}</td></tr>)}
-  </Table></Card> : activeTab === 'Subscription' ? <><Card title="Subscription details"><div className="customer-detail-grid"><div><small>Plan</small><b>{d.subscription.plan}</b></div><div><small>Status</small><b>{d.subscription.status}</b></div><div><small>Start date</small><b>{d.subscription.startDate}</b></div><div><small>Expiry date</small><b>{d.subscription.expiryDate}</b></div><div><small>Renewal</small><b>{d.subscription.renewal}</b></div></div></Card><CustomerCommercial customer={c} detail={d} onSaved={load} /></> : activeTab === 'Configuration' ? <Card title="Customer configuration" subtitle="Configuration values currently applied to this customer."><Table headers={['Key', 'Value', 'Scope', 'Environment', 'Status', 'Updated by', 'Updated date']}>
+  </Table></Card> : activeTab === 'Documents' ? <CustomerDocuments id={id} /> : activeTab === 'Subscription' ? <><Card title="Subscription details"><div className="customer-detail-grid"><div><small>Plan</small><b>{d.subscription.plan}</b></div><div><small>Status</small><b>{d.subscription.status}</b></div><div><small>Start date</small><b>{d.subscription.startDate}</b></div><div><small>Expiry date</small><b>{d.subscription.expiryDate}</b></div><div><small>Renewal</small><b>{d.subscription.renewal}</b></div></div></Card><CustomerCommercial customer={c} detail={d} onSaved={load} /></> : activeTab === 'Configuration' ? <Card title="Customer configuration" subtitle="Configuration values currently applied to this customer."><Table headers={['Key', 'Value', 'Scope', 'Environment', 'Status', 'Updated by', 'Updated date']}>
     {d.configuration.map((item: any) => <tr key={item.key}><td>{item.key}</td><td>{item.value}</td><td>{item.scope}</td><td>{item.environment}</td><td><Badge>{item.status}</Badge></td><td>{item.updatedBy}</td><td>{item.updatedDate}</td></tr>)}
   </Table></Card> : activeTab === 'Infrastructure' ? <Card title="Infrastructure" subtitle="Current hosting and service health for this customer."><Table headers={['Server', 'Environment', 'Status', 'Services']}>
     {d.infrastructure.map((item: any) => <tr key={item.server}><td>{item.server}</td><td>{item.environment}</td><td><Badge>{item.status}</Badge></td><td>{item.services}</td></tr>)}

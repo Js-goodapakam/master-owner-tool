@@ -34,7 +34,7 @@ app.use(
   }),
 );
 
-app.use(express.json());
+app.use(express.json({ limit: '12mb' }));
 
 // Supabase privileged operations are server-only. Never expose these keys to the browser.
 const roleKeys: Record<string, string> = {
@@ -1019,6 +1019,43 @@ app.post('/api/customers/:id/entitlements', authorize('entitlement.manage'), asy
   }
   await recordPlatformAudit(q, 'entitlement.override_created', 'entitlement_override', row.id, undefined, { customerId: customer.id, entitlementKey: input.entitlementKey, expiresAt: input.expiresAt || null });
   return r.status(201).json(row);
+});
+
+const customerDocumentSchema = z.object({
+  category: z.enum(['KYC', 'GST', 'PAN', 'INCORPORATION', 'ADDRESS', 'CONTRACT', 'OTHER']),
+  name: z.string().trim().min(1).max(180), contentType: z.enum(['application/pdf', 'image/jpeg', 'image/png', 'image/webp']),
+  dataBase64: z.string().min(4), replacesId: z.string().uuid().optional(),
+});
+app.get('/api/customers/:id/documents', authorize('customer.view'), async (q, r) => {
+  const customer = await loadCustomer(String(q.params.id)); if (!customer) return r.status(404).json({ error: 'NOT_FOUND' });
+  const response = await supabaseAdmin(`rest/v1/customer_documents?select=id,category,original_name,content_type,size_bytes,version,status,created_at,uploaded_by,replaces_id&customer_id=eq.${encodeURIComponent(customer.id)}&status=eq.ACTIVE&order=created_at.desc`);
+  if (!response.ok) return r.status(502).json({ error: 'DOCUMENTS_UNAVAILABLE' }); return r.json(await response.json());
+});
+app.post('/api/customers/:id/documents', authorize('customer.update'), async (q, r) => {
+  const parsed = customerDocumentSchema.safeParse(q.body); if (!parsed.success) return r.status(400).json({ error: 'VALIDATION', details: parsed.error.flatten() });
+  const customer = await loadCustomer(String(q.params.id)); if (!customer) return r.status(404).json({ error: 'NOT_FOUND' });
+  const input = parsed.data; const bytes = Buffer.from(input.dataBase64.replace(/^data:[^;]+;base64,/, ''), 'base64');
+  if (!bytes.length || bytes.length > 10 * 1024 * 1024) return r.status(400).json({ error: 'INVALID_DOCUMENT_SIZE' });
+  const safeName = input.name.replace(/[^A-Za-z0-9._-]/g, '_'); const path = `${customer.id}/${randomUUID()}-${safeName}`;
+  const upload = await supabaseAdmin(`/storage/v1/object/private-customer-documents/${encodeURIComponent(path)}`, { method: 'POST', headers: { 'Content-Type': input.contentType, 'x-upsert': 'false' }, body: bytes });
+  if (!upload.ok) return r.status(502).json({ error: 'DOCUMENT_UPLOAD_FAILED' });
+  const created = await supabaseAdmin('/rest/v1/customer_documents', { method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ customer_id: customer.id, category: input.category, original_name: input.name, storage_path: path, content_type: input.contentType, size_bytes: bytes.length, replaces_id: input.replacesId || null, uploaded_by: (q as any).actor?.id || null }) });
+  if (!created.ok) return r.status(502).json({ error: 'DOCUMENT_RECORD_FAILED' }); const row = (await created.json() as Array<any>)[0];
+  if (input.replacesId) await supabaseAdmin(`rest/v1/customer_documents?id=eq.${encodeURIComponent(input.replacesId)}&customer_id=eq.${encodeURIComponent(customer.id)}`, { method: 'PATCH', body: JSON.stringify({ status: 'REPLACED' }) });
+  await recordPlatformAudit(q, 'customer_document.uploaded', 'customer_document', row.id, undefined, { customerId: customer.id, category: input.category, size: bytes.length }); return r.status(201).json(row);
+});
+app.get('/api/customers/:id/documents/:documentId/download', authorize('customer.view'), async (q, r) => {
+  const customerId = String(q.params.id); const documentId = String(q.params.documentId);
+  const found = await supabaseAdmin(`rest/v1/customer_documents?select=id,storage_path,original_name,content_type&customer_id=eq.${encodeURIComponent(customerId)}&id=eq.${encodeURIComponent(documentId)}&status=eq.ACTIVE&limit=1`);
+  const doc = found.ok ? (await found.json() as Array<any>)[0] : null; if (!doc) return r.status(404).json({ error: 'DOCUMENT_NOT_FOUND' });
+  const file = await supabaseAdmin(`/storage/v1/object/private-customer-documents/${encodeURIComponent(doc.storage_path)}`); if (!file.ok) return r.status(502).json({ error: 'DOCUMENT_STORAGE_UNAVAILABLE' });
+  r.setHeader('Content-Type', doc.content_type); r.setHeader('Content-Disposition', `attachment; filename="${doc.original_name.replace(/[\"\\]/g, '_')}"`); r.setHeader('Cache-Control', 'private, no-store'); return r.send(Buffer.from(await file.arrayBuffer()));
+});
+app.delete('/api/customers/:id/documents/:documentId', authorize('customer.update'), async (q, r) => {
+  const customerId = String(q.params.id); const documentId = String(q.params.documentId); const found = await supabaseAdmin(`rest/v1/customer_documents?select=id,storage_path&customer_id=eq.${encodeURIComponent(customerId)}&id=eq.${encodeURIComponent(documentId)}&status=eq.ACTIVE&limit=1`);
+  const doc = found.ok ? (await found.json() as Array<any>)[0] : null; if (!doc) return r.status(404).json({ error: 'DOCUMENT_NOT_FOUND' });
+  const removed = await supabaseAdmin(`/storage/v1/object/private-customer-documents/${encodeURIComponent(doc.storage_path)}`, { method: 'DELETE' }); if (!removed.ok) return r.status(502).json({ error: 'DOCUMENT_DELETE_FAILED' });
+  await supabaseAdmin(`rest/v1/customer_documents?id=eq.${encodeURIComponent(documentId)}`, { method: 'PATCH', body: JSON.stringify({ status: 'DELETED', deleted_at: new Date().toISOString() }) }); await recordPlatformAudit(q, 'customer_document.deleted', 'customer_document', documentId, { customerId }, undefined); return r.status(204).send();
 });
 
 app.get(
