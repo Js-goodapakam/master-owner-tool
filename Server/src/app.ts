@@ -789,6 +789,14 @@ app.post('/api/onboarding', authorize('customer.create'), (q, r) => {
   });
 });
 
+app.get('/api/onboarding/signup/:signupRequestId', authorize('customer.create'), async (q, r) => {
+  if (!supabaseConfigured()) return r.json(null);
+  const id = String(q.params.signupRequestId);
+  const response = await supabaseAdmin(`rest/v1/onboarding_sessions?select=id,current_step,payload,status&signup_request_id=eq.${encodeURIComponent(id)}&status=eq.IN_PROGRESS&limit=1`);
+  if (!response.ok) return r.status(502).json({ error: 'ONBOARDING_SESSION_UNAVAILABLE' });
+  return r.json((await response.json() as Array<any>)[0] || null);
+});
+
 app.post('/api/customers/:id/engagestay', authorize('customer.update'), async (q, r) => {
   const customer = await loadCustomer(String(q.params.id));
   if (!customer) return r.status(404).json({ error: 'NOT_FOUND' });

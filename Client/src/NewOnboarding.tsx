@@ -57,6 +57,13 @@ function OnboardingWizard({ signup, onBackToQueue }: { signup: SignupRequestRow;
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
 
+  useEffect(() => { void api<any>(`/onboarding/signup/${encodeURIComponent(signup.id)}`).then((session) => {
+    if (!session?.payload) return; const saved = session.payload;
+    setStep(Math.max(0, Math.min(6, Number(session.current_step || 1) - 1)));
+    setRequest(old => ({ ...old, businessName: saved.companyName || old.businessName, email: saved.email || old.email, mobile: saved.phone || old.mobile }));
+    setIndustry(saved.industry || 'Hospitality'); setProduct(saved.product || 'Engage Stay'); setDeployment(saved.deployment || 'Shared'); setEnvironment(saved.environment || 'Trial'); setTrialStart(saved.trialStart || today()); setTrialEnd(saved.trialEnd || ''); setTenantName(saved.tenantName || ''); setTenantId(saved.tenantId || ''); setAppUrl(saved.appUrl || ''); setAdminName(saved.adminName || ''); setAdminEmail(saved.adminEmail || ''); setModules(Array.isArray(saved.modules) ? saved.modules : []); setAssignedOwner(saved.accountOwner || ''); setProvisioning(saved.provisioning || 'Not Started'); setNotes(saved.notes || '');
+  }).catch(() => undefined); }, [signup.id]);
+
   const trialDays = useMemo(() => {
     if (!trialStart || !trialEnd || trialEnd < trialStart) return null;
     return Math.round((Date.parse(`${trialEnd}T00:00:00Z`) - Date.parse(`${trialStart}T00:00:00Z`)) / 86400000);
