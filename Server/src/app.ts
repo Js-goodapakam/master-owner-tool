@@ -822,24 +822,47 @@ app.get('/api/subscriptions', authorize('subscription.view'), (_q, r) => {
     .catch(() => { if (!r.headersSent) r.status(502).json({ error: 'SUBSCRIPTION_REGISTRY_UNAVAILABLE' }); });
 });
 
-app.post(
-  '/api/subscriptions',
-  authorize('subscription.manage'),
-  (q, r) => {
-    addAudit(
-      'subscription.activated',
-      'subscription',
-      ids(),
-      undefined,
-      q.body,
-    );
+const subscriptionActivationSchema = z.object({
+  customerId: z.string().uuid(),
+  planId: z.string().uuid(),
+  status: z.enum(['TRIAL', 'ACTIVE']),
+  startsAt: z.string().datetime().optional(),
+  expiresAt: z.string().datetime().optional(),
+  renewalMode: z.enum(['MANUAL', 'AUTO_RENEW']).default('MANUAL'),
+}).refine((value) => !value.expiresAt || !value.startsAt || new Date(value.expiresAt) > new Date(value.startsAt), { message: 'Expiry must be after start.' });
 
-    r.status(201).json({
-      status: 'Active',
-      ...q.body,
-    });
-  },
-);
+app.post('/api/subscriptions', authorize('subscription.manage'), async (q, r) => {
+  const parsed = subscriptionActivationSchema.safeParse(q.body);
+  if (!parsed.success) return r.status(400).json({ error: 'VALIDATION', details: parsed.error.flatten() });
+  if (!supabaseConfigured()) return r.status(501).json({ error: 'DATABASE_REQUIRED', message: 'Subscription activation is unavailable outside a configured control plane.' });
+  const input = parsed.data;
+  try {
+    const [customer, plan] = await Promise.all([
+      supabaseAdmin(`rest/v1/customers?select=id& id=eq.${encodeURIComponent(input.customerId)}&limit=1`.replace('& ', '&')),
+      supabaseAdmin(`rest/v1/plans?select=id,product_id,status& id=eq.${encodeURIComponent(input.planId)}&limit=1`.replace('& ', '&')),
+    ]);
+    if (!customer.ok || !plan.ok) return r.status(502).json({ error: 'SUBSCRIPTION_VALIDATION_UNAVAILABLE' });
+    if (!(await customer.json() as unknown[]).length) return r.status(404).json({ error: 'CUSTOMER_NOT_FOUND' });
+    const planRow = (await plan.json() as Array<{ id: string; product_id: string; status: string }>)[0];
+    if (!planRow || planRow.status !== 'ACTIVE') return r.status(400).json({ error: 'PLAN_NOT_AVAILABLE' });
+    const existing = await supabaseAdmin(`rest/v1/subscriptions?select=id&customer_id=eq.${encodeURIComponent(input.customerId)}&product_id=eq.${encodeURIComponent(planRow.product_id)}&status=in.(TRIAL,ACTIVE)&limit=1`);
+    if (!existing.ok) return r.status(502).json({ error: 'SUBSCRIPTION_LOOKUP_FAILED' });
+    if ((await existing.json() as unknown[]).length) return r.status(409).json({ error: 'ACTIVE_SUBSCRIPTION_EXISTS', message: 'End or change the existing subscription before activating another.' });
+    const startsAt = input.startsAt || new Date().toISOString();
+    const created = await supabaseAdmin('/rest/v1/subscriptions', { method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ customer_id: input.customerId, product_id: planRow.product_id, plan_id: planRow.id, status: input.status, starts_at: startsAt, expires_at: input.expiresAt || null, renewal_mode: input.renewalMode }) });
+    if (!created.ok) return r.status(502).json({ error: 'SUBSCRIPTION_CREATE_FAILED' });
+    const row = (await created.json() as Array<{ id: string }>)[0];
+    await Promise.all([
+      supabaseAdmin(`rest/v1/customers?id=eq.${encodeURIComponent(input.customerId)}`, { method: 'PATCH', body: JSON.stringify({ status: input.status, activated_at: startsAt, updated_at: new Date().toISOString(), updated_by: (q as any).actor?.id || null }) }),
+      supabaseAdmin(`rest/v1/customer_products?customer_id=eq.${encodeURIComponent(input.customerId)}&product_id=eq.${encodeURIComponent(planRow.product_id)}`, { method: 'PATCH', body: JSON.stringify({ status: input.status }) }),
+    ]);
+    await recordPlatformAudit(q, 'subscription.activated', 'subscription', row.id, undefined, { customerId: input.customerId, planId: input.planId, status: input.status, expiresAt: input.expiresAt || null });
+    return r.status(201).json({ id: row.id, status: input.status, startsAt, expiresAt: input.expiresAt || null });
+  } catch (error) {
+    console.error('Subscription activation failed:', error);
+    return r.status(500).json({ error: 'SUBSCRIPTION_ACTIVATION_FAILED' });
+  }
+});
 
 app.get(
   '/api/infrastructure',
