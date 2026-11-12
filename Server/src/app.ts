@@ -1,7 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import { z } from 'zod';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID, timingSafeEqual } from 'node:crypto';
 import { authenticate, authorize } from './auth.js';
 import { createLocalDemoSession, isLocalDemoEnabled, isLoopbackRequest } from './localAuth.js';
 import {
@@ -54,6 +54,15 @@ function supabaseAdminKey(): string | undefined {
 }
 function supabaseConfigured(): boolean {
   return Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_ANON_KEY && supabaseAdminKey());
+}
+function hasOwnerServiceAuthorization(req: express.Request): boolean {
+  const token = process.env.ENGAGE_OWNER_SERVICE_TOKEN;
+  const supplied = req.get('authorization') || '';
+  if (!token || token.length < 32) return false;
+  return timingSafeEqual(
+    createHash('sha256').update(supplied).digest(),
+    createHash('sha256').update(`Bearer ${token}`).digest(),
+  );
 }
 async function supabaseAdmin(path: string, init: RequestInit = {}) {
   const base = process.env.SUPABASE_URL;
@@ -425,12 +434,74 @@ app.get('/api/customers', authorize('customer.view'), (_q, r) => {
     });
 });
 
-app.get('/api/signup-requests', authorize('customer.create'), (_q, r) =>
-  r.json(signupRequests),
-);
+const productSignupSchema = z.object({
+  source: z.enum(['email', 'google', 'microsoft']),
+  externalUserId: z.string().trim().min(1).max(255),
+  email: z.string().trim().email().max(254),
+  displayName: z.string().trim().max(160).optional(),
+  organizationName: z.string().trim().max(200).optional(),
+  phone: z.string().trim().max(32).optional(),
+  requestedLifecycle: z.enum(['TRIAL', 'LIVE']).default('TRIAL'),
+  occurredAt: z.string().datetime().optional(),
+});
+
+app.post('/api/integrations/engagestay/signup', async (q, r) => {
+  if (!hasOwnerServiceAuthorization(q)) return r.status(401).json({ error: 'SERVICE_AUTH_REQUIRED' });
+  if (!supabaseConfigured()) return r.status(503).json({ error: 'SIGNUP_INTAKE_NOT_CONFIGURED' });
+  const parsed = productSignupSchema.safeParse(q.body);
+  if (!parsed.success) return r.status(400).json({ error: 'VALIDATION', details: parsed.error.flatten() });
+  const idempotencyKey = q.get('idempotency-key') || '';
+  if (!/^[A-Za-z0-9:_-]{8,128}$/.test(idempotencyKey)) return r.status(400).json({ error: 'IDEMPOTENCY_KEY_REQUIRED' });
+  try {
+    const input = parsed.data;
+    const payload = {
+      product_code: 'engage_stay', source: input.source, external_user_id: input.externalUserId,
+      email: input.email.toLowerCase(), display_name: input.displayName || null,
+      organization_name: input.organizationName || null, phone: input.phone || null,
+      requested_lifecycle: input.requestedLifecycle, occurred_at: input.occurredAt || new Date().toISOString(),
+      idempotency_key: idempotencyKey,
+    };
+    const inserted = await supabaseAdmin('/rest/v1/signup_requests', {
+      method: 'POST', headers: { Prefer: 'resolution=ignore-duplicates,return=representation' }, body: JSON.stringify(payload),
+    });
+    if (!inserted.ok) return r.status(502).json({ error: 'SIGNUP_INTAKE_WRITE_FAILED' });
+    let row: { id: string } | undefined = (await inserted.json() as Array<{ id: string }>)[0];
+    if (!row) {
+      const existing = await supabaseAdmin(`rest/v1/signup_requests?select=id&product_code=eq.engage_stay&idempotency_key=eq.${encodeURIComponent(idempotencyKey)}&limit=1`);
+      row = existing.ok ? (await existing.json() as Array<{ id: string }>)[0] : undefined;
+    }
+    if (!row) return r.status(502).json({ error: 'SIGNUP_INTAKE_LOOKUP_FAILED' });
+    await recordPlatformAudit(q, 'signup_request.received', 'signup_request', row.id, undefined, { product: 'engage_stay', source: input.source, email: input.email.toLowerCase() });
+    return r.status(202).json({ id: row.id, accepted: true });
+  } catch (error) {
+    console.error('EngageStay signup intake failed:', error);
+    return r.status(500).json({ error: 'SIGNUP_INTAKE_FAILED' });
+  }
+});
+
+app.get('/api/signup-requests', authorize('customer.create'), (_q, r) => {
+  if (!supabaseConfigured()) return r.json(signupRequests);
+  void supabaseAdmin('rest/v1/signup_requests?select=id,organization_name,display_name,email,phone,source,requested_lifecycle,occurred_at&status=in.(NEW,IN_REVIEW)&order=occurred_at.desc')
+    .then(async (response) => {
+      if (!response.ok) throw new Error('Signup queue query failed.');
+      const rows = await response.json() as Array<Record<string, string | null>>;
+      r.json(rows.map((row) => ({ id: row.id, name: row.organization_name || row.display_name || row.email, email: row.email, mobile: row.phone || '', signupDate: row.occurred_at, source: row.source, requestedLifecycle: row.requested_lifecycle })));
+    })
+    .catch(() => { if (!r.headersSent) r.status(502).json({ error: 'SIGNUP_QUEUE_UNAVAILABLE' }); });
+});
 
 app.delete('/api/signup-requests/:id', authorize('customer.create'), (q, r) => {
-  const index = signupRequests.findIndex((item) => item.id === q.params.id);
+  const signupRequestId = String(q.params.id);
+  if (supabaseConfigured()) {
+    return void supabaseAdmin(`rest/v1/signup_requests?id=eq.${encodeURIComponent(signupRequestId)}`, { method: 'PATCH', body: JSON.stringify({ status: 'DISMISSED', updated_at: new Date().toISOString() }) })
+      .then(async (response) => {
+        if (!response.ok) return r.status(502).json({ error: 'SIGNUP_REQUEST_UPDATE_FAILED' });
+        await recordPlatformAudit(q, 'signup_request.dismissed', 'signup_request', signupRequestId);
+        return r.status(204).send();
+      })
+      .catch(() => { if (!r.headersSent) r.status(500).json({ error: 'SIGNUP_REQUEST_UPDATE_FAILED' }); });
+  }
+  const index = signupRequests.findIndex((item) => item.id === signupRequestId);
   if (index < 0) return r.status(404).json({ error: 'NOT_FOUND', message: 'Signup request not found.' });
   const [removed] = signupRequests.splice(index, 1);
   addAudit('signup_request.deleted', 'signup_request', removed.id, removed, undefined);

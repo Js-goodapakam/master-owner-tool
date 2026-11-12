@@ -101,7 +101,7 @@ export default function Login({ onSuccess }: Props) {
                 name="identifier"
                 type="email"
                 autoComplete="username"
-                placeholder="admin@telecmi.com"
+                placeholder="admin@engage.com"
                 value={identifier}
                 onChange={(event) => setIdentifier(event.target.value)}
                 required
