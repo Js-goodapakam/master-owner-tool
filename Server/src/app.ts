@@ -940,7 +940,10 @@ const configuration = [
 app.get(
   '/api/configuration',
   authorize('configuration.view'),
-  (_q, r) => r.json(configuration),
+  (_q, r) => {
+    if (supabaseConfigured()) return r.json([]);
+    return r.json(configuration);
+  },
 );
 
 app.patch(
@@ -1011,24 +1014,32 @@ app.get('/api/integrations', authorize('configuration.view'), async (_q, r) => {
       lastSync = new Date().toISOString();
     } catch { engageStayStatus = 'Unavailable'; }
   }
-  r.json([
+  const records = [
   { id: 'int-engagestay', integration: 'EngageStay workspace control', provider: 'EngageStay', scope: 'Friday Owner', status: engageStayStatus, lastSync },
-  { id: 'int-1', integration: 'WhatsApp Business', provider: 'Meta', scope: 'Friday Communication', status: 'Connected', lastSync: '2026-10-11 10:35' },
-  { id: 'int-2', integration: 'CRM sync', provider: 'Friday AI CRM', scope: 'Friday AI Desk', status: 'Connected', lastSync: '2026-10-11 10:28' },
-  { id: 'int-3', integration: 'Email delivery', provider: 'SendGrid', scope: 'Platform', status: 'Action required', lastSync: '2026-10-10 18:02' },
-]);
+  ];
+  r.json(supabaseConfigured() ? records : [...records,
+    { id: 'int-1', integration: 'WhatsApp Business', provider: 'Meta', scope: 'Friday Communication', status: 'Connected', lastSync: '2026-10-11 10:35' },
+    { id: 'int-2', integration: 'CRM sync', provider: 'Friday AI CRM', scope: 'Friday AI Desk', status: 'Connected', lastSync: '2026-10-11 10:28' },
+    { id: 'int-3', integration: 'Email delivery', provider: 'SendGrid', scope: 'Platform', status: 'Action required', lastSync: '2026-10-10 18:02' },
+  ]);
 });
 
-app.get('/api/monitoring', authorize('infrastructure.view'), (_q, r) => r.json([
+app.get('/api/monitoring', authorize('infrastructure.view'), (_q, r) => {
+  if (supabaseConfigured()) return r.json([]);
+  return r.json([
   { id: 'mon-1', service: 'Owner API', environment: 'Production', status: 'Operational', uptime: '99.99%', checkedAt: new Date().toISOString() },
   { id: 'mon-2', service: 'Customer web app', environment: 'Production', status: 'Operational', uptime: '99.95%', checkedAt: new Date().toISOString() },
   { id: 'mon-3', service: 'Background workers', environment: 'Production', status: 'Operational', uptime: '99.98%', checkedAt: new Date().toISOString() },
-]));
+  ]);
+});
 
-app.get('/api/backups', authorize('infrastructure.view'), (_q, r) => r.json([
+app.get('/api/backups', authorize('infrastructure.view'), (_q, r) => {
+  if (supabaseConfigured()) return r.json([]);
+  return r.json([
   { id: 'bak-1', resource: 'Owner PostgreSQL', schedule: 'Daily 02:00 IST', lastBackup: '2026-10-11 02:00', status: 'Completed', retention: '30 days' },
   { id: 'bak-2', resource: 'Customer assets', schedule: 'Daily 03:00 IST', lastBackup: '2026-10-11 03:00', status: 'Completed', retention: '30 days' },
-]));
+  ]);
+});
 
 app.get('/api/users-access', (q, r, next) => {
   if (!can(q, 'users.view')) return r.status(403).json({ error: 'FORBIDDEN', message: 'Permission required: users.view' });
@@ -1180,11 +1191,14 @@ app.delete('/api/users-access/:id', async (q, r) => {
   }
 });
 
-app.get('/api/owner-settings', authorize('configuration.view'), (_q, r) => r.json([
+app.get('/api/owner-settings', authorize('configuration.view'), (_q, r) => {
+  if (supabaseConfigured()) return r.json([]);
+  return r.json([
   { id: 'set-1', setting: 'Default trial duration', value: '14 days', scope: 'New onboarding', updatedBy: 'Jaya Sankara' },
   { id: 'set-2', setting: 'Customer invite expiry', value: '72 hours', scope: 'Access', updatedBy: 'Jaya Sankara' },
   { id: 'set-3', setting: 'Audit retention', value: '365 days', scope: 'Compliance', updatedBy: 'Jaya Sankara' },
-]));
+  ]);
+});
 
 app.use(
   (
