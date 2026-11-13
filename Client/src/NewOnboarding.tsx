@@ -37,7 +37,7 @@ function OnboardingWizard({ signup, onBackToQueue }: { signup: SignupRequestRow;
   const [step, setStep] = useState(0);
   const [environment, setEnvironment] = useState<Environment>('Trial');
   const [request, setRequest] = useState<SignupRequest>({
-    businessName: signup.name, email: signup.email, mobile: signup.mobile, signupDate: toDateInput(signup.signupDate), emailStatus: 'Verified', mobileStatus: 'Verified', // only OTP-verified signups reach the queue
+    businessName: signup.name, email: signup.email, mobile: signup.mobile, signupDate: toDateInput(signup.signupDate), emailStatus: 'Verified', mobileStatus: 'Pending', // the signup verifies email only; the phone number has not passed an OTP challenge
   });
   const [industry, setIndustry] = useState('Hospitality');
   const [product, setProduct] = useState('Engage Stay');
