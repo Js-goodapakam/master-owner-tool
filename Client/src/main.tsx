@@ -643,45 +643,81 @@ function UsersAccess() {
   const [message, setMessage] = useState('');
   const [messageError, setMessageError] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [resettingId, setResettingId] = useState('');
+  const [credential, setCredential] = useState<{ name: string; email: string; password: string } | null>(null);
+  const [copied, setCopied] = useState(false);
+  const [currentRole, setCurrentRole] = useState('');
   const [pendingDelete, setPendingDelete] = useState<any | null>(null);
   const [deleting, setDeleting] = useState(false);
 
-  // UI visibility only: the current header currently displays the signed-in demo
-  // profile as Owner. Prefer an app-supplied role if present, then fall back to
-  // that displayed demo role. This is NOT authorization; the backend must verify
-  // the role before allowing any deletion.
-  const currentRole = (
-    localStorage.getItem('friday-owner-role') ||
-    'Owner'
-  ).trim();
+  // Role visibility is read from the authenticated Owner API. Authorization is enforced server-side.
+  const canCreateUsers = currentRole === 'Owner' || currentRole === 'Super Admin';
   const canDeleteUsers = ['Owner', 'Super Admin', 'Admin'].includes(currentRole);
 
   useEffect(() => {
     api<any[]>('/users-access')
       .then(setRows)
-      .catch((err: Error) => setMessage(err.message));
+      .catch((err: Error) => { setMessageError(true); setMessage(err.message); });
+    api<{ role: string }>('/auth/me')
+      .then(profile => setCurrentRole(profile.role))
+      .catch(() => setCurrentRole(''));
   }, []);
 
-  const invite = async (event: FormEvent) => {
+  const createUser = async (event: FormEvent) => {
     event.preventDefault();
+    if (!canCreateUsers || saving || credential) return;
     setSaving(true);
     setMessage('');
     setMessageError(false);
     try {
-      const user = await api<any>('/users-access', { method: 'POST', body: JSON.stringify(form) });
-      if (user.persistence === 'in-memory-demo-only') {
-        setMessageError(true);
-        setMessage('Local demo only: user was not created in Supabase.');
-      } else {
-        setMessage(`Supabase user created and invitation sent to ${user.email}.`);
-      }
-      setRows((current) => [user, ...current]);
+      const created = await api<any>('/users-access', {
+        method: 'POST', body: JSON.stringify(form),
+      });
+      if (!created.temporaryPassword || !created.id) throw new Error('Supabase did not return the new login credentials.');
+      setRows(current => [created, ...current]);
+      setCredential({ name: created.name, email: created.email, password: created.temporaryPassword });
+      setCopied(false);
       setForm({ name: '', email: '', role: 'Operations' });
-    } catch (err) {
+      setMessage('Employee created directly in Supabase. No invitation email was sent.');
+    } catch (cause) {
       setMessageError(true);
-      setMessage(err instanceof Error ? err.message : 'Could not create this user.');
+      setMessage(cause instanceof Error ? cause.message : 'Could not create the employee.');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const setTemporaryPassword = async (user: any) => {
+    if (!canCreateUsers || resettingId || credential) return;
+    setResettingId(user.id);
+    setMessage('');
+    setMessageError(false);
+    try {
+      const result = await api<{ email: string; temporaryPassword: string; status: string }>(
+        '/users-access/' + encodeURIComponent(user.id) + '/set-temporary-password', { method: 'POST' },
+      );
+      if (!result.temporaryPassword) throw new Error('Temporary password was not returned by Supabase.');
+      setRows(current => current.map(row => row.id === user.id ? { ...row, status: result.status } : row));
+      setCredential({ name: user.name, email: result.email, password: result.temporaryPassword });
+      setCopied(false);
+      setMessage('New temporary login password generated for the employee. No email was sent.');
+    } catch (cause) {
+      setMessageError(true);
+      setMessage(cause instanceof Error ? cause.message : 'Could not set login password.');
+    } finally {
+      setResettingId('');
+    }
+  };
+
+  const copyTemporaryPassword = async () => {
+    if (!credential) return;
+    try {
+      await navigator.clipboard.writeText(credential.password);
+      setCopied(true);
+    } catch {
+      setCopied(false);
+      setMessageError(true);
+      setMessage('Clipboard access unavailable. Select and copy the displayed temporary password manually.');
     }
   };
 
@@ -708,15 +744,15 @@ function UsersAccess() {
   };
 
   return <div className="owner-users-page">
-    <Card title="Owner users & access" subtitle="Create a Supabase Auth employee and email an invitation to set their password.">
-      <form className="owner-user-form" onSubmit={invite}>
+    <Card title="Owner users & access" subtitle="Create an employee directly in Supabase Auth. No invitation email is sent.">
+      {canCreateUsers ? <form className="owner-user-form" onSubmit={createUser}>
         <Input required placeholder="Full name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
         <Input required type="email" placeholder="Work email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
         <Select value={form.role} onChange={(e: ChangeEvent<HTMLSelectElement>) => setForm({ ...form, role: e.target.value })}>
           {['Super Admin', 'Admin', 'Operations', 'Support', 'Finance', 'Infrastructure Admin', 'Viewer'].map((role) => <option key={role}>{role}</option>)}
         </Select>
-        <Button type="submit" disabled={saving}>{saving ? 'Sending invite…' : 'Create & invite'}</Button>
-      </form>
+        <Button type="submit" disabled={saving || Boolean(credential)}>{saving ? 'Creating…' : 'Create user'}</Button>
+      </form> : <p className="owner-user-message">Only the Owner or a Super Admin can create employee accounts.</p>}
       {message && <p className={messageError ? "owner-user-message error" : "owner-user-message"} role={messageError ? "alert" : "status"}>{message}</p>}
     </Card>
     <Card title="Access directory" subtitle="Delete controls are shown only for Owner, Super Admin, and Admin when the signed-in role is supplied by the app.">
@@ -729,13 +765,40 @@ function UsersAccess() {
           <td>{user.status}</td>
           <td>{user.lastLogin || '—'}</td>
           <td>
-            {canDeleteUsers && user.role !== 'Owner' && user.isPrimaryOwner !== true && user.is_primary_owner !== true
-              ? <Button type="button" onClick={() => requestDelete(user)} disabled={deleting}>Delete User</Button>
-              : <span>—</span>}
+            <div className="owner-user-row-actions">
+              {canCreateUsers && user.role !== 'Owner' && user.isPrimaryOwner !== true && user.is_primary_owner !== true &&
+                (currentRole === 'Owner' || user.role !== 'Super Admin') &&
+                <Button type="button" disabled={Boolean(resettingId) || Boolean(credential)}
+                  onClick={() => void setTemporaryPassword(user)}>
+                  {resettingId === user.id ? 'Setting…' : 'Set login password'}
+                </Button>}
+              {canDeleteUsers && user.role !== 'Owner' && user.isPrimaryOwner !== true && user.is_primary_owner !== true
+                ? <Button type="button" onClick={() => requestDelete(user)} disabled={deleting}>Delete User</Button>
+                : null}
+            </div>
           </td>
         </tr>)}
       </Table>
     </Card>
+    {credential && <div className="owner-credential-backdrop" role="presentation">
+      <section className="owner-credential-dialog" role="dialog" aria-modal="true" aria-labelledby="owner-credential-title">
+        <h3 id="owner-credential-title">Employee login credentials</h3>
+        <p><strong>{credential.name}</strong> can now sign in to the Owner Tool using this email and temporary password.</p>
+        <div className="owner-credential-field">
+          <label>Email</label>
+          <input type="text" readOnly value={credential.email} aria-label="Employee login email" />
+        </div>
+        <div className="owner-credential-field">
+          <label>One-time temporary password</label>
+          <input type="text" readOnly value={credential.password} autoComplete="off" spellCheck={false} aria-label="Employee temporary password" />
+        </div>
+        <p className="owner-credential-warning">Copy and share these credentials securely. This password is displayed only here, and the employee must change it on first login. No invitation email has been sent.</p>
+        <div className="owner-credential-actions">
+          <Button type="button" onClick={() => void copyTemporaryPassword()}>{copied ? 'Copied' : 'Copy password'}</Button>
+          <Button type="button" onClick={() => { setCredential(null); setCopied(false); }}>I have saved it · Close</Button>
+        </div>
+      </section>
+    </div>}
     {pendingDelete && <div className="owner-delete-backdrop" role="presentation">
       <section className="owner-delete-dialog" role="dialog" aria-modal="true" aria-labelledby="owner-delete-title">
         <h3 id="owner-delete-title">Confirm user deletion</h3>
