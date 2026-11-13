@@ -967,7 +967,12 @@ function App({ product, backToApplications, identity, onSignOut }: { product: Ac
 
 let content =
   page === 'Dashboard' ? (
-    <Dashboard />
+    <Dashboard
+      productCode={product.code}
+      productName={product.name}
+      onNavigate={nextPage => { setCustomer(''); setPage(nextPage); }}
+      onOpenCustomer={customerId => { setPage('Customers'); setCustomer(customerId); }}
+    />
   ) :
 
     page === 'Customer Onboarding' ? (
@@ -1203,7 +1208,7 @@ let content =
           MAIN CONTENT
       ================================================= */}
 
-      <main>
+      <main className={page === 'Dashboard' && !customer ? 'owner-dashboard-main' : undefined}>
         <header className="topbar">
 
           <div className="topbar-title">
