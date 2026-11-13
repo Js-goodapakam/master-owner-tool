@@ -557,3 +557,18 @@
   .owner-modules-main .owner-module-body .owner-delete-actions{flex-direction:column-reverse}
   .owner-modules-main .owner-module-body .owner-delete-actions button{width:100%}
 }
+
+
+/* Standalone authentication error state must not inherit the shell's 300px sidebar
+   allowance: this route has no sidebar. Session checking itself uses the
+   application selector's normal loading UI. */
+#root > main.owner-password-gate{
+  box-sizing:border-box;
+  width:100%!important;
+  max-width:none!important;
+  min-width:0!important;
+  min-height:100dvh;
+  margin:0!important;
+  padding:24px!important;
+  background:linear-gradient(135deg,#07131d,#10102b);
+}
