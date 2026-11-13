@@ -1466,9 +1466,14 @@ app.post('/api/users-access', async (q, r) => {
       });
     }
 
+    if (redirectTo.protocol !== 'https:' && !(process.env.NODE_ENV !== 'production' && redirectTo.hostname === 'localhost')) {
+      return r.status(503).json({ error: 'INVITATION_NOT_CONFIGURED', message: 'Owner invitation redirect must use HTTPS.' });
+    }
+
     // Do not create an employee with a shared or server-generated password.
     // Supabase sends a one-time invite link through its configured email flow.
-    const createAuth = await supabaseAdmin('/auth/v1/invite', {
+    // GoTrue accepts redirect_to as an invite ENDPOINT query parameter, not a JSON property.
+    const createAuth = await supabaseAdmin('/auth/v1/invite?redirect_to=' + encodeURIComponent(redirectTo.toString()), {
       method: 'POST',
       body: JSON.stringify({
         email: parsed.data.email.toLowerCase(),
@@ -1476,14 +1481,14 @@ app.post('/api/users-access', async (q, r) => {
           full_name: parsed.data.name,
           account_type: 'internal_employee',
         },
-        redirect_to: redirectTo.toString(),
       }),
     });
     const authPayload = await createAuth.json().catch(() => ({})) as Record<string, any>;
     if (!createAuth.ok) {
       const duplicateMessage = String(authPayload.msg || authPayload.message || authPayload.error_description || '').toLowerCase();
-      if (createAuth.status === 422 || duplicateMessage.includes('already')) return r.status(409).json({ error: 'AUTH_USER_EXISTS', message: 'This email already belongs to a Supabase Auth user. Verify that it is not a customer account before provisioning it for Friday Owner.' });
-      return r.status(502).json({ error: 'AUTH_USER_CREATE_FAILED', detail: authPayload });
+      if (createAuth.status === 422 || duplicateMessage.includes('already')) return r.status(409).json({ error: 'AUTH_USER_EXISTS', message: 'This email is already registered in Supabase Auth. Check with the Owner before adding it as a staff account.' });
+      console.error('Supabase Owner invite rejected:', createAuth.status, String(authPayload.code || authPayload.error_code || authPayload.msg || authPayload.message || 'unknown'));
+      return r.status(502).json({ error: 'INVITATION_FAILED', message: 'Supabase could not send the invitation. Check email delivery settings and try again.' });
     }
     const authUser = authPayload.user || authPayload;
     if (!authUser.id) return r.status(502).json({ error: 'AUTH_USER_ID_MISSING', message: 'Supabase Auth did not return the new user ID.' });
@@ -1491,7 +1496,7 @@ app.post('/api/users-access', async (q, r) => {
     const profile = {
       user_id: authUser.id, email: parsed.data.email.toLowerCase(), full_name: parsed.data.name,
       role_key: roleKey, account_type: 'internal_employee', must_change_password: true,
-      is_primary_owner: false, is_active: true, created_by: actor?.id && actor.id !== 'demo-user' ? actor.id : null,
+      is_primary_owner: false, is_active: true,
     };
     const profileInsert = await supabaseAdmin('/rest/v1/owner_profiles', {
       method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify(profile),
@@ -1507,8 +1512,18 @@ app.post('/api/users-access', async (q, r) => {
       status: 'Invitation pending', lastLogin: 'Never', isPrimaryOwner: false,
       must_change_password: true,
     };
-    addAudit('owner_user.created', 'owner_user', authUser.id, undefined, { ...result, temporaryPassword: '[not logged]' });
-    return r.status(201).json(result);
+    // Make the action auditable in persistent storage, never in the demo-only store.
+    // The Auth user and profile are already created; do not claim an invitation failed merely
+    // because audit storage becomes temporarily unavailable.
+    let auditRecorded = true;
+    try {
+      await recordPlatformAudit(q, 'owner_user.invited', 'owner_user', authUser.id, undefined,
+        { email: result.email, role: result.role, status: result.status });
+    } catch (auditError) {
+      auditRecorded = false;
+      console.error('Owner invite succeeded but audit failed:', auditError);
+    }
+    return r.status(201).json({ ...result, auditRecorded });
   } catch (error) {
     console.error('Employee creation failed:', error);
     return r.status(500).json({ error: 'EMPLOYEE_CREATE_FAILED', message: 'Could not create the employee. Check server configuration and logs.' });
