@@ -760,6 +760,16 @@ function ApplicationIcon({ code }: { code: string }) {
   return <Users size={25} strokeWidth={1.8} />;
 }
 
+function ApplicationLoadingProgress({ label }: { label: string }) {
+  return (
+    <div className="application-selector-progress-wrapper">
+      <div className="application-selector-progress-track" role="progressbar" aria-label={label} aria-valuetext="Loading in progress">
+        <span className="application-selector-progress-indicator" aria-hidden="true" />
+      </div>
+    </div>
+  );
+}
+
 function ApplicationSelector({ onSelect, identity, onSignOut }: { onSelect: (product: ActiveProduct) => void; identity: OwnerIdentity | null; onSignOut: () => void }) {
   const [products, setProducts] = useState<ActiveProduct[]>([]);
   const [error, setError] = useState('');
@@ -854,6 +864,7 @@ function ApplicationSelector({ onSelect, identity, onSignOut }: { onSelect: (pro
               <span className="application-selector-spinner" aria-hidden="true" />
               <span>Connecting to your workspaces…</span>
             </div>
+            <ApplicationLoadingProgress label="Loading application list" />
             <div className="application-selector-skeleton-grid" aria-hidden="true">
               {[0, 1, 2, 3].map(index => (
                 <div className="application-selector-skeleton-card" key={index}>
@@ -869,6 +880,13 @@ function ApplicationSelector({ onSelect, identity, onSignOut }: { onSelect: (pro
         ) : orderedProducts.length === 0 ? (
           error ? null : <div className="application-selector-empty">No applications are available for your account.</div>
         ) : (
+          <>
+          {entering && (
+            <div className="application-selector-opening" role="status">
+              <span>Opening your workspace…</span>
+              <ApplicationLoadingProgress label="Opening selected workspace" />
+            </div>
+          )}
           <section className="application-grid" aria-label="Available product workspaces">
             {orderedProducts.map(product => {
               const connected = product.status !== 'NOT_CONNECTED';
@@ -905,6 +923,7 @@ function ApplicationSelector({ onSelect, identity, onSignOut }: { onSelect: (pro
               );
             })}
           </section>
+          </>
         )}
       </div>
     </main>
