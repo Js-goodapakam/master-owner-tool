@@ -648,11 +648,13 @@ function UsersAccess() {
   const [copied, setCopied] = useState(false);
   const [currentRole, setCurrentRole] = useState('');
   const [pendingDelete, setPendingDelete] = useState<any | null>(null);
+  const [deleteEmail, setDeleteEmail] = useState('');
+  const [deleteError, setDeleteError] = useState('');
   const [deleting, setDeleting] = useState(false);
 
   // Role visibility is read from the authenticated Owner API. Authorization is enforced server-side.
   const canCreateUsers = currentRole === 'Owner' || currentRole === 'Super Admin';
-  const canDeleteUsers = ['Owner', 'Super Admin', 'Admin'].includes(currentRole);
+  const canDeleteUsers = currentRole === 'Owner' || currentRole === 'Super Admin';
 
   useEffect(() => {
     api<any[]>('/users-access')
@@ -723,24 +725,57 @@ function UsersAccess() {
 
   const requestDelete = (user: any) => {
     if (!canDeleteUsers) {
-      setMessage('Delete User is restricted to Owner, Super Admin, and Admin.');
+      setMessageError(true);
+      setMessage('Only the Owner or a Super Admin can remove employees.');
       return;
     }
     if (user.role === 'Owner' || user.isPrimaryOwner === true || user.is_primary_owner === true) {
-      setMessage('The primary Owner account cannot be deleted.');
+      setMessageError(true);
+      setMessage('The Primary Owner account cannot be deleted.');
       return;
     }
+    if (user.role === 'Super Admin' && currentRole !== 'Owner') {
+      setMessageError(true);
+      setMessage('Only the Owner can remove a Super Admin.');
+      return;
+    }
+    setDeleteEmail('');
+    setDeleteError('');
     setPendingDelete(user);
   };
 
   const confirmDelete = async () => {
-    if (!pendingDelete) return;
-    // No DELETE endpoint has been verified in the supplied backend contract.
-    // Do not remove the row locally or report success until a real endpoint exists.
+    if (!pendingDelete || deleting) return;
+    if (deleteEmail.trim().toLowerCase() !== pendingDelete.email.toLowerCase()) {
+      setDeleteError('Enter the exact employee email to confirm.');
+      return;
+    }
     setDeleting(true);
-    setMessage('Deletion is not connected yet: the backend must provide a verified DELETE /users-access/:id endpoint with server-side role checks, primary-Owner protection, session revocation, and audit logging.');
-    setDeleting(false);
-    setPendingDelete(null);
+    setDeleteError('');
+    try {
+      const response = await api<{
+        success: boolean; userId: string; outcome: 'deleted' | 'deactivated';
+        accessRevoked: boolean; message: string; auditRecorded: boolean;
+      }>('/users-access/' + encodeURIComponent(pendingDelete.id), {
+        method: 'DELETE',
+        body: JSON.stringify({ confirmEmail: deleteEmail.trim() }),
+      });
+      if (!response.success || !response.accessRevoked) throw new Error('Supabase did not confirm employee access removal.');
+      if (response.outcome === 'deleted') {
+        setRows(current => current.filter(row => row.id !== pendingDelete.id));
+      } else {
+        setRows(current => current.map(row => row.id === pendingDelete.id ? { ...row, status: 'Disabled' } : row));
+      }
+      setMessageError(false);
+      setMessage(response.message + (response.auditRecorded ? '' : ' The final audit entry needs administrator review.'));
+      setPendingDelete(null);
+      setDeleteEmail('');
+    } catch (cause) {
+      // Keep confirmation dialog open so an API error cannot look like a successful deletion.
+      setDeleteError(cause instanceof Error ? cause.message : 'Could not remove employee access.');
+    } finally {
+      setDeleting(false);
+    }
   };
 
   return <div className="owner-users-page">
@@ -755,8 +790,8 @@ function UsersAccess() {
       </form> : <p className="owner-user-message">Only the Owner or a Super Admin can create employee accounts.</p>}
       {message && <p className={messageError ? "owner-user-message error" : "owner-user-message"} role={messageError ? "alert" : "status"}>{message}</p>}
     </Card>
-    <Card title="Access directory" subtitle="Delete controls are shown only for Owner, Super Admin, and Admin when the signed-in role is supplied by the app.">
-      {!canDeleteUsers && <p className="owner-user-message" role="note">Delete User is restricted to Owner, Super Admin, and Admin. A server-verified role is not yet wired to this screen.</p>}
+    <Card title="Access directory" subtitle="Employee access is managed securely in Supabase. Historical profiles may be retained for audit integrity.">
+      {!canDeleteUsers && <p className="owner-user-message" role="note">Only the Owner or a Super Admin may remove employee accounts.</p>}
       <Table headers={['Name', 'Email', 'Role', 'Status', 'Last login', 'Actions']}>
         {rows.map((user) => <tr key={user.id}>
           <td>{user.name}</td>
@@ -772,8 +807,9 @@ function UsersAccess() {
                   onClick={() => void setTemporaryPassword(user)}>
                   {resettingId === user.id ? 'Setting…' : 'Set login password'}
                 </Button>}
-              {canDeleteUsers && user.role !== 'Owner' && user.isPrimaryOwner !== true && user.is_primary_owner !== true
-                ? <Button type="button" onClick={() => requestDelete(user)} disabled={deleting}>Delete User</Button>
+              {canDeleteUsers && user.role !== 'Owner' && user.isPrimaryOwner !== true && user.is_primary_owner !== true &&
+                (currentRole === 'Owner' || user.role !== 'Super Admin')
+                ? <Button type="button" onClick={() => requestDelete(user)} disabled={deleting || Boolean(credential)}>Delete User</Button>
                 : null}
             </div>
           </td>
@@ -800,12 +836,19 @@ function UsersAccess() {
       </section>
     </div>}
     {pendingDelete && <div className="owner-delete-backdrop" role="presentation">
-      <section className="owner-delete-dialog" role="dialog" aria-modal="true" aria-labelledby="owner-delete-title">
-        <h3 id="owner-delete-title">Confirm user deletion</h3>
-        <p>You're requesting deletion of <strong>{pendingDelete.name || pendingDelete.email}</strong>. This cannot proceed until the backend delete operation is implemented.</p>
+      <section className="owner-delete-dialog" role="dialog" aria-modal="true" aria-labelledby="owner-delete-title" aria-describedby="owner-delete-description">
+        <h3 id="owner-delete-title">Remove employee access?</h3>
+        <p id="owner-delete-description">Remove <strong>{pendingDelete.name || pendingDelete.email}</strong> from the Owner Console. Supabase Auth will delete the account if permitted by existing data references; otherwise access will be disabled and historical records retained.</p>
+        <label className="owner-delete-email-label" htmlFor="owner-delete-email">Type <strong>{pendingDelete.email}</strong> to confirm</label>
+        <input id="owner-delete-email" className="owner-delete-email-input" type="email" autoComplete="off"
+          spellCheck={false} value={deleteEmail} disabled={deleting}
+          onChange={event => { setDeleteEmail(event.target.value); setDeleteError(''); }}
+          placeholder="Employee email" />
+        {deleteError && <p className="owner-delete-error" role="alert">{deleteError}</p>}
         <div className="owner-delete-actions">
-          <Button type="button" disabled={deleting} onClick={() => setPendingDelete(null)}>Cancel</Button>
-          <Button type="button" disabled={deleting} onClick={confirmDelete}>{deleting ? 'Checking…' : 'Confirm deletion'}</Button>
+          <Button type="button" disabled={deleting} onClick={() => { setPendingDelete(null); setDeleteEmail(''); setDeleteError(''); }}>Cancel</Button>
+          <Button type="button" disabled={deleting || deleteEmail.trim().toLowerCase() !== pendingDelete.email.toLowerCase()}
+            onClick={() => void confirmDelete()}>{deleting ? 'Removing…' : 'Remove employee'}</Button>
         </div>
       </section>
     </div>}
