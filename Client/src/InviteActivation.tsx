@@ -14,9 +14,10 @@ type Props = {
   invitation: OwnerInvitation;
   onActivated: (session: { access_token: string; refresh_token?: string }) => void;
   onCancel: () => void;
+  mode?: 'invitation' | 'first-login';
 };
 
-export default function InviteActivation({ invitation, onActivated, onCancel }: Props) {
+export default function InviteActivation({ invitation, onActivated, onCancel, mode = 'invitation' }: Props) {
   const [password, setPassword] = useState('');
   const [confirmation, setConfirmation] = useState('');
   const [busy, setBusy] = useState(false);
@@ -48,7 +49,7 @@ export default function InviteActivation({ invitation, onActivated, onCancel }: 
         refresh_token: invitation.refreshToken,
       });
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Unable to activate your account. Please request a new invitation.');
+      setError(cause instanceof Error ? cause.message : 'Unable to update your password. Please try again.');
     } finally {
       setBusy(false);
     }
@@ -63,9 +64,11 @@ export default function InviteActivation({ invitation, onActivated, onCancel }: 
         <span className="fl-brand-word">Engage</span>
         <span className="fl-ai-badge">AI</span>
       </header>
-      <section className="fl-login-card" aria-label="Activate Owner Console invitation">
-        <h1>Activate your account</h1>
-        <p className="fl-subtitle">Welcome to Engagehubs Owner Console. Set a personal password to activate your invited account.</p>
+      <section className="fl-login-card" aria-label={mode === 'first-login' ? 'Set your employee password' : 'Activate Owner Console invitation'}>
+        <h1>{mode === 'first-login' ? 'Set your password' : 'Activate your account'}</h1>
+        <p className="fl-subtitle">{mode === 'first-login'
+          ? 'Your administrator created this account directly. Change the temporary password before accessing your Owner workspace.'
+          : 'Welcome to Engagehubs Owner Console. Set a personal password to activate your invited account.'}</p>
         {invitation.accessToken ? <form onSubmit={activate}>
           <label htmlFor="ia-password">New password</label>
           <div className="fl-field">
@@ -97,7 +100,7 @@ export default function InviteActivation({ invitation, onActivated, onCancel }: 
           </div>
           {error && <p className="fl-status fl-error" role="alert">{error}</p>}
           <button className="fl-login-button" type="submit" disabled={busy}>
-            <span>{busy ? 'Activating account…' : 'Set password & continue'}</span>
+            <span>{busy ? 'Saving password…' : 'Set password & continue'}</span>
           </button>
         </form> : (
           <p className="fl-status fl-error" role="alert">
