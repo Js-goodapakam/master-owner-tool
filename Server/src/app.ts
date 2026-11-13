@@ -460,6 +460,90 @@ app.get('/api/dashboard', authorize('customer.view'), async (_q, r) => {
   });
 });
 
+// Product-specific Owner command center. All joins and filtering happen on the authenticated API.
+app.get('/api/dashboard/overview', authorize('customer.view'), async (q, r) => {
+  const code = String(q.query.productCode || '');
+  if (!/^(engage_stay|engage_fit|engage_realty|engage_crm)$/.test(code)) return r.status(400).json({ error: 'INVALID_PRODUCT' });
+  if (!await requireProductAccess(q, r, code)) return;
+  if (!supabaseConfigured()) return r.status(503).json({ error: 'DATABASE_REQUIRED' });
+  try {
+    const rows = async <T>(path: string): Promise<T[]> => {
+      const response = await supabaseAdmin(path);
+      if (!response.ok) throw new Error('Dashboard source unavailable: ' + response.status);
+      return await response.json() as T[];
+    };
+    const product = (await rows<{id:string;product_code:string;name:string}>(
+      'rest/v1/products?select=id,product_code,name&product_code=eq.' + encodeURIComponent(code) + '&limit=1'
+    ))[0];
+    if (!product) return r.status(404).json({ error: 'PRODUCT_NOT_FOUND' });
+    const productId = encodeURIComponent(product.id);
+    const showSignups = can(q, 'customer.create');
+    const showSubscriptions = can(q, 'subscription.view');
+    const showAudit = can(q, 'audit.view');
+
+    type Signup = { id:string;organization_name:string|null;display_name:string|null;email:string;status:string;occurred_at:string;requested_lifecycle:string };
+    type Session = { id:string;signup_request_id:string|null;customer_id:string|null;status:string;current_step:number;updated_at:string };
+    type Subscription = { id:string;customer_id:string;status:string;expires_at:string|null;plans?:{name:string}|null };
+    type Job = { id:string;customer_id:string;status:string;operation:string;failure_code:string|null;updated_at:string };
+    type Environment = { environment:string;status:string;last_checked_at:string|null };
+    type Deployment = { id:string;status:string;environment:string;version:string|null;completed_at:string|null };
+    type Audit = { id:string;action:string;resource_id:string;resource_type:string;created_at:string };
+
+    const [assignments, allCustomers, signups, subscriptions, sessions, jobs, environments, deployments, activity] = await Promise.all([
+      rows<{customer_id:string;status:string}>('rest/v1/customer_products?select=customer_id,status&product_id=eq.' + productId),
+      loadCustomers(),
+      showSignups ? rows<Signup>('rest/v1/signup_requests?select=id,organization_name,display_name,email,status,occurred_at,requested_lifecycle&product_code=eq.' + encodeURIComponent(code) + '&order=occurred_at.desc') : Promise.resolve([] as Signup[]),
+      showSubscriptions ? rows<Subscription>('rest/v1/subscriptions?select=id,customer_id,status,expires_at,plans(name)&product_id=eq.' + productId + '&order=created_at.desc') : Promise.resolve([] as Subscription[]),
+      showSignups ? rows<Session>('rest/v1/onboarding_sessions?select=id,signup_request_id,customer_id,status,current_step,updated_at&status=eq.IN_PROGRESS') : Promise.resolve([] as Session[]),
+      rows<Job>('rest/v1/provisioning_jobs?select=id,customer_id,status,operation,failure_code,updated_at&product_id=eq.' + productId + '&order=updated_at.desc&limit=100'),
+      rows<Environment>('rest/v1/product_environments?select=environment,status,last_checked_at&product_id=eq.' + productId),
+      rows<Deployment>('rest/v1/deployments?select=id,status,environment,version,completed_at&product_id=eq.' + productId + '&order=started_at.desc&limit=10'),
+      showAudit ? rows<Audit>('rest/v1/audit_logs?select=id,action,resource_id,resource_type,created_at&product_id=eq.' + productId + '&order=created_at.desc&limit=12') : Promise.resolve([] as Audit[]),
+    ]);
+    const customerIds = new Set(assignments.map(row => row.customer_id));
+    const signupIds = new Set(signups.map(row => row.id));
+    return r.json({
+      product: { code: product.product_code, name: product.name }, fetchedAt: new Date().toISOString(),
+      visibility: { signups: showSignups, subscriptions: showSubscriptions, audit: showAudit },
+      customers: allCustomers.filter(c => customerIds.has(c.id)).map(c => ({
+        id: c.id, name: c.companyName, status: c.status, createdAt: c.createdAt,
+      })),
+      signups: signups.filter(x => ['NEW','IN_REVIEW'].includes(x.status)).map(x => ({
+        id: x.id, name: x.organization_name || x.display_name || x.email, status: x.status,
+        email: x.email, requestedLifecycle: x.requested_lifecycle, createdAt: x.occurred_at,
+      })),
+      onboarding: sessions.filter(x =>
+        Boolean((x.signup_request_id && signupIds.has(x.signup_request_id)) ||
+          (x.customer_id && customerIds.has(x.customer_id)))
+      ).map(x => ({
+        id: x.id, signupRequestId: x.signup_request_id, customerId: x.customer_id,
+        status: x.status, step: x.current_step, updatedAt: x.updated_at,
+      })),
+      subscriptions: subscriptions.map(x => ({
+        id: x.id, customerId: x.customer_id, status: x.status,
+        plan: x.plans?.name || 'Custom', expiresAt: x.expires_at,
+      })),
+      provisioning: jobs.map(x => ({
+        id: x.id, customerId: x.customer_id, status: x.status, operation: x.operation,
+        failureCode: x.failure_code, updatedAt: x.updated_at,
+      })),
+      operations: environments.map(x => ({
+        environment: x.environment, status: x.status, checkedAt: x.last_checked_at,
+      })),
+      deployments: deployments.map(x => ({
+        id: x.id, status: x.status, environment: x.environment, version: x.version, completedAt: x.completed_at,
+      })),
+      activity: activity.map(x => ({
+        id: x.id, action: x.action, resourceId: x.resource_id, resourceType: x.resource_type, createdAt: x.created_at,
+      })),
+      billing: { connected: false, mrr: null },
+    });
+  } catch (error) {
+    console.error('Owner Dashboard data query failed:', error);
+    return r.status(502).json({ error: 'DASHBOARD_UNAVAILABLE', message: 'Dashboard data could not be loaded. Please retry.' });
+  }
+});
+
 app.get('/api/customers', authorize('customer.view'), (_q, r) => {
   void loadCustomers()
     .then((items) => r.json(items))
