@@ -49,7 +49,7 @@ const safeDate = (value?: string | null) => {
     : 'Date unavailable';
 };
 
-const humanize = (text: string) => text.replace(/[_-.]/g, ' ').replace(/\s+/g, ' ').trim().replace(/\b\w/g, c => c.toUpperCase());
+const humanize = (text: string) => text.replace(/[_.-]/g, ' ').replace(/\s+/g, ' ').trim().replace(/\b\w/g, c => c.toUpperCase());
 const countDistinct = (items: string[]) => new Set(items.filter(Boolean)).size;
 const isWithinDays = (value: string | null, days: number) => {
   if (!value) return false;
