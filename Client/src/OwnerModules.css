@@ -506,3 +506,54 @@
   .owner-credential-actions{flex-direction:column}
   .owner-credential-actions button{width:100%}
 }
+
+
+/* Confirm destructive employee removal without relying on the legacy placeholder UI. */
+.owner-modules-main .owner-module-body .owner-delete-backdrop{
+  position:fixed;inset:0;z-index:1400;
+  display:flex;align-items:center;justify-content:center;
+  padding:18px;background:rgba(2,8,21,.84)!important;backdrop-filter:blur(6px);
+}
+.owner-modules-main .owner-module-body .owner-delete-dialog{
+  width:min(530px,100%);padding:26px;max-height:calc(100dvh - 36px);
+  overflow-y:auto;border:1px solid rgba(118,153,216,.35)!important;
+  background:linear-gradient(145deg,#17243c,#0c1729)!important;
+  box-shadow:0 25px 72px rgba(0,0,0,.46)!important;
+}
+.owner-modules-main .owner-module-body .owner-delete-dialog h3{margin:0 0 10px;font-size:20px;color:#f4f1de!important}
+.owner-modules-main .owner-module-body .owner-delete-dialog p{margin:0 0 16px;color:#b8c9e3!important;font-size:12px;line-height:1.6}
+.owner-modules-main .owner-module-body .owner-delete-dialog p strong{color:#fff}
+.owner-modules-main .owner-module-body .owner-delete-email-label{
+  display:block;margin:0 0 9px;color:#a9c7f3;font-size:11px;font-weight:600;
+}
+.owner-modules-main .owner-module-body .owner-delete-email-label strong{color:#f3f6ff}
+.owner-modules-main .owner-module-body .owner-delete-email-input{
+  display:block;width:100%;min-height:43px;padding:10px 12px;
+  color:#eff6ff!important;background:#0a172b!important;
+  border:1px solid rgba(111,153,223,.42)!important;border-radius:10px!important;
+  font-size:12px;
+}
+.owner-modules-main .owner-module-body .owner-delete-email-input:focus-visible{
+  outline:2px solid #7eb4ff;outline-offset:2px;
+}
+.owner-modules-main .owner-module-body .owner-delete-error{
+  margin:12px 0!important;color:#ffc5ce!important;font-size:12px;
+}
+.owner-modules-main .owner-module-body .owner-delete-actions{
+  display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;
+  gap:10px;margin-top:22px;
+}
+.owner-modules-main .owner-module-body .owner-delete-actions button{
+  min-height:39px;border-radius:9px;cursor:pointer;
+}
+.owner-modules-main .owner-module-body .owner-delete-actions button:last-child:not(:disabled){
+  color:#fff!important;background:#b72f48!important;border:1px solid #d75972!important;
+}
+.owner-modules-main .owner-module-body .owner-delete-actions button:last-child:disabled{
+  opacity:.45!important;cursor:not-allowed;
+}
+@media(max-width:520px){
+  .owner-modules-main .owner-module-body .owner-delete-dialog{padding:19px}
+  .owner-modules-main .owner-module-body .owner-delete-actions{flex-direction:column-reverse}
+  .owner-modules-main .owner-module-body .owner-delete-actions button{width:100%}
+}
