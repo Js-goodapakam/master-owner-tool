@@ -760,11 +760,15 @@ function ApplicationIcon({ code }: { code: string }) {
   return <Users size={25} strokeWidth={1.8} />;
 }
 
-function ApplicationLoadingProgress({ label }: { label: string }) {
+function ApplicationLoadingProgress({ label, value }: { label: string; value: number }) {
   return (
     <div className="application-selector-progress-wrapper">
-      <div className="application-selector-progress-track" role="progressbar" aria-label={label} aria-valuetext="Loading in progress">
-        <span className="application-selector-progress-indicator" aria-hidden="true" />
+      <div className="application-selector-progress-heading">
+        <span>Estimated loading progress</span>
+        <strong className="application-selector-progress-value">{value}%</strong>
+      </div>
+      <div className="application-selector-progress-track" role="progressbar" aria-label={label} aria-valuemin={0} aria-valuemax={100} aria-valuenow={value}>
+        <span className="application-selector-progress-indicator" style={{ width: value + "%" }} aria-hidden="true" />
       </div>
     </div>
   );
@@ -776,26 +780,33 @@ function ApplicationSelector({ onSelect, identity, onSignOut }: { onSelect: (pro
   const [entering, setEntering] = useState('');
   const [loading, setLoading] = useState(true);
   const [retryCount, setRetryCount] = useState(0);
+  const [listProgress, setListProgress] = useState(0);
+  const [openingProgress, setOpeningProgress] = useState(0);
 
   useEffect(() => {
     window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
     let mounted = true;
     let timedOut = false;
+    setListProgress(0);
+    // Estimated percentages rise by 1% while the request is pending.
+    // Do not reach 100% until real product data has arrived and been parsed.
+    const progressTimer = window.setInterval(() => {
+      if (mounted) setListProgress(current => current === 100 ? 100 : Math.min(current + 1, 94));
+    }, 95);
     const controller = new AbortController();
-    const timeout = window.setTimeout(() => {
-      timedOut = true;
-      controller.abort();
-    }, 12000);
+    const timeout = window.setTimeout(() => { timedOut = true; controller.abort(); }, 12000);
     setLoading(true);
     setError('');
-    // A lightweight, permission-filtered endpoint avoids loading every product's modules and features.
     api<any[]>('/products/selector', { signal: controller.signal })
-      .then(rows => {
-        if (mounted) setProducts(rows.map(row => ({
+      .then(async rows => {
+        if (!mounted) return;
+        setProducts(rows.map(row => ({
           id: row.id, code: row.code, name: row.name,
           description: row.description || 'Manage this application workspace.',
           status: row.status, commercialStatus: row.commercialStatus,
         })));
+        setListProgress(100);
+        await new Promise(resolve => window.setTimeout(resolve, 240));
       })
       .catch(cause => {
         if (mounted) setError(timedOut
@@ -804,20 +815,33 @@ function ApplicationSelector({ onSelect, identity, onSignOut }: { onSelect: (pro
       })
       .finally(() => {
         window.clearTimeout(timeout);
+        window.clearInterval(progressTimer);
         if (mounted) setLoading(false);
       });
     return () => {
       mounted = false;
       window.clearTimeout(timeout);
+      window.clearInterval(progressTimer);
       controller.abort();
     };
   }, [retryCount]);
 
+  useEffect(() => {
+    if (!entering) return;
+    const timer = window.setInterval(() => {
+      setOpeningProgress(current => current === 100 ? 100 : Math.min(current + 1, 94));
+    }, 95);
+    return () => window.clearInterval(timer);
+  }, [entering]);
+
   const enter = async (product: ActiveProduct) => {
+    setOpeningProgress(0);
     setEntering(product.id);
     setError('');
     try {
       const context = await api<any>('/products/' + encodeURIComponent(product.code) + '/context');
+      setOpeningProgress(100);
+      await new Promise(resolve => window.setTimeout(resolve, 240));
       onSelect(context.product);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Application access could not be verified.');
@@ -864,7 +888,7 @@ function ApplicationSelector({ onSelect, identity, onSignOut }: { onSelect: (pro
               <span className="application-selector-spinner" aria-hidden="true" />
               <span>Connecting to your workspaces…</span>
             </div>
-            <ApplicationLoadingProgress label="Loading application list" />
+            <ApplicationLoadingProgress label="Loading application list" value={listProgress} />
             <div className="application-selector-skeleton-grid" aria-hidden="true">
               {[0, 1, 2, 3].map(index => (
                 <div className="application-selector-skeleton-card" key={index}>
@@ -884,7 +908,7 @@ function ApplicationSelector({ onSelect, identity, onSignOut }: { onSelect: (pro
           {entering && (
             <div className="application-selector-opening" role="status">
               <span>Opening your workspace…</span>
-              <ApplicationLoadingProgress label="Opening selected workspace" />
+              <ApplicationLoadingProgress label="Opening selected workspace" value={openingProgress} />
             </div>
           )}
           <section className="application-grid" aria-label="Available product workspaces">
