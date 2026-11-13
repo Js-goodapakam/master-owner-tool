@@ -445,3 +445,64 @@
     scroll-behavior:auto!important;animation-duration:.01ms!important;transition-duration:.01ms!important;
   }
 }
+
+
+/* Direct Supabase employee provisioning — one-time credentials never persist in browser storage. */
+.owner-modules-main .owner-module-body .owner-user-row-actions{
+  display:flex;flex-wrap:wrap;align-items:center;gap:8px;
+}
+.owner-modules-main .owner-module-body .owner-user-row-actions button{
+  min-height:34px;white-space:nowrap;
+}
+.owner-credential-backdrop{
+  position:fixed;inset:0;z-index:1400;
+  display:flex;align-items:center;justify-content:center;
+  padding:18px;background:rgba(2,8,21,.84);
+  backdrop-filter:blur(6px);
+}
+.owner-credential-dialog{
+  width:min(510px,100%);max-height:calc(100dvh - 38px);
+  overflow:auto;padding:27px;
+  border:1px solid rgba(111,164,245,.35);
+  border-radius:17px;background:linear-gradient(145deg,#162541,#0b1629);
+  box-shadow:0 22px 75px rgba(0,0,0,.45);
+  color:#e8f1ff;
+}
+.owner-credential-dialog h3{
+  margin:0 0 13px;color:#f4f1de;font-size:21px;font-weight:700;
+}
+.owner-credential-dialog p{
+  color:#b6c9e4;font-size:12px;line-height:1.65;
+}
+.owner-credential-dialog p strong{color:#fff}
+.owner-credential-field{display:flex;flex-direction:column;gap:7px;margin:16px 0}
+.owner-credential-field label{font-size:11px;font-weight:650;color:#acd0ff}
+.owner-credential-dialog .owner-credential-field input{
+  padding:12px 13px;min-height:42px;width:100%;
+  border:1px solid rgba(91,145,220,.45);border-radius:9px;
+  background:#081527;color:#f4f6fe;font:600 12px 'SF Pro Display','Helvetica Neue',Helvetica,Arial,sans-serif;
+  letter-spacing:.02em;user-select:all;
+}
+.owner-credential-warning{
+  padding:12px;border:1px solid rgba(221,167,68,.30);border-radius:10px;
+  background:rgba(140,88,24,.15);color:#eed0a0!important;
+}
+.owner-credential-actions{display:flex;justify-content:flex-end;flex-wrap:wrap;gap:10px;margin-top:21px}
+.owner-credential-actions button{min-height:37px;border-radius:9px}
+.owner-password-gate{
+  display:grid;place-items:center;gap:10px;
+  min-height:100dvh;padding:25px;color:#d9e9ff;
+  background:linear-gradient(135deg,#07131d,#10102b);
+  font:600 14px 'SF Pro Display','Helvetica Neue',Helvetica,Arial,sans-serif;
+  text-align:center;
+}
+.owner-password-gate>div{display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:12px}
+.owner-password-gate button{
+  border:1px solid rgba(101,150,229,.5);border-radius:9px;
+  padding:9px 15px;background:#173b71;color:white;cursor:pointer;
+}
+@media(max-width:650px){
+  .owner-credential-dialog{padding:19px}
+  .owner-credential-actions{flex-direction:column}
+  .owner-credential-actions button{width:100%}
+}
