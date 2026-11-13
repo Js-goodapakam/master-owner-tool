@@ -1379,16 +1379,21 @@ function Root() {
   const [identity, setIdentity] = useState<OwnerIdentity | null>(null);
   const [invitation, setInvitation] = useState<OwnerInvitation | null>(readOwnerInvitation);
   const [identityRevision, setIdentityRevision] = useState(0);
+  const [passwordGate, setPasswordGate] = useState<'checking' | 'required' | 'ready' | 'error'>(
+    () => localStorage.getItem('friday-access-token') ? 'checking' : 'ready',
+  );
 
   const signOut = () => {
     localStorage.removeItem('friday-access-token');
     localStorage.removeItem('friday-refresh-token');
     setActiveProduct(null);
     setIdentity(null);
+    setPasswordGate('ready');
     setSigned(false);
   };
 
-  const done = (session: FridaySession) => {
+  const done = (session: FridaySession & { must_change_password?: boolean }) => {
+    setPasswordGate(session.must_change_password ? 'required' : 'checking');
     localStorage.setItem('friday-access-token', session.access_token);
 
     if (session.refresh_token) {
@@ -1401,6 +1406,18 @@ function Root() {
     setSigned(true);
     setIdentityRevision(revision => revision + 1);
   };
+
+  // The server is authoritative for mandatory password rotation even after a page refresh.
+  useEffect(() => {
+    if (!signed) return;
+    let mounted = true;
+    api<{ must_change_password: boolean }>('/auth/password-status')
+      .then(status => {
+        if (mounted) setPasswordGate(status.must_change_password ? 'required' : 'ready');
+      })
+      .catch(() => { if (mounted) setPasswordGate('error'); });
+    return () => { mounted = false; };
+  }, [signed, identityRevision]);
 
   useEffect(() => {
     if (!signed) return;
@@ -1432,6 +1449,30 @@ function Root() {
 
   if (!signed) {
     return <Login onSuccess={done} />;
+  }
+
+  if (passwordGate === 'checking') {
+    return <main className="owner-password-gate"><div role="status">Verifying your employee account…</div></main>;
+  }
+  if (passwordGate === 'error') {
+    return <main className="owner-password-gate">
+      <div role="alert">
+        Account verification is temporarily unavailable.
+        <button type="button" onClick={() => setIdentityRevision(revision => revision + 1)}>Retry</button>
+        <button type="button" onClick={signOut}>Sign out</button>
+      </div>
+    </main>;
+  }
+  if (passwordGate === 'required') {
+    return <InviteActivation
+      mode="first-login"
+      invitation={{ accessToken: localStorage.getItem('friday-access-token') || '' }}
+      onActivated={() => {
+        setPasswordGate('ready');
+        setIdentityRevision(revision => revision + 1);
+      }}
+      onCancel={signOut}
+    />;
   }
 
   if (!activeProduct) return <ApplicationSelector onSelect={setActiveProduct} identity={identity} onSignOut={signOut} />;
