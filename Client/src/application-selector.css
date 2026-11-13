@@ -170,3 +170,54 @@
 @media(prefers-reduced-motion:reduce){
   .application-selector-spinner,.application-selector-shimmer{animation:none!important}
 }
+
+/* Signed-in owner controls are independent of the application cards. */
+.application-selector-header{position:relative}
+.application-selector-account{
+  position:absolute;right:0;top:50%;transform:translateY(-50%);
+}
+.application-selector-account .topbar-account-actions{
+  display:flex;align-items:center;gap:12px;
+}
+.application-selector-account .topbar-profile{
+  display:flex;align-items:center;gap:9px;min-width:0;
+}
+.application-selector-account .topbar-avatar{
+  width:37px;height:37px;flex:0 0 37px;
+  display:grid;place-items:center;border-radius:50%;
+  border:1px solid rgba(127,157,206,.28);
+  background:rgba(48,68,111,.38);color:#e9f1ff;
+  font-size:12px;font-weight:700;
+}
+.application-selector-account .topbar-user-details{
+  display:flex;flex-direction:column;gap:2px;min-width:0;
+}
+.application-selector-account .topbar-user-details span{
+  color:#f2f5fb;font-size:12px;font-weight:650;
+  max-width:145px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.application-selector-account .topbar-user-details small{
+  color:#97a9cc;font-size:11px;
+}
+.application-selector-account .topbar-signout{
+  display:inline-flex;align-items:center;justify-content:center;gap:8px;
+  min-height:38px;padding:0 12px;white-space:nowrap;cursor:pointer;
+  border:1px solid rgba(129,155,207,.30);border-radius:9px;
+  background:rgba(24,35,60,.65);color:#eaf1ff;font-size:12px;font-weight:550;
+  transition:background .16s ease,border-color .16s ease;
+}
+.application-selector-account .topbar-signout:hover{
+  background:rgba(37,64,111,.82);border-color:rgba(128,179,255,.65);
+}
+.application-selector-account .topbar-signout:focus-visible{
+  outline:2px solid #b5dcff;outline-offset:3px;
+}
+@media(max-width:920px){
+  .application-selector-header{flex-direction:column;gap:18px}
+  .application-selector-account{position:static;transform:none}
+  .application-selector .application-selector-intro{margin-top:25px}
+}
+@media(max-width:380px){
+  .application-selector-account .topbar-user-details span{max-width:100px}
+  .application-selector-account .topbar-signout{padding:0 9px}
+}

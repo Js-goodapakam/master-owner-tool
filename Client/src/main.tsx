@@ -5,6 +5,7 @@ import logo from './assets/friday-f-logo.png';
 
 import {
   Activity,
+  ArrowLeft,
   ArrowUpRight,
   Building2,
   Hotel,
@@ -729,6 +730,28 @@ function UsersAccess() {
 
 type ActiveProduct = { id: string; code: string; name: string; description: string; status: string; commercialStatus?: string };
 
+type OwnerIdentity = { name: string; email?: string; role: string };
+
+function OwnerAccountActions({ identity, onSignOut }: { identity: OwnerIdentity | null; onSignOut: () => void }) {
+  const displayName = identity?.name || identity?.email || 'Owner account';
+  const initials = displayName.trim().split(/\s+/).slice(0, 2).map(part => part.charAt(0).toUpperCase()).join('') || 'O';
+  return (
+    <div className="topbar-account-actions">
+      <div className="topbar-profile">
+        <div className="topbar-avatar" aria-hidden="true">{initials}</div>
+        <div className="topbar-user-details">
+          <span>{displayName}</span>
+          <small>{identity?.role || 'Owner'}</small>
+        </div>
+      </div>
+      <button type="button" className="topbar-signout" aria-label="Sign out" title="Sign out" onClick={onSignOut}>
+        <LogOut size={18} aria-hidden="true" />
+        <span>Sign out</span>
+      </button>
+    </div>
+  );
+}
+
 function ApplicationIcon({ code }: { code: string }) {
   const productCode = code.toLowerCase();
   if (productCode.includes('stay')) return <Hotel size={25} strokeWidth={1.8} />;
@@ -737,7 +760,7 @@ function ApplicationIcon({ code }: { code: string }) {
   return <Users size={25} strokeWidth={1.8} />;
 }
 
-function ApplicationSelector({ onSelect }: { onSelect: (product: ActiveProduct) => void }) {
+function ApplicationSelector({ onSelect, identity, onSignOut }: { onSelect: (product: ActiveProduct) => void; identity: OwnerIdentity | null; onSignOut: () => void }) {
   const [products, setProducts] = useState<ActiveProduct[]>([]);
   const [error, setError] = useState('');
   const [entering, setEntering] = useState('');
@@ -806,6 +829,9 @@ function ApplicationSelector({ onSelect }: { onSelect: (product: ActiveProduct) 
             <img src={logo} alt="" className="application-selector-brand-mark" />
             <span className="application-selector-brand-name">Engage</span>
             <span className="application-selector-brand-badge">AI</span>
+          </div>
+          <div className="application-selector-account">
+            <OwnerAccountActions identity={identity} onSignOut={onSignOut} />
           </div>
         </header>
 
@@ -885,7 +911,7 @@ function ApplicationSelector({ onSelect }: { onSelect: (product: ActiveProduct) 
   );
 }
 
-function App({ product, backToApplications }: { product: ActiveProduct; backToApplications: () => void }) {
+function App({ product, backToApplications, identity, onSignOut }: { product: ActiveProduct; backToApplications: () => void; identity: OwnerIdentity | null; onSignOut: () => void }) {
 
   const [page, setPage] =
     useState('Dashboard');
@@ -1138,7 +1164,7 @@ let content =
         <header className="topbar">
 
           <div className="topbar-title">
-            <button className="workspace-switcher" type="button" onClick={backToApplications}>Applications</button>
+            <button className="workspace-switcher" type="button" onClick={backToApplications} title="Return to application selection"><ArrowLeft size={15} aria-hidden="true" /> Switch application</button>
             <h1>
               {customer
                 ? 'View Customer'
@@ -1156,32 +1182,7 @@ let content =
             </div>
           )}
 
-          <div className="topbar-account-actions">
-            <div className="topbar-profile">
-              <div className="topbar-avatar">
-                JS
-              </div>
-              <div className="topbar-user-details">
-                <span>Jaya Sankara</span>
-                <small>Owner</small>
-              </div>
-            </div>
-
-            <button
-              type="button"
-              className="topbar-signout"
-              aria-label="Sign out"
-              title="Sign out"
-              onClick={() => {
-                localStorage.removeItem('friday-access-token');
-                localStorage.removeItem('friday-refresh-token');
-                window.location.reload();
-              }}
-            >
-              <LogOut size={18} />
-              <span>Sign out</span>
-            </button>
-          </div>
+          <OwnerAccountActions identity={identity} onSignOut={onSignOut} />
 
         </header>
 
@@ -1208,6 +1209,15 @@ function Root() {
     () => Boolean(localStorage.getItem('friday-access-token')),
   );
   const [activeProduct, setActiveProduct] = useState<ActiveProduct | null>(null);
+  const [identity, setIdentity] = useState<OwnerIdentity | null>(null);
+
+  const signOut = () => {
+    localStorage.removeItem('friday-access-token');
+    localStorage.removeItem('friday-refresh-token');
+    setActiveProduct(null);
+    setIdentity(null);
+    setSigned(false);
+  };
 
   const done = (session: FridaySession) => {
     localStorage.setItem('friday-access-token', session.access_token);
@@ -1216,8 +1226,26 @@ function Root() {
       localStorage.setItem('friday-refresh-token', session.refresh_token);
     }
 
+    if (session.user?.email) {
+      setIdentity({ name: session.user.email, email: session.user.email, role: 'Owner' });
+    }
     setSigned(true);
   };
+
+  useEffect(() => {
+    if (!signed) return;
+    let mounted = true;
+    api<OwnerIdentity>('/auth/me')
+      .then(profile => { if (mounted) setIdentity(profile); })
+      .catch(() => { /* Keep the page functional if profile details are temporarily unavailable. */ });
+    return () => { mounted = false; };
+  }, [signed]);
+
+  useEffect(() => {
+    const onExpired = () => signOut();
+    window.addEventListener('friday:session-expired', onExpired);
+    return () => window.removeEventListener('friday:session-expired', onExpired);
+  }, []);
 
   useEffect(() => {
     const token = localStorage.getItem('friday-access-token');
@@ -1228,8 +1256,8 @@ function Root() {
     return <Login onSuccess={done} />;
   }
 
-  if (!activeProduct) return <ApplicationSelector onSelect={setActiveProduct} />;
-  return <App product={activeProduct} backToApplications={() => setActiveProduct(null)} />;
+  if (!activeProduct) return <ApplicationSelector onSelect={setActiveProduct} identity={identity} onSignOut={signOut} />;
+  return <App product={activeProduct} backToApplications={() => setActiveProduct(null)} identity={identity} onSignOut={signOut} />;
 }
 
 

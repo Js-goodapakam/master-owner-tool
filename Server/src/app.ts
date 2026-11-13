@@ -379,6 +379,27 @@ app.use('/api', (q, r, next) => {
   return next();
 });
 
+// Return the authenticated Owner identity for consistent account controls across workspaces.
+app.get('/api/auth/me', async (q, r) => {
+  const actor = (q as any).actor;
+  if (!actor) return r.status(401).json({ error: 'UNAUTHENTICATED' });
+  if (!supabaseConfigured()) {
+    return r.json({ name: 'Demo Owner', email: '', role: actor.role || 'Owner' });
+  }
+  try {
+    const profile = await ownerProfileById(String(actor.id));
+    if (!profile) return r.status(403).json({ error: 'OWNER_PROFILE_REQUIRED' });
+    return r.json({
+      name: String(profile.full_name || profile.email || 'Owner'),
+      email: String(profile.email || ''),
+      role: actor.role || 'Owner',
+    });
+  } catch (error) {
+    console.error('Owner profile lookup failed:', error);
+    return r.status(503).json({ error: 'PROFILE_UNAVAILABLE', message: 'Account details are temporarily unavailable.' });
+  }
+});
+
 const customerSchema = z.object({
   companyName: z.string().min(2),
   legalName: z.string().min(2),
