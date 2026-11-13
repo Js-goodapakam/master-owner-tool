@@ -1,0 +1,111 @@
+/* Engagehubs Owner workspace selector. Matches the dark Owner Login theme.
+   All styles are scoped so other application screens are untouched. */
+.application-selector,.application-selector *{box-sizing:border-box}
+.application-selector{
+  --picker-white:#f4f6fb;--picker-muted:#a7b5d0;--picker-panel:rgba(16,19,35,.9);
+  position:relative;display:flex;align-items:center;justify-content:center;
+  width:100%;min-width:0;min-height:100vh;min-height:100dvh;
+  margin:0;padding:clamp(22px,4.5vh,52px) 24px;overflow-x:clip;
+  color:var(--picker-white);font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;
+  background:radial-gradient(ellipse 49% 72% at 100% 0%,rgba(91,48,183,.30),transparent 73%),
+             radial-gradient(ellipse 43% 64% at 0% 4%,rgba(0,157,157,.15),transparent 73%),
+             linear-gradient(135deg,#07131d 0%,#0a0d1e 48%,#111027 100%);
+}
+.application-selector-frame{width:min(1216px,100%);min-width:0;margin:0 auto}
+.application-selector-header{display:flex;align-items:center;justify-content:center;min-height:45px}
+.application-selector-brand{display:inline-flex;align-items:center;justify-content:center;gap:9px;min-height:44px}
+.application-selector .application-selector-brand-mark{
+  width:40px;height:40px;min-width:40px;object-fit:contain;padding:0;border-radius:0;
+  background:transparent;box-shadow:none;filter:drop-shadow(0 2px 8px rgba(30,109,255,.18))
+}
+.application-selector-brand-name{font-size:33px;font-weight:700;line-height:1;letter-spacing:-1.4px;color:#f6f7fb}
+.application-selector-brand-badge{align-self:flex-start;padding:4px 6px;border:1px solid rgba(77,115,255,.82);border-radius:5px;color:#8bb4ff;font-size:10px;line-height:1}
+.application-selector-intro{max-width:790px;margin:clamp(24px,4vh,40px) auto 28px;text-align:center}
+.application-selector-eyebrow{display:inline-flex;align-items:center;justify-content:center;gap:8px;color:#86a7e4;font-size:11px;font-weight:700;letter-spacing:.16em;line-height:1.3}
+.application-selector .application-selector-intro h1{margin:10px 0 9px;color:var(--picker-white);font-size:clamp(27px,3vw,38px);font-weight:660;letter-spacing:-.035em;line-height:1.14}
+.application-selector-heading-accent{color:#3988fc}
+.application-selector .application-selector-intro p{max-width:640px;margin:0 auto;color:var(--picker-muted);font-size:14px;line-height:1.65}
+.application-selector .application-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px;width:100%;max-width:none;margin:0 auto}
+.application-selector .application-card{
+  display:flex;flex-direction:column;justify-content:flex-start;min-width:0;min-height:263px;padding:22px;
+  border:1px solid rgba(142,155,190,.19);border-radius:17px;background:var(--picker-panel);
+  color:var(--picker-white);box-shadow:0 22px 56px rgba(0,0,0,.21),inset 0 1px rgba(255,255,255,.025);
+  backdrop-filter:blur(16px);transition:border-color .18s ease,background .18s ease,transform .18s ease
+}
+.application-selector .application-card--connected{
+  border-color:rgba(64,124,245,.52);background:linear-gradient(155deg,rgba(22,36,65,.94),rgba(15,20,37,.96));
+  box-shadow:0 18px 48px rgba(1,7,22,.28),inset 0 1px rgba(105,159,250,.07)
+}
+.application-selector .application-card--connected:hover{border-color:rgba(101,163,255,.82);transform:translateY(-2px)}
+.application-card-top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+.application-card-icon{display:inline-grid;place-items:center;width:48px;height:48px;flex:0 0 48px;border:1px solid rgba(81,129,226,.20);border-radius:13px;background:rgba(24,60,120,.35);color:#8db9ff}
+.application-card--connected .application-card-icon{color:#f0f6ff;background:linear-gradient(135deg,#1455cb,#3088f5);border-color:rgba(76,148,255,.45)}
+.application-card-status{
+  display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:25px;max-width:145px;
+  padding:4px 9px;border:1px solid rgba(111,126,164,.22);border-radius:20px;
+  background:rgba(116,135,175,.09);color:#9baccc;font-size:10px;font-weight:650;letter-spacing:.015em;
+  text-transform:capitalize;white-space:nowrap
+}
+.application-card-status-dot{width:6px;height:6px;flex:0 0 6px;border-radius:50%;background:#7e8da9}
+.application-card-status--connected{color:#8bd7bc;border-color:rgba(87,180,147,.25);background:rgba(49,146,115,.12)}
+.application-card-status--connected .application-card-status-dot{background:#55d0a4}
+.application-card-copy{padding:23px 0 20px;flex:1 1 auto;min-height:0}
+.application-selector .application-card h2{margin:0 0 8px;color:#f4f6fc;font-size:19px;font-weight:650;line-height:1.25;letter-spacing:-.02em}
+.application-selector .application-card p{margin:0;color:#a1b1cb;font-size:12.5px;line-height:1.6;overflow-wrap:anywhere}
+.application-selector .application-card-footer{
+  display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;
+  padding-top:17px;border-top:1px solid rgba(128,142,177,.15)
+}
+.application-card-commercial{max-width:140px;color:#8fa0c0;font-size:11px;line-height:1.35}
+.application-card-action{
+  display:inline-flex;align-items:center;justify-content:center;gap:6px;min-width:118px;min-height:38px;
+  padding:0 11px;border:1px solid rgba(68,140,255,.75);border-radius:9px;
+  background:linear-gradient(105deg,#155bd6,#2e83f6);color:#fff;font-size:11px;font-weight:650;
+  white-space:nowrap;cursor:pointer;box-shadow:0 10px 24px rgba(17,92,221,.2);
+  transition:filter .16s ease,transform .16s ease
+}
+.application-card-action:not(:disabled):hover{filter:brightness(1.13);transform:translateY(-1px)}
+.application-card-action:focus-visible{outline:2px solid #aad7ff;outline-offset:3px}
+.application-card-action:disabled{
+  border-color:rgba(109,127,163,.20);background:rgba(92,110,145,.14);
+  color:#8797b2;box-shadow:none;cursor:not-allowed
+}
+.application-selector-footer{
+  display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px 22px;
+  margin-top:26px;padding-top:18px;border-top:1px solid rgba(129,146,184,.12);
+  color:#8394b5;font-size:11px;line-height:1.45
+}
+.application-selector-footer span:first-child{display:inline-flex;align-items:center;gap:7px}
+.application-selector-error{
+  max-width:840px;margin:0 auto 20px;padding:12px 17px;border:1px solid rgba(248,113,113,.35);
+  border-radius:10px;background:rgba(120,34,51,.2);color:#ffb4bd;font-size:13px;text-align:center
+}
+.application-selector-empty{min-height:190px;display:grid;place-items:center;padding:24px;color:var(--picker-muted);text-align:center}
+@media(max-width:1150px){
+  .application-selector .application-grid{grid-template-columns:repeat(2,minmax(0,1fr));max-width:750px}
+  .application-selector .application-card{min-height:226px}
+  .application-selector-frame{max-width:870px}
+  .application-selector-footer{max-width:750px;margin-left:auto;margin-right:auto}
+}
+@media(max-width:640px){
+  .application-selector{align-items:flex-start;padding:24px 16px 30px}
+  .application-selector-brand-name{font-size:30px}
+  .application-selector .application-selector-brand-mark{width:37px;height:37px;min-width:37px}
+  .application-selector-intro{margin:29px auto 24px}
+  .application-selector-eyebrow{font-size:10px;letter-spacing:.12em}
+  .application-selector .application-selector-intro h1{font-size:29px}
+  .application-selector .application-selector-intro p{font-size:13px}
+  .application-selector .application-grid{grid-template-columns:minmax(0,1fr);max-width:430px;gap:12px}
+  .application-selector .application-card{min-height:209px;padding:18px}
+  .application-card-copy{padding:18px 0}
+  .application-selector .application-card h2{font-size:18px}
+  .application-selector-footer{max-width:430px;flex-direction:column;align-items:flex-start;margin-top:22px}
+}
+@media(max-width:380px){.application-selector .application-card-footer{align-items:flex-start}.application-card-action{min-width:110px}}
+@media(max-height:740px) and (min-width:1151px){
+  .application-selector{padding-top:20px;padding-bottom:20px}
+  .application-selector-intro{margin-top:20px;margin-bottom:21px}
+  .application-selector .application-card{min-height:242px}
+  .application-selector-footer{margin-top:19px;padding-top:12px}
+}
+@media(prefers-reduced-motion:reduce){.application-card,.application-card-action{transition:none!important}}

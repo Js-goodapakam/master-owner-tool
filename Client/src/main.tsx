@@ -5,6 +5,9 @@ import logo from './assets/friday-f-logo.png';
 
 import {
   Activity,
+  ArrowUpRight,
+  Building2,
+  Hotel,
   CreditCard,
   DatabaseBackup,
   FileClock,
@@ -38,6 +41,7 @@ import {
 import './styles.css';
 import './auth.css';
 import './UsersAccess.css';
+import './application-selector.css';
 
 import Dashboard from './Dashboard';
 import NewOnboarding from './NewOnboarding';
@@ -725,11 +729,124 @@ function UsersAccess() {
 
 type ActiveProduct = { id: string; code: string; name: string; description: string; status: string; commercialStatus?: string };
 
+function ApplicationIcon({ code }: { code: string }) {
+  const productCode = code.toLowerCase();
+  if (productCode.includes('stay')) return <Hotel size={25} strokeWidth={1.8} />;
+  if (productCode.includes('fit')) return <Activity size={25} strokeWidth={1.8} />;
+  if (productCode.includes('realty')) return <Building2 size={25} strokeWidth={1.8} />;
+  return <Users size={25} strokeWidth={1.8} />;
+}
+
 function ApplicationSelector({ onSelect }: { onSelect: (product: ActiveProduct) => void }) {
-  const [products, setProducts] = useState<ActiveProduct[]>([]); const [error, setError] = useState(''); const [entering, setEntering] = useState('');
-  useEffect(() => { api<any[]>('/products').then(rows => setProducts(rows.map(row => ({ id: row.id, code: row.code, name: row.name, description: row.description || 'Application control plane', status: row.status, commercialStatus: row.commercialStatus })))).catch(e => setError(e.message)); }, []);
-  const enter = async (product: ActiveProduct) => { setEntering(product.id); setError(''); try { const context = await api<any>(`/products/${encodeURIComponent(product.code)}/context`); onSelect(context.product); } catch (e) { setError(e instanceof Error ? e.message : 'Application access could not be verified.'); } finally { setEntering(''); } };
-  return <main className="application-selector"><header><img src={logo} alt="Engagehubs"/><div><span>ENGAGEHUBS CONTROL PLANE</span><h1>Select an application</h1><p>Choose an authorized product workspace. Technical environments are selected after entering the application.</p></div></header>{error ? <ErrorState message={error}/> : products.length === 0 ? <Loading/> : <section className="application-grid">{products.map(product => <article className="application-card" key={product.id}><div><Badge>{product.status}</Badge><h2>{product.name}</h2><p>{product.description}</p></div><footer><small>{product.commercialStatus === 'ACTIVE' ? 'Commercially available' : 'Setup required'}</small><Button type="button" disabled={product.status === 'NOT_CONNECTED' || Boolean(entering)} onClick={() => void enter(product)}>{entering === product.id ? 'Opening…' : 'Enter application'}</Button></footer></article>)}</section>}<p className="application-note">Trial and Live are subscription states. Production and other technical environments are selected inside the product workspace.</p></main>;
+  const [products, setProducts] = useState<ActiveProduct[]>([]);
+  const [error, setError] = useState('');
+  const [entering, setEntering] = useState('');
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+    let mounted = true;
+    api<any[]>('/products')
+      .then(rows => {
+        if (mounted) setProducts(rows.map(row => ({
+          id: row.id, code: row.code, name: row.name,
+          description: row.description || 'Manage this application workspace.',
+          status: row.status, commercialStatus: row.commercialStatus,
+        })));
+      })
+      .catch(cause => {
+        if (mounted) setError(cause instanceof Error ? cause.message : 'Unable to load applications.');
+      })
+      .finally(() => { if (mounted) setLoading(false); });
+    return () => { mounted = false; };
+  }, []);
+
+  const enter = async (product: ActiveProduct) => {
+    setEntering(product.id);
+    setError('');
+    try {
+      const context = await api<any>('/products/' + encodeURIComponent(product.code) + '/context');
+      onSelect(context.product);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Application access could not be verified.');
+    } finally {
+      setEntering('');
+    }
+  };
+
+  const orderedProducts = [...products].sort((a, b) =>
+    Number(b.status !== 'NOT_CONNECTED') - Number(a.status !== 'NOT_CONNECTED') ||
+    a.name.localeCompare(b.name),
+  );
+
+  return (
+    <main className="application-selector">
+      <div className="application-selector-frame">
+        <header className="application-selector-header">
+          <div className="application-selector-brand" aria-label="Engage AI Owner Console">
+            <img src={logo} alt="" className="application-selector-brand-mark" />
+            <span className="application-selector-brand-name">Engage</span>
+            <span className="application-selector-brand-badge">AI</span>
+          </div>
+        </header>
+
+        <section className="application-selector-intro" aria-labelledby="application-selector-heading">
+          <span className="application-selector-eyebrow"><ShieldCheck size={15} aria-hidden="true" /> ENGAGEHUBS CONTROL PLANE</span>
+          <h1 id="application-selector-heading">Select an application<span className="application-selector-heading-accent">.</span></h1>
+          <p>Select a connected product workspace to manage customer onboarding, subscriptions and operations.</p>
+        </section>
+
+        {error && <div className="application-selector-error" role="alert">{error}</div>}
+
+        {loading ? (
+          <div className="application-selector-empty" role="status">Loading your applications…</div>
+        ) : orderedProducts.length === 0 ? (
+          <div className="application-selector-empty">No applications are available for your account.</div>
+        ) : (
+          <section className="application-grid" aria-label="Available product workspaces">
+            {orderedProducts.map(product => {
+              const connected = product.status !== 'NOT_CONNECTED';
+              const commercialLabel = !connected
+                ? 'Integration pending'
+                : product.commercialStatus === 'ACTIVE' ? 'Commercially available' : 'Commercial setup pending';
+              return (
+                <article className={'application-card ' + (connected ? 'application-card--connected' : 'application-card--pending')} key={product.id}>
+                  <div className="application-card-top">
+                    <span className="application-card-icon" aria-hidden="true"><ApplicationIcon code={product.code} /></span>
+                    <span className={'application-card-status ' + (connected ? 'application-card-status--connected' : '')}>
+                      <span className="application-card-status-dot" aria-hidden="true" />
+                      {product.status.replace(/_/g, ' ').toLowerCase()}
+                    </span>
+                  </div>
+                  <div className="application-card-copy">
+                    <h2>{product.name}</h2>
+                    <p>{product.description}</p>
+                  </div>
+                  <footer className="application-card-footer">
+                    <span className="application-card-commercial">{commercialLabel}</span>
+                    <button
+                      className="application-card-action"
+                      type="button"
+                      disabled={!connected || Boolean(entering)}
+                      onClick={() => void enter(product)}
+                      aria-label={connected ? 'Enter ' + product.name : product.name + ' not connected'}
+                    >
+                      {entering === product.id ? 'Opening…' : connected ? 'Enter workspace' : 'Unavailable'}
+                      <ArrowUpRight size={16} aria-hidden="true" />
+                    </button>
+                  </footer>
+                </article>
+              );
+            })}
+          </section>
+        )}
+        <footer className="application-selector-footer">
+          <span><ShieldCheck size={16} aria-hidden="true" /> Secure access to authorized products</span>
+          <span>Trial and Live subscriptions are managed within each workspace.</span>
+        </footer>
+      </div>
+    </main>
+  );
 }
 
 function App({ product, backToApplications }: { product: ActiveProduct; backToApplications: () => void }) {
