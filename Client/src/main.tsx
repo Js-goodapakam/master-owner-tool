@@ -1,6 +1,7 @@
 import { useEffect, useState, type ChangeEvent, type FormEvent } from 'react';
 import { createRoot } from 'react-dom/client';
 import Login from './Login';
+import InviteActivation, { type OwnerInvitation } from './InviteActivation';
 import logo from './assets/friday-f-logo.png';
 
 import {
@@ -1286,12 +1287,27 @@ type FridaySession = {
   user?: { id: string; email?: string };
 };
 
+function readOwnerInvitation(): OwnerInvitation | null {
+  if (typeof window === 'undefined' || !window.location.hash.startsWith('#')) return null;
+  const data = new URLSearchParams(window.location.hash.slice(1));
+  if (data.get('type') !== 'invite' && !data.has('error')) return null;
+  const accessToken = data.get('access_token') || '';
+  const refreshToken = data.get('refresh_token') || undefined;
+  const error = data.get('error_description') ||
+    (!accessToken ? 'This invitation link is invalid or has expired. Ask your Owner to send a new invitation.' : undefined);
+  // Never retain invite bearer tokens in the URL or browser history.
+  window.history.replaceState(null, '', window.location.pathname + window.location.search);
+  return { accessToken, refreshToken, error };
+}
+
 function Root() {
   const [signed, setSigned] = useState(
     () => Boolean(localStorage.getItem('friday-access-token')),
   );
   const [activeProduct, setActiveProduct] = useState<ActiveProduct | null>(null);
   const [identity, setIdentity] = useState<OwnerIdentity | null>(null);
+  const [invitation, setInvitation] = useState<OwnerInvitation | null>(readOwnerInvitation);
+  const [identityRevision, setIdentityRevision] = useState(0);
 
   const signOut = () => {
     localStorage.removeItem('friday-access-token');
@@ -1312,6 +1328,7 @@ function Root() {
       setIdentity({ name: session.user.email, email: session.user.email, role: 'Owner' });
     }
     setSigned(true);
+    setIdentityRevision(revision => revision + 1);
   };
 
   useEffect(() => {
@@ -1321,7 +1338,7 @@ function Root() {
       .then(profile => { if (mounted) setIdentity(profile); })
       .catch(() => { /* Keep the page functional if profile details are temporarily unavailable. */ });
     return () => { mounted = false; };
-  }, [signed]);
+  }, [signed, identityRevision]);
 
   useEffect(() => {
     const onExpired = () => signOut();
@@ -1333,6 +1350,14 @@ function Root() {
     const token = localStorage.getItem('friday-access-token');
     if (!token) setSigned(false);
   }, []);
+
+  if (invitation) {
+    return <InviteActivation
+      invitation={invitation}
+      onActivated={session => { done(session); setInvitation(null); }}
+      onCancel={() => setInvitation(null)}
+    />;
+  }
 
   if (!signed) {
     return <Login onSuccess={done} />;
