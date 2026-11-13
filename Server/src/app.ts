@@ -1566,38 +1566,106 @@ app.post('/api/users-access/:id/set-temporary-password', async (q, r) => {
   }
 });
 
+// Remove employee access from the Owner control plane.
+// A fresh employee is deleted in Supabase Auth, which cascades owner_profiles and refresh sessions.
+// For staff referenced by historical operations, foreign-key restrictions can prevent hard deletion:
+// revoke Owner access by disabling the profile, retaining the audit trail and returning an explicit status.
 app.delete('/api/users-access/:id', async (q, r) => {
-  if (!can(q, 'users.delete')) return r.status(403).json({ error: 'FORBIDDEN', message: 'Permission required: users.delete' });
+  const actor = (q as any).actor;
+  if (!can(q, 'users.delete') || !['owner', 'super_admin'].includes(String(actor?.roleKey))) {
+    return r.status(403).json({ error: 'FORBIDDEN', message: 'Only the Owner or a Super Admin may remove employees.' });
+  }
+  const id = z.string().uuid().safeParse(q.params.id);
+  if (!id.success) return r.status(400).json({ error: 'INVALID_USER_ID' });
+  if (id.data === actor?.id) {
+    return r.status(403).json({ error: 'SELF_DELETE_NOT_ALLOWED', message: 'You cannot delete your own Owner Console account.' });
+  }
   if (!supabaseConfigured()) {
-    const index = ownerUsers.findIndex((user) => user.id === q.params.id);
-    if (index < 0) return r.status(404).json({ error: 'NOT_FOUND', message: 'User not found.' });
-    const target = ownerUsers[index];
-    if (target.role === 'Owner' || (target as any).isPrimaryOwner === true) return r.status(403).json({ error: 'PRIMARY_OWNER_PROTECTED', message: 'Owner accounts cannot be deleted.' });
-    const [removed] = ownerUsers.splice(index, 1);
-    addAudit('owner_user.deleted_demo', 'owner_user', removed.id, removed, undefined);
-    return r.json({ success: true, userId: removed.id, persistence: 'in-memory-demo-only', sessionsRevoked: false });
+    return r.status(503).json({ error: 'SUPABASE_NOT_CONFIGURED', message: 'Employee deletion requires Supabase Auth.' });
   }
   try {
-    const response = await supabaseAdmin(`/rest/v1/owner_profiles?select=user_id,email,full_name,role_key,is_primary_owner,is_active&user_id=eq.${encodeURIComponent(q.params.id)}&limit=1`);
-    if (!response.ok) return r.status(502).json({ error: 'PROFILE_QUERY_FAILED' });
-    const rows = await response.json() as Array<Record<string, any>>;
-    const target = rows[0];
-    if (!target) return r.status(404).json({ error: 'NOT_FOUND', message: 'Employee not found.' });
-    if (target.is_primary_owner || target.role_key === 'owner') return r.status(403).json({ error: 'PRIMARY_OWNER_PROTECTED', message: 'Owner accounts cannot be deleted.' });
-    // FK is ON DELETE RESTRICT, so remove the profile first and restore it if Auth deletion fails.
-    const deleteProfile = await supabaseAdmin(`/rest/v1/owner_profiles?user_id=eq.${encodeURIComponent(target.user_id)}`, { method: 'DELETE' });
-    if (!deleteProfile.ok) return r.status(502).json({ error: 'PROFILE_DELETE_FAILED' });
-    const deleteAuth = await supabaseAdmin(`/auth/v1/admin/users/${encodeURIComponent(target.user_id)}`, { method: 'DELETE' });
-    if (!deleteAuth.ok) {
-      const restore = await supabaseAdmin('/rest/v1/owner_profiles', { method: 'POST', body: JSON.stringify(target) });
-      console.error('Auth deletion failed; profile restore status:', restore.status);
-      return r.status(502).json({ error: 'AUTH_USER_DELETE_FAILED', message: 'Auth account deletion failed; profile restoration was attempted.' });
+    const urlId = encodeURIComponent(id.data);
+    const profileResponse = await supabaseAdmin(
+      '/rest/v1/owner_profiles?select=user_id,email,full_name,role_key,is_primary_owner,is_active&user_id=eq.' + urlId + '&limit=1',
+    );
+    if (!profileResponse.ok) return r.status(502).json({ error: 'PROFILE_QUERY_FAILED' });
+    const profiles = await profileResponse.json() as Array<{
+      user_id: string; email: string; full_name: string; role_key: string;
+      is_primary_owner: boolean; is_active: boolean;
+    }>;
+    const target = profiles[0];
+    if (!target) return r.status(404).json({ error: 'NOT_FOUND', message: 'Employee no longer exists.' });
+    if (target.is_primary_owner || target.role_key === 'owner') {
+      return r.status(403).json({ error: 'PRIMARY_OWNER_PROTECTED', message: 'The Primary Owner cannot be deleted.' });
     }
-    addAudit('owner_user.deleted', 'owner_user', target.user_id, target, undefined);
-    return r.json({ success: true, userId: target.user_id, sessionsRevoked: true });
+    if (target.role_key === 'super_admin' && actor?.roleKey !== 'owner') {
+      return r.status(403).json({ error: 'PRIVILEGED_ROLE_REQUIRES_OWNER', message: 'Only the Owner can remove a Super Admin.' });
+    }
+    const confirmed = typeof q.body?.confirmEmail === 'string' && q.body.confirmEmail.trim().toLowerCase() === target.email.toLowerCase();
+    if (!confirmed) {
+      return r.status(400).json({ error: 'CONFIRMATION_REQUIRED', message: 'Enter the employee email to confirm removal.' });
+    }
+
+    // Fail closed if the durable audit store is unavailable. No employee is modified yet.
+    try {
+      await recordPlatformAudit(q, 'owner_user.removal_requested', 'owner_user', target.user_id, target, {
+        requestedBy: actor.id, intendedAction: 'delete_or_disable',
+      });
+    } catch (auditError) {
+      console.error('Employee removal pre-audit failed:', auditError);
+      return r.status(503).json({ error: 'AUDIT_UNAVAILABLE', message: 'Removal was not performed because audit storage is unavailable.' });
+    }
+
+    const authDelete = await supabaseAdmin('/auth/v1/admin/users/' + urlId, { method: 'DELETE' });
+    let result: { success: boolean; userId: string; outcome: 'deleted' | 'deactivated'; accessRevoked: boolean; message: string };
+    if (authDelete.ok) {
+      // Auth deletion removes refresh sessions and cascades the employee profile.
+      // The Owner API also checks profile existence on every authenticated request.
+      result = {
+        success: true, userId: target.user_id, outcome: 'deleted', accessRevoked: true,
+        message: 'Employee deleted from Supabase Auth and Owner directory.',
+      };
+    } else {
+      // A historically referenced profile cannot always be hard deleted. Preserve it for
+      // audit integrity, but revoke all Owner API access immediately through is_active.
+      const disabled = await supabaseAdmin('/rest/v1/owner_profiles?user_id=eq.' + urlId, {
+        method: 'PATCH',
+        headers: { Prefer: 'return=representation' },
+        body: JSON.stringify({ is_active: false, updated_at: new Date().toISOString() }),
+      });
+      if (!disabled.ok) {
+        console.error('Employee Auth deletion and deactivation both failed:', authDelete.status, disabled.status);
+        return r.status(502).json({
+          error: 'EMPLOYEE_REMOVAL_FAILED',
+          message: 'Supabase could not delete or deactivate the employee. No successful removal is confirmed.',
+        });
+      }
+      const disabledRows = await disabled.json() as Array<{ user_id: string; is_active: boolean }>;
+      if (!disabledRows.some(row => row.user_id === target.user_id && row.is_active === false)) {
+        return r.status(502).json({ error: 'ACCESS_REVOKE_NOT_VERIFIED', message: 'Employee access revocation could not be verified.' });
+      }
+      console.warn('Employee retained for history, Owner access disabled. Supabase delete returned:', authDelete.status);
+      result = {
+        success: true, userId: target.user_id, outcome: 'deactivated', accessRevoked: true,
+        message: 'Employee access revoked. The profile is retained for historical records; Supabase Auth deletion was not completed.',
+      };
+    }
+
+    let auditRecorded = true;
+    try {
+      await recordPlatformAudit(q,
+        result.outcome === 'deleted' ? 'owner_user.deleted' : 'owner_user.deactivated',
+        'owner_user', target.user_id, target,
+        { outcome: result.outcome, accessRevoked: true, requestedBy: actor.id });
+    } catch (error) {
+      auditRecorded = false;
+      console.error('Employee removal succeeded but final audit entry failed:', error);
+    }
+    r.setHeader('Cache-Control', 'no-store');
+    return r.json({ ...result, auditRecorded });
   } catch (error) {
-    console.error('Employee deletion failed:', error);
-    return r.status(500).json({ error: 'EMPLOYEE_DELETE_FAILED' });
+    console.error('Employee removal failed:', error);
+    return r.status(500).json({ error: 'EMPLOYEE_REMOVAL_FAILED', message: 'Employee removal failed. Review Owner API logs.' });
   }
 });
 
