@@ -340,7 +340,7 @@ function Onboarding() {
           </Select>
 
           <Input
-            placeholder="Friday Team Member Handling This Request"
+            placeholder="Engagehubs team member handling this request"
             value={form.accountOwner}
             onChange={(e) =>
               setForm({
