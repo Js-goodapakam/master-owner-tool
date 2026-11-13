@@ -1402,7 +1402,10 @@ app.get('/api/backups', authorize('infrastructure.view'), (_q, r) => {
 
 app.get('/api/users-access', (q, r, next) => {
   if (!can(q, 'users.view')) return r.status(403).json({ error: 'FORBIDDEN', message: 'Permission required: users.view' });
-  if (!supabaseConfigured()) return r.json(ownerUsers); // local demo only
+  if (!supabaseConfigured()) {
+    if (process.env.NODE_ENV === 'production') return r.status(503).json({ error: 'SUPABASE_NOT_CONFIGURED', message: 'Owner user directory requires Supabase Auth configuration.' });
+    return r.json(ownerUsers); // local demo only
+  }
   void (async () => {
     const response = await supabaseAdmin('/rest/v1/owner_profiles?select=user_id,email,full_name,role_key,is_active,is_primary_owner,must_change_password,created_at&order=created_at.desc');
     if (!response.ok) return r.status(502).json({ error: 'PROFILE_QUERY_FAILED', message: await response.text() });
@@ -1436,7 +1439,8 @@ app.post('/api/users-access', async (q, r) => {
   }
 
   if (!supabaseConfigured()) {
-    // Preserve local demo behavior when Supabase credentials are not configured.
+    if (process.env.NODE_ENV === 'production') return r.status(503).json({ error: 'SUPABASE_NOT_CONFIGURED', message: 'User creation requires configured Supabase Auth; no employee was created.' });
+    // Preserve local demo behavior for explicitly non-production development only.
     const user = { id: ids(), ...parsed.data, status: 'Invitation pending', lastLogin: 'Never' };
     ownerUsers.unshift(user);
     addAudit('owner_user.created_demo', 'owner_user', user.id, undefined, user);
@@ -1505,7 +1509,9 @@ app.post('/api/users-access', async (q, r) => {
       // Compensate to avoid leaving an Auth account without its Friday Owner profile.
       const rollback = await supabaseAdmin(`/auth/v1/admin/users/${encodeURIComponent(authUser.id)}`, { method: 'DELETE' });
       console.error('Profile insert failed; attempted Auth-user rollback:', await profileInsert.text(), 'rollback status:', rollback.status);
-      return r.status(502).json({ error: 'PROFILE_CREATE_FAILED', message: 'Employee profile could not be saved; the Auth account creation was rolled back where possible.' });
+      return r.status(502).json({ error: 'PROFILE_CREATE_FAILED', message: rollback.ok
+        ? 'Supabase Auth accepted the invite, but the employee profile could not be saved. The Auth user was rolled back. Retry after reviewing server logs.'
+        : 'Invitation was accepted, but employee provisioning is incomplete. Contact an Owner administrator; do not retry until the account is reconciled.' });
     }
     const result = {
       id: authUser.id, name: parsed.data.name, email: parsed.data.email.toLowerCase(), role: parsed.data.role,
