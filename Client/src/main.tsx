@@ -791,9 +791,7 @@ function ApplicationSelector({ onSelect }: { onSelect: (product: ActiveProduct) 
         </header>
 
         <section className="application-selector-intro" aria-labelledby="application-selector-heading">
-          <span className="application-selector-eyebrow"><ShieldCheck size={15} aria-hidden="true" /> ENGAGEHUBS CONTROL PLANE</span>
           <h1 id="application-selector-heading">Select an application<span className="application-selector-heading-accent">.</span></h1>
-          <p>Select a connected product workspace to manage customer onboarding, subscriptions and operations.</p>
         </section>
 
         {error && <div className="application-selector-error" role="alert">{error}</div>}
@@ -815,7 +813,7 @@ function ApplicationSelector({ onSelect }: { onSelect: (product: ActiveProduct) 
                     <span className="application-card-icon" aria-hidden="true"><ApplicationIcon code={product.code} /></span>
                     <span className={'application-card-status ' + (connected ? 'application-card-status--connected' : '')}>
                       <span className="application-card-status-dot" aria-hidden="true" />
-                      {product.status.replace(/_/g, ' ').toLowerCase()}
+                      {product.status === 'CONFIGURED' ? 'Connected' : product.status.replace(/_/g, ' ').toLowerCase()}
                     </span>
                   </div>
                   <div className="application-card-copy">
