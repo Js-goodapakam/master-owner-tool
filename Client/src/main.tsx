@@ -641,6 +641,7 @@ function UsersAccess() {
   const [rows, setRows] = useState<any[]>([]);
   const [form, setForm] = useState({ name: '', email: '', role: 'Operations' });
   const [message, setMessage] = useState('');
+  const [messageError, setMessageError] = useState(false);
   const [saving, setSaving] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<any | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -665,12 +666,19 @@ function UsersAccess() {
     event.preventDefault();
     setSaving(true);
     setMessage('');
+    setMessageError(false);
     try {
       const user = await api<any>('/users-access', { method: 'POST', body: JSON.stringify(form) });
+      if (user.persistence === 'in-memory-demo-only') {
+        setMessageError(true);
+        setMessage('Local demo only: user was not created in Supabase.');
+      } else {
+        setMessage(`Supabase user created and invitation sent to ${user.email}.`);
+      }
       setRows((current) => [user, ...current]);
       setForm({ name: '', email: '', role: 'Operations' });
-      setMessage(`Invitation created for ${user.email}.`);
     } catch (err) {
+      setMessageError(true);
       setMessage(err instanceof Error ? err.message : 'Could not create this user.');
     } finally {
       setSaving(false);
@@ -700,16 +708,16 @@ function UsersAccess() {
   };
 
   return <div className="owner-users-page">
-    <Card title="Owner users & access" subtitle="Invite internal operators and assign their Owner Tool role.">
+    <Card title="Owner users & access" subtitle="Create a Supabase Auth employee and email an invitation to set their password.">
       <form className="owner-user-form" onSubmit={invite}>
         <Input required placeholder="Full name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
         <Input required type="email" placeholder="Work email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
         <Select value={form.role} onChange={(e: ChangeEvent<HTMLSelectElement>) => setForm({ ...form, role: e.target.value })}>
-          {['Owner', 'Super Admin', 'Admin', 'Operations', 'Support', 'Finance', 'Infrastructure Admin', 'Viewer'].map((role) => <option key={role}>{role}</option>)}
+          {['Super Admin', 'Admin', 'Operations', 'Support', 'Finance', 'Infrastructure Admin', 'Viewer'].map((role) => <option key={role}>{role}</option>)}
         </Select>
-        <Button type="submit" disabled={saving}>{saving ? 'Creating…' : 'Create user'}</Button>
+        <Button type="submit" disabled={saving}>{saving ? 'Sending invite…' : 'Create & invite'}</Button>
       </form>
-      {message && <p className="owner-user-message" role="status">{message}</p>}
+      {message && <p className={messageError ? "owner-user-message error" : "owner-user-message"} role={messageError ? "alert" : "status"}>{message}</p>}
     </Card>
     <Card title="Access directory" subtitle="Delete controls are shown only for Owner, Super Admin, and Admin when the signed-in role is supplied by the app.">
       {!canDeleteUsers && <p className="owner-user-message" role="note">Delete User is restricted to Owner, Super Admin, and Admin. A server-verified role is not yet wired to this screen.</p>}
