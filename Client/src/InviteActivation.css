@@ -1,0 +1,13 @@
+/* Invitation activation uses Owner Login design and keeps the invite tokens out of URLs. */
+.ia-page .fl-login-card { width:100%; }
+.ia-page .fl-login-card .fl-subtitle { line-height:1.65; }
+.ia-page .fl-field input { width:100%; padding:0 18px; }
+.ia-page .ia-back-link{
+  display:block;margin:19px auto 0;padding:8px 12px;
+  border:0;background:transparent;color:#91bbff;
+  font:600 12px 'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;
+  cursor:pointer;text-align:center;
+}
+.ia-page .ia-back-link:hover{color:#cfe4ff;text-decoration:underline}
+.ia-page .ia-back-link:focus-visible{outline:2px solid #9bd0ff;outline-offset:3px}
+.ia-page .ia-back-link:disabled{opacity:.55;cursor:not-allowed}
