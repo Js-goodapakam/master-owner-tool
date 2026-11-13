@@ -1546,7 +1546,9 @@ app.post('/api/users-access/:id/set-temporary-password', async (q, r) => {
     });
     if (!flagged.ok) return r.status(502).json({ error: 'PROFILE_UPDATE_FAILED' });
     const updated = await supabaseAdmin('/auth/v1/admin/users/' + encodeURIComponent(target.user_id), {
-      method: 'PUT', body: JSON.stringify({ password: temporaryPassword }),
+      // Earlier invite-created employees may still have an unconfirmed email.
+      // Admin verification allows direct password login without completing an invitation.
+      method: 'PUT', body: JSON.stringify({ password: temporaryPassword, email_confirm: true }),
     });
     if (!updated.ok) {
       console.error('Employee temporary password reset failed:', updated.status);
