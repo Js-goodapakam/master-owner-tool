@@ -43,6 +43,7 @@ import './styles.css';
 import './auth.css';
 import './UsersAccess.css';
 import './application-selector.css';
+import './OwnerModules.css';
 
 import Dashboard from './Dashboard';
 import NewOnboarding from './NewOnboarding';
@@ -111,6 +112,22 @@ const nav = [
   },
 ];
 
+
+const ownerModuleDescriptions: Record<string, { title: string; description: string }> = {
+  'Customer Onboarding': { title: 'Customer onboarding', description: 'Review incoming registrations and configure customer workspaces through the seven-step journey.' },
+  'Customers': { title: 'Customer management', description: 'Manage customer profiles, subscriptions, documents, access, and tenant lifecycle.' },
+  'Products': { title: 'Products & plans', description: 'Review registered products, connected services and available commercial plans.' },
+  'Subscriptions': { title: 'Subscription management', description: 'Track subscriptions, renewals, customer lifecycle states and expiry schedules.' },
+  'Infrastructure': { title: 'Infrastructure', description: 'Review registered infrastructure providers, environments and recorded capacity.' },
+  'Deployments': { title: 'Deployments', description: 'Inspect deployment records, versions and release status across environments.' },
+  'Configuration': { title: 'Customer settings', description: 'Inspect and manage the stored configuration of customer application environments.' },
+  'Connected Integrations': { title: 'Connected integrations', description: 'Review integration connections, providers and synchronization records.' },
+  'Live Monitoring': { title: 'Live monitoring', description: 'View monitoring records and service availability reported by connected providers.' },
+  'Backup & Restore': { title: 'Backup & restore', description: 'Review available backup schedules, retention and recovery records.' },
+  'Users & Access': { title: 'Users & access', description: 'Manage internal Owner Console accounts and role-based access.' },
+  'Audit Logs': { title: 'Audit logs', description: 'Trace important administrative and customer lifecycle changes.' },
+  'Owner Settings': { title: 'Owner settings', description: 'Review platform-wide settings and administrative preferences.' },
+};
 
 /* =========================================================
    CUSTOMERS
@@ -1126,6 +1143,11 @@ let content =
   }
 
 
+  const isDashboard = page === 'Dashboard' && !customer;
+  const activeModule = customer
+    ? { title: 'Customer 360', description: 'Customer profile, assigned products, subscriptions, documents and operational history.' }
+    : ownerModuleDescriptions[page] || { title: page, description: 'Administrative records and operations for the selected application.' };
+
   return (
     <div
       className={
@@ -1208,7 +1230,7 @@ let content =
           MAIN CONTENT
       ================================================= */}
 
-      <main className={page === 'Dashboard' && !customer ? 'owner-dashboard-main' : undefined}>
+      <main className={isDashboard ? 'owner-dashboard-main' : 'owner-modules-main'}>
         <header className="topbar">
 
           <div className="topbar-title">
@@ -1216,7 +1238,7 @@ let content =
             <h1>
               {customer
                 ? 'View Customer'
-                : `${product.name} · ${page}`}
+                : isDashboard ? `${product.name} · Dashboard` : `${product.name} · Owner Console`}
             </h1>
           </div>
 
@@ -1234,7 +1256,19 @@ let content =
 
         </header>
 
-        {content}
+        {isDashboard ? content : (
+          <div className="owner-modules-content">
+            <section className="owner-module-hero" aria-label={`${activeModule.title} section`}>
+              <div className="owner-module-hero-copy">
+                <span className="owner-module-eyebrow">ENGAGEHUBS / {product.name.toUpperCase()}</span>
+                <h2>{activeModule.title}<span>.</span></h2>
+                <p>{activeModule.description}</p>
+              </div>
+              <div className="owner-module-hero-mark" aria-hidden="true"><img src={logo} alt="" /></div>
+            </section>
+            <div className="owner-module-body">{content}</div>
+          </div>
+        )}
       </main>
     </div>
   );
