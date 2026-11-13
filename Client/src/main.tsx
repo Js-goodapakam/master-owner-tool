@@ -742,11 +742,21 @@ function ApplicationSelector({ onSelect }: { onSelect: (product: ActiveProduct) 
   const [error, setError] = useState('');
   const [entering, setEntering] = useState('');
   const [loading, setLoading] = useState(true);
+  const [retryCount, setRetryCount] = useState(0);
 
   useEffect(() => {
     window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
     let mounted = true;
-    api<any[]>('/products')
+    let timedOut = false;
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, 12000);
+    setLoading(true);
+    setError('');
+    // A lightweight, permission-filtered endpoint avoids loading every product's modules and features.
+    api<any[]>('/products/selector', { signal: controller.signal })
       .then(rows => {
         if (mounted) setProducts(rows.map(row => ({
           id: row.id, code: row.code, name: row.name,
@@ -755,11 +765,20 @@ function ApplicationSelector({ onSelect }: { onSelect: (product: ActiveProduct) 
         })));
       })
       .catch(cause => {
-        if (mounted) setError(cause instanceof Error ? cause.message : 'Unable to load applications.');
+        if (mounted) setError(timedOut
+          ? 'The application list is taking longer than expected. Please try again.'
+          : cause instanceof Error ? cause.message : 'Unable to load applications.');
       })
-      .finally(() => { if (mounted) setLoading(false); });
-    return () => { mounted = false; };
-  }, []);
+      .finally(() => {
+        window.clearTimeout(timeout);
+        if (mounted) setLoading(false);
+      });
+    return () => {
+      mounted = false;
+      window.clearTimeout(timeout);
+      controller.abort();
+    };
+  }, [retryCount]);
 
   const enter = async (product: ActiveProduct) => {
     setEntering(product.id);
@@ -794,12 +813,35 @@ function ApplicationSelector({ onSelect }: { onSelect: (product: ActiveProduct) 
           <h1 id="application-selector-heading">Select an application<span className="application-selector-heading-accent">.</span></h1>
         </section>
 
-        {error && <div className="application-selector-error" role="alert">{error}</div>}
+        {error && <div className="application-selector-error" role="alert">
+          <span>{error}</span>
+          {!loading && products.length === 0 && (
+            <button type="button" className="application-selector-retry" onClick={() => setRetryCount(count => count + 1)}>
+              Retry loading
+            </button>
+          )}
+        </div>}
 
         {loading ? (
-          <div className="application-selector-empty" role="status">Loading your applications…</div>
+          <div className="application-selector-loading" role="status" aria-label="Loading available applications">
+            <div className="application-selector-loading-message">
+              <span className="application-selector-spinner" aria-hidden="true" />
+              <span>Connecting to your workspaces…</span>
+            </div>
+            <div className="application-selector-skeleton-grid" aria-hidden="true">
+              {[0, 1, 2, 3].map(index => (
+                <div className="application-selector-skeleton-card" key={index}>
+                  <span className="application-selector-skeleton-icon application-selector-shimmer" />
+                  <span className="application-selector-skeleton-title application-selector-shimmer" />
+                  <span className="application-selector-skeleton-description application-selector-shimmer" />
+                  <span className="application-selector-skeleton-description application-selector-skeleton-short application-selector-shimmer" />
+                  <span className="application-selector-skeleton-action application-selector-shimmer" />
+                </div>
+              ))}
+            </div>
+          </div>
         ) : orderedProducts.length === 0 ? (
-          <div className="application-selector-empty">No applications are available for your account.</div>
+          error ? null : <div className="application-selector-empty">No applications are available for your account.</div>
         ) : (
           <section className="application-grid" aria-label="Available product workspaces">
             {orderedProducts.map(product => {
@@ -838,10 +880,6 @@ function ApplicationSelector({ onSelect }: { onSelect: (product: ActiveProduct) 
             })}
           </section>
         )}
-        <footer className="application-selector-footer">
-          <span><ShieldCheck size={16} aria-hidden="true" /> Secure access to authorized products</span>
-          <span>Trial and Live subscriptions are managed within each workspace.</span>
-        </footer>
       </div>
     </main>
   );

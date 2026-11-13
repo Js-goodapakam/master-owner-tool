@@ -882,6 +882,34 @@ app.get('/api/customers/:id/provisioning-jobs', authorize('customer.view'), asyn
   return r.json(await response.json());
 });
 
+// Minimal product summary for the application picker. Keep detailed registry reads in /api/products.
+app.get('/api/products/selector', authorize('product.view'), async (q, r) => {
+  try {
+    const allowed = await allowedProductCodes((q as any).actor);
+    if (!supabaseConfigured()) {
+      // Preserve the existing local-demo response without assuming the demo model has product codes.
+      return r.json(allowed === null ? products : []);
+    }
+
+    const response = await supabaseAdmin('rest/v1/products?select=id,product_code,name,description,status,adapter_status,commercial_status&order=name');
+    if (!response.ok) throw new Error('Product summary query failed.');
+    const rows = await response.json() as RegistryProductRow[];
+    const visible = allowed === null ? rows : rows.filter(product => allowed.includes(product.product_code));
+    return r.json(visible.map(product => ({
+      id: product.id, code: product.product_code, name: product.name,
+      description: product.description || '',
+      status: product.adapter_status === 'HEALTHY' ? product.status : product.adapter_status,
+      commercialStatus: product.commercial_status,
+    })));
+  } catch (error) {
+    console.error('Application selector product query failed:', error);
+    if (!r.headersSent) r.status(502).json({
+      error: 'PRODUCT_SELECTOR_UNAVAILABLE',
+      message: 'Applications could not be loaded. Please try again.',
+    });
+  }
+});
+
 app.get('/api/products', authorize('product.view'), (q, r) => {
   void loadProductRegistry()
     .then(async (registry) => { const allowed = await allowedProductCodes((q as any).actor); r.json(allowed === null ? registry : registry.filter(product => allowed.includes((product as any).code))); })
