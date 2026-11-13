@@ -16,7 +16,9 @@ export async function api<T>(
     headers.set('Content-Type', 'application/json');
   }
 
-  if (token) {
+  // An invitation activation request supplies its own short-lived token.
+  // Never override that explicit Authorization header with a previous browser session.
+  if (token && !headers.has('Authorization')) {
     headers.set('Authorization', `Bearer ${token}`);
   }
 
@@ -27,7 +29,7 @@ export async function api<T>(
       headers,
     });
   } catch {
-    throw new Error('Unable to connect to Friday Master. Check your connection and try again.');
+    throw new Error('Unable to connect to Engage Owner Console. Check your connection and try again.');
   }
 
   const contentType = response.headers.get('content-type') || '';
