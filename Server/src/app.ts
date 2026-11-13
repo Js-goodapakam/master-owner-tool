@@ -1,7 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import { z } from 'zod';
-import { createHash, randomUUID, timingSafeEqual } from 'node:crypto';
+import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import { authenticate, authorize } from './auth.js';
 import { createLocalDemoSession, isLocalDemoEnabled, isLoopbackRequest } from './localAuth.js';
 import {
@@ -366,6 +366,13 @@ app.post('/api/auth/change-password', authenticate, async (q, r) => {
     return r.status(503).json({ error: 'PASSWORD_CHANGED_FLAG_UPDATE_FAILED', message: 'Password was updated, but the account status could not be updated. Contact the administrator before continuing.' });
   }
   return r.json({ success: true, must_change_password: false, message: 'Password changed successfully.' });
+});
+
+// Password gate status is accessible only after authenticating the user's bearer token.
+app.get('/api/auth/password-status', authenticate, (q, r) => {
+  const actor = (q as any).actor;
+  r.setHeader('Cache-Control', 'no-store');
+  return r.json({ must_change_password: Boolean(actor?.mustChangePassword) });
 });
 
 app.use('/api', authenticate);
@@ -1420,119 +1427,140 @@ app.get('/api/users-access', (q, r, next) => {
 });
 
 const ownerUserSchema = z.object({
-  name: z.string().trim().min(2),
-  email: z.string().trim().email(),
-  role: z.enum(['Owner', 'Super Admin', 'Admin', 'Operations', 'Support', 'Finance', 'Infrastructure Admin', 'Viewer']),
+  name: z.string().trim().min(2).max(160),
+  email: z.string().trim().email().max(254),
+  role: z.enum(['Super Admin', 'Admin', 'Operations', 'Support', 'Finance', 'Infrastructure Admin', 'Viewer']),
 });
 
+function employeeAdminAllowed(q: express.Request): boolean {
+  const actor = (q as any).actor;
+  return Boolean(actor?.permissions?.includes('users.create') &&
+    (actor?.roleKey === 'owner' || actor?.roleKey === 'super_admin'));
+}
+
+// Admin API creates a confirmed Auth user with a CSPRNG temporary password.
+// No email invitation is sent. Password is returned once over HTTPS, never logged or stored in plaintext.
 app.post('/api/users-access', async (q, r) => {
-  if (!can(q, 'users.create')) return r.status(403).json({ error: 'FORBIDDEN', message: 'Permission required: users.create' });
+  if (!employeeAdminAllowed(q)) return r.status(403).json({
+    error: 'FORBIDDEN', message: 'Only the Owner or a Super Admin can create employee accounts.',
+  });
   const parsed = ownerUserSchema.safeParse(q.body);
   if (!parsed.success) return r.status(400).json({ error: 'VALIDATION', details: parsed.error.flatten() });
   const actor = (q as any).actor;
   const roleKey = roleKeys[parsed.data.role];
   if (!roleKey) return r.status(400).json({ error: 'INVALID_ROLE' });
-  // Owner identities are never created through the ordinary employee form. Primary Owner is bootstrapped from env.
-  if (roleKey === 'owner') return r.status(403).json({ error: 'OWNER_ROLE_RESERVED', message: 'The Owner role is reserved for the configured primary Owner.' });
-  if (roleKey === 'super_admin' && actor?.roleKey !== 'owner' && actor?.role !== 'Owner') {
-    return r.status(403).json({ error: 'PRIVILEGED_ROLE_REQUIRES_OWNER', message: 'Only the primary Owner may assign Super Admin.' });
+  if (roleKey === 'super_admin' && actor?.roleKey !== 'owner') {
+    return r.status(403).json({ error: 'PRIVILEGED_ROLE_REQUIRES_OWNER', message: 'Only the Owner can create a Super Admin.' });
   }
-
   if (!supabaseConfigured()) {
-    if (process.env.NODE_ENV === 'production') return r.status(503).json({ error: 'SUPABASE_NOT_CONFIGURED', message: 'User creation requires configured Supabase Auth; no employee was created.' });
-    // Preserve local demo behavior for explicitly non-production development only.
-    const user = { id: ids(), ...parsed.data, status: 'Invitation pending', lastLogin: 'Never' };
-    ownerUsers.unshift(user);
-    addAudit('owner_user.created_demo', 'owner_user', user.id, undefined, user);
-    return r.status(201).json({ ...user, persistence: 'in-memory-demo-only' });
+    return r.status(503).json({ error: 'SUPABASE_NOT_CONFIGURED', message: 'Employee creation requires a configured Supabase Auth backend.' });
   }
 
+  const email = parsed.data.email.toLowerCase();
   try {
-    const duplicate = await supabaseAdmin(`/rest/v1/owner_profiles?select=user_id&email=eq.${encodeURIComponent(parsed.data.email.toLowerCase())}&limit=1`);
-    if (!duplicate.ok) return r.status(502).json({ error: 'PROFILE_QUERY_FAILED', message: await duplicate.text() });
-    if ((await duplicate.json() as unknown[]).length) return r.status(409).json({ error: 'DUPLICATE', message: 'An employee with this email already exists.' });
-
-    const inviteRedirect = process.env.OWNER_INVITE_REDIRECT_URL;
-    if (!inviteRedirect) {
-      return r.status(503).json({
-        error: 'INVITATION_NOT_CONFIGURED',
-        message: 'Employee invitations are unavailable until OWNER_INVITE_REDIRECT_URL is configured on the server.',
-      });
+    const duplicate = await supabaseAdmin('/rest/v1/owner_profiles?select=user_id&email=eq.' + encodeURIComponent(email) + '&limit=1');
+    if (!duplicate.ok) return r.status(502).json({ error: 'PROFILE_QUERY_FAILED' });
+    if ((await duplicate.json() as unknown[]).length) {
+      return r.status(409).json({ error: 'DUPLICATE', message: 'This employee already exists. Use Set login password from the Access directory if needed.' });
     }
 
-    let redirectTo: URL;
-    try {
-      redirectTo = new URL(inviteRedirect);
-    } catch {
-      return r.status(503).json({
-        error: 'INVITATION_NOT_CONFIGURED',
-        message: 'OWNER_INVITE_REDIRECT_URL is not a valid URL.',
-      });
-    }
-
-    if (redirectTo.protocol !== 'https:' && !(process.env.NODE_ENV !== 'production' && redirectTo.hostname === 'localhost')) {
-      return r.status(503).json({ error: 'INVITATION_NOT_CONFIGURED', message: 'Owner invitation redirect must use HTTPS.' });
-    }
-
-    // Do not create an employee with a shared or server-generated password.
-    // Supabase sends a one-time invite link through its configured email flow.
-    // GoTrue accepts redirect_to as an invite ENDPOINT query parameter, not a JSON property.
-    const createAuth = await supabaseAdmin('/auth/v1/invite?redirect_to=' + encodeURIComponent(redirectTo.toString()), {
+    const temporaryPassword = randomBytes(24).toString('base64url');
+    const created = await supabaseAdmin('/auth/v1/admin/users', {
       method: 'POST',
       body: JSON.stringify({
-        email: parsed.data.email.toLowerCase(),
-        data: {
-          full_name: parsed.data.name,
-          account_type: 'internal_employee',
-        },
+        email, password: temporaryPassword, email_confirm: true,
+        user_metadata: { full_name: parsed.data.name, account_type: 'internal_employee' },
       }),
     });
-    const authPayload = await createAuth.json().catch(() => ({})) as Record<string, any>;
-    if (!createAuth.ok) {
-      const duplicateMessage = String(authPayload.msg || authPayload.message || authPayload.error_description || '').toLowerCase();
-      if (createAuth.status === 422 || duplicateMessage.includes('already')) return r.status(409).json({ error: 'AUTH_USER_EXISTS', message: 'This email is already registered in Supabase Auth. Check with the Owner before adding it as a staff account.' });
-      console.error('Supabase Owner invite rejected:', createAuth.status, String(authPayload.code || authPayload.error_code || authPayload.msg || authPayload.message || 'unknown'));
-      return r.status(502).json({ error: 'INVITATION_FAILED', message: 'Supabase could not send the invitation. Check email delivery settings and try again.' });
+    const payload = await created.json().catch(() => ({})) as Record<string, any>;
+    if (!created.ok) {
+      const errorText = String(payload.msg || payload.message || payload.error_description || '').toLowerCase();
+      if (created.status === 422 || errorText.includes('already')) return r.status(409).json({
+        error: 'AUTH_USER_EXISTS',
+        message: 'This email already exists in Supabase Auth. If it appears in the Access directory, use Set login password instead.',
+      });
+      console.error('Supabase employee creation failed:', created.status, String(payload.code || payload.error_code || 'AUTH_CREATE_FAILED'));
+      return r.status(502).json({ error: 'AUTH_USER_CREATE_FAILED', message: 'Supabase could not create this employee.' });
     }
-    const authUser = authPayload.user || authPayload;
-    if (!authUser.id) return r.status(502).json({ error: 'AUTH_USER_ID_MISSING', message: 'Supabase Auth did not return the new user ID.' });
+    const authUser = payload.user || payload;
+    if (!authUser.id) return r.status(502).json({ error: 'AUTH_USER_ID_MISSING', message: 'Supabase did not confirm the employee ID.' });
 
     const profile = {
-      user_id: authUser.id, email: parsed.data.email.toLowerCase(), full_name: parsed.data.name,
-      role_key: roleKey, account_type: 'internal_employee', must_change_password: true,
+      user_id: authUser.id, email, full_name: parsed.data.name, role_key: roleKey,
+      account_type: 'internal_employee', must_change_password: true,
       is_primary_owner: false, is_active: true,
     };
-    const profileInsert = await supabaseAdmin('/rest/v1/owner_profiles', {
+    const stored = await supabaseAdmin('/rest/v1/owner_profiles', {
       method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify(profile),
     });
-    if (!profileInsert.ok) {
-      // Compensate to avoid leaving an Auth account without its Friday Owner profile.
-      const rollback = await supabaseAdmin(`/auth/v1/admin/users/${encodeURIComponent(authUser.id)}`, { method: 'DELETE' });
-      console.error('Profile insert failed; attempted Auth-user rollback:', await profileInsert.text(), 'rollback status:', rollback.status);
+    if (!stored.ok) {
+      const rollback = await supabaseAdmin('/auth/v1/admin/users/' + encodeURIComponent(authUser.id), { method: 'DELETE' });
+      console.error('Employee profile insert rejected. Auth rollback status:', rollback.status);
       return r.status(502).json({ error: 'PROFILE_CREATE_FAILED', message: rollback.ok
-        ? 'Supabase Auth accepted the invite, but the employee profile could not be saved. The Auth user was rolled back. Retry after reviewing server logs.'
-        : 'Invitation was accepted, but employee provisioning is incomplete. Contact an Owner administrator; do not retry until the account is reconciled.' });
+        ? 'Employee profile could not be saved. The new Auth user was rolled back.'
+        : 'Auth user was created but employee profile setup failed. Contact the Owner before retrying.' });
     }
+
     const result = {
-      id: authUser.id, name: parsed.data.name, email: parsed.data.email.toLowerCase(), role: parsed.data.role,
-      status: 'Invitation pending', lastLogin: 'Never', isPrimaryOwner: false,
-      must_change_password: true,
+      id: authUser.id, name: parsed.data.name, email, role: parsed.data.role,
+      status: 'Password Change Required', lastLogin: 'Never',
+      isPrimaryOwner: false, must_change_password: true,
     };
-    // Make the action auditable in persistent storage, never in the demo-only store.
-    // The Auth user and profile are already created; do not claim an invitation failed merely
-    // because audit storage becomes temporarily unavailable.
-    let auditRecorded = true;
     try {
-      await recordPlatformAudit(q, 'owner_user.invited', 'owner_user', authUser.id, undefined,
-        { email: result.email, role: result.role, status: result.status });
-    } catch (auditError) {
-      auditRecorded = false;
-      console.error('Owner invite succeeded but audit failed:', auditError);
-    }
-    return r.status(201).json({ ...result, auditRecorded });
+      await recordPlatformAudit(q, 'owner_user.created', 'owner_user', authUser.id, undefined, {
+        email, role: result.role, status: result.status,
+      });
+    } catch (auditError) { console.error('Employee created but audit recording failed:', auditError); }
+    r.setHeader('Cache-Control', 'no-store');
+    r.setHeader('Pragma', 'no-cache');
+    return r.status(201).json({ ...result, temporaryPassword });
   } catch (error) {
     console.error('Employee creation failed:', error);
-    return r.status(500).json({ error: 'EMPLOYEE_CREATE_FAILED', message: 'Could not create the employee. Check server configuration and logs.' });
+    return r.status(500).json({ error: 'EMPLOYEE_CREATE_FAILED', message: 'Employee could not be created. Review the Owner API logs.' });
+  }
+});
+
+// Re-issue a temporary password for an existing employee (including a prior invite-created user).
+// Never modify the primary Owner. Super Admins cannot reset another Super Admin.
+app.post('/api/users-access/:id/set-temporary-password', async (q, r) => {
+  if (!employeeAdminAllowed(q)) return r.status(403).json({
+    error: 'FORBIDDEN', message: 'Only the Owner or a Super Admin can set employee login credentials.',
+  });
+  if (!supabaseConfigured()) return r.status(503).json({ error: 'SUPABASE_NOT_CONFIGURED' });
+  const actor = (q as any).actor;
+  try {
+    const found = await supabaseAdmin('/rest/v1/owner_profiles?select=user_id,email,role_key,is_primary_owner&user_id=eq.' + encodeURIComponent(q.params.id) + '&limit=1');
+    if (!found.ok) return r.status(502).json({ error: 'PROFILE_QUERY_FAILED' });
+    const rows = await found.json() as Array<{user_id:string;email:string;role_key:string;is_primary_owner:boolean}>;
+    const target = rows[0];
+    if (!target) return r.status(404).json({ error: 'NOT_FOUND', message: 'Employee not found.' });
+    if (target.is_primary_owner || target.role_key === 'owner') return r.status(403).json({ error: 'OWNER_PROTECTED' });
+    if (target.role_key === 'super_admin' && actor?.roleKey !== 'owner') {
+      return r.status(403).json({ error: 'PRIVILEGED_ROLE_REQUIRES_OWNER' });
+    }
+    const temporaryPassword = randomBytes(24).toString('base64url');
+    // Set the restricted flag before changing the Auth credential to avoid a window of full access.
+    const flagged = await supabaseAdmin('/rest/v1/owner_profiles?user_id=eq.' + encodeURIComponent(target.user_id), {
+      method: 'PATCH', headers: { Prefer: 'return=minimal' },
+      body: JSON.stringify({ must_change_password: true, updated_at: new Date().toISOString() }),
+    });
+    if (!flagged.ok) return r.status(502).json({ error: 'PROFILE_UPDATE_FAILED' });
+    const updated = await supabaseAdmin('/auth/v1/admin/users/' + encodeURIComponent(target.user_id), {
+      method: 'PUT', body: JSON.stringify({ password: temporaryPassword }),
+    });
+    if (!updated.ok) {
+      console.error('Employee temporary password reset failed:', updated.status);
+      return r.status(502).json({ error: 'PASSWORD_RESET_FAILED', message: 'Password update was unsuccessful. Recheck the employee account before retrying.' });
+    }
+    try {
+      await recordPlatformAudit(q, 'owner_user.password_reset', 'owner_user', target.user_id, undefined, { email: target.email });
+    } catch (auditError) { console.error('Employee password was reset but audit recording failed:', auditError); }
+    r.setHeader('Cache-Control', 'no-store');
+    r.setHeader('Pragma', 'no-cache');
+    return r.json({ id: target.user_id, email: target.email, status: 'Password Change Required', temporaryPassword });
+  } catch (error) {
+    console.error('Employee temporary password operation failed:', error);
+    return r.status(500).json({ error: 'PASSWORD_RESET_FAILED', message: 'Employee login could not be updated.' });
   }
 });
 
