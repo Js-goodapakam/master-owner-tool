@@ -906,7 +906,7 @@ function ApplicationLoadingProgress({ label, value }: { label: string; value: nu
   );
 }
 
-function ApplicationSelector({ onSelect, identity, onSignOut }: { onSelect: (product: ActiveProduct) => void; identity: OwnerIdentity | null; onSignOut: () => void }) {
+function ApplicationSelector({ onSelect, identity, onSignOut, sessionPending = false }: { onSelect: (product: ActiveProduct) => void; identity: OwnerIdentity | null; onSignOut: () => void; sessionPending?: boolean }) {
   const [products, setProducts] = useState<ActiveProduct[]>([]);
   const [error, setError] = useState('');
   const [entering, setEntering] = useState('');
@@ -917,9 +917,19 @@ function ApplicationSelector({ onSelect, identity, onSignOut }: { onSelect: (pro
 
   useEffect(() => {
     window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+    if (sessionPending) {
+      // Reuse the existing application-selection loading state during a silent
+      // authentication check. Do not call product APIs until the check succeeds.
+      setLoading(true);
+      setError('');
+      const timer = window.setInterval(() => {
+        setListProgress(current => Math.min(current + 1, 22));
+      }, 160);
+      return () => window.clearInterval(timer);
+    }
     let mounted = true;
     let timedOut = false;
-    setListProgress(0);
+    setListProgress(current => Math.min(current, 22));
     // Estimated percentages rise by 1% while the request is pending.
     // Do not reach 100% until real product data has arrived and been parsed.
     const progressTimer = window.setInterval(() => {
@@ -956,7 +966,7 @@ function ApplicationSelector({ onSelect, identity, onSignOut }: { onSelect: (pro
       window.clearInterval(progressTimer);
       controller.abort();
     };
-  }, [retryCount]);
+  }, [retryCount, sessionPending]);
 
   useEffect(() => {
     if (!entering) return;
@@ -1450,16 +1460,26 @@ function Root() {
     setIdentityRevision(revision => revision + 1);
   };
 
-  // The server is authoritative for mandatory password rotation even after a page refresh.
+  // Check mandatory password rotation silently while the normal application
+  // selection skeleton is visible. Never bypass this server-authoritative gate.
   useEffect(() => {
     if (!signed) return;
     let mounted = true;
-    api<{ must_change_password: boolean }>('/auth/password-status')
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 10000);
+    api<{ must_change_password: boolean }>('/auth/password-status', { signal: controller.signal })
       .then(status => {
         if (mounted) setPasswordGate(status.must_change_password ? 'required' : 'ready');
       })
-      .catch(() => { if (mounted) setPasswordGate('error'); });
-    return () => { mounted = false; };
+      .catch(() => {
+        if (mounted) setPasswordGate('error');
+      })
+      .finally(() => window.clearTimeout(timeout));
+    return () => {
+      mounted = false;
+      controller.abort();
+      window.clearTimeout(timeout);
+    };
   }, [signed, identityRevision]);
 
   useEffect(() => {
@@ -1494,9 +1514,6 @@ function Root() {
     return <Login onSuccess={done} />;
   }
 
-  if (passwordGate === 'checking') {
-    return <main className="owner-password-gate"><div role="status">Verifying your employee account…</div></main>;
-  }
   if (passwordGate === 'error') {
     return <main className="owner-password-gate">
       <div role="alert">
@@ -1518,7 +1535,14 @@ function Root() {
     />;
   }
 
-  if (!activeProduct) return <ApplicationSelector onSelect={setActiveProduct} identity={identity} onSignOut={signOut} />;
+  if (passwordGate === 'checking' || !activeProduct) {
+    return <ApplicationSelector
+      onSelect={setActiveProduct}
+      identity={identity}
+      onSignOut={signOut}
+      sessionPending={passwordGate === 'checking'}
+    />;
+  }
   return <App product={activeProduct} backToApplications={() => setActiveProduct(null)} identity={identity} onSignOut={signOut} />;
 }
 
