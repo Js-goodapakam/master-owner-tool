@@ -1,5 +1,3 @@
-@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap');
-
 /* =========================================================
    FRIDAY MASTER OWNER — DESIGN SYSTEM
    ========================================================= */
@@ -39,7 +37,7 @@
   --color-info: #1556D8;
 
   /* Typography */
-  --font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  --font-family: 'SF Pro Display', 'SF Pro Icons', 'Helvetica Neue', Helvetica, Arial, sans-serif;
 
   /* Spacing */
   --space-1: 4px;
@@ -4037,7 +4035,7 @@ header .user {
   --color-text-muted: #7b8aa4;
   --color-border: #e3e9f2;
   --color-border-light: #edf1f7;
-  --font-family: Inter, sans-serif;
+  --font-family: 'SF Pro Display', 'SF Pro Icons', 'Helvetica Neue', Helvetica, Arial, sans-serif;
 }
 html, body, #root {
   font-family: Inter, sans-serif;
@@ -4744,4 +4742,96 @@ body { overflow-x:hidden; }
 }
 .shell > main > .topbar .workspace-switcher:focus-visible{
   outline:2px solid #2468e0;outline-offset:2px;
+}
+
+
+/* =========================================================
+   ENGAGEHUBS TYPOGRAPHY + TOPBAR / CONTENT COLLISION FIX
+   Single Owner Console font contract. Prefer installed SF Pro,
+   then native Helvetica and Arial fallbacks; never bundle fonts.
+   ========================================================= */
+:root {
+  --font-family: 'SF Pro Display', 'SF Pro Icons', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+}
+html, body, #root, #root * {
+  font-family: var(--font-family) !important;
+}
+html, body {
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* The former legacy topbar height (64px) could be shorter than its
+   two-line title + controls. It also had a transparent sticky background,
+   showing the module hero THROUGH the topbar while scrolling.
+   Give the header its own natural row height and an opaque surface. */
+.shell > main.owner-modules-main > header.topbar,
+.shell > main.owner-dashboard-main > header.topbar {
+  box-sizing: border-box !important;
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 50 !important;
+  display: flex !important;
+  flex: 0 0 auto !important;
+  align-items: center !important;
+  min-height: 108px !important;
+  height: auto !important;
+  padding: 16px 0 18px !important;
+  margin: 0 !important;
+  background: #080f1f !important;
+  border-bottom: 1px solid rgba(131, 158, 207, .18) !important;
+  isolation: isolate;
+}
+.shell > main.owner-modules-main > .owner-modules-content {
+  position: relative;
+  flex: 0 0 auto;
+  z-index: 0;
+  min-width: 0;
+  margin: 0;
+  padding-top: 20px;
+}
+.shell > main.owner-modules-main > header.topbar > .topbar-title,
+.shell > main.owner-dashboard-main > header.topbar > .topbar-title {
+  align-self: center;
+  min-width: 0 !important;
+  max-width: min(100%, 380px);
+}
+.shell > main.owner-modules-main > header.topbar > .topbar-title h1,
+.shell > main.owner-dashboard-main > header.topbar > .topbar-title h1 {
+  line-height: 1.25 !important;
+  overflow-wrap: break-word;
+}
+.shell > main.owner-modules-main > header.topbar > .global-search {
+  flex: 1 1 200px;
+  min-width: 0 !important;
+  max-width: 440px;
+}
+@media(max-width: 1100px){
+  .shell > main.owner-modules-main > header.topbar,
+  .shell > main.owner-dashboard-main > header.topbar {
+    gap: 12px !important;
+  }
+  .shell > main.owner-modules-main > header.topbar > .global-search{
+    max-width: 280px;
+  }
+}
+@media(max-width: 760px){
+  .shell > main.owner-modules-main > header.topbar,
+  .shell > main.owner-dashboard-main > header.topbar{
+    min-height: 0 !important;
+    padding: 14px 0 15px !important;
+    flex-wrap: wrap !important;
+    row-gap: 12px !important;
+  }
+  .shell > main.owner-modules-main > header.topbar > .topbar-title,
+  .shell > main.owner-dashboard-main > header.topbar > .topbar-title{
+    flex: 1 1 100% !important;
+    max-width: 100%;
+  }
+  .shell > main.owner-modules-main > header.topbar > .topbar-account-actions,
+  .shell > main.owner-dashboard-main > header.topbar > .topbar-account-actions{
+    width: 100% !important;
+    justify-content: flex-end !important;
+  }
+  .shell > main.owner-modules-main > .owner-modules-content{padding-top:15px}
 }
