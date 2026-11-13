@@ -267,6 +267,11 @@
 .owner-modules-main .owner-module-body fieldset button:hover{background:#21529a}
 .owner-modules-main .owner-module-body .owner-user-form{min-width:0}
 .owner-modules-main .owner-module-body .owner-user-message{color:#89e0bb!important}
+.owner-modules-main .owner-module-body .owner-user-message.error{
+  color:#ffc0c8!important;background:rgba(130,36,61,.23);
+  border:1px solid rgba(245,109,132,.30);border-radius:10px;
+  padding:11px 14px;line-height:1.5;
+}
 .owner-modules-main .owner-module-body .owner-delete-backdrop{background:rgba(3,9,20,.72)}
 .owner-modules-main .owner-module-body .owner-delete-dialog{color:#dceaff!important;max-height:calc(100dvh - 60px);overflow-y:auto}
 .owner-modules-main .owner-module-body .owner-delete-dialog h3{color:#f3f1e6}
