@@ -223,30 +223,12 @@
 }
 
 
-/* Indeterminate progress indicates API work without inventing a percentage. */
-.application-selector-progress-wrapper{
-  width:min(480px,100%);
-  margin:0 auto 24px;
-}
-.application-selector-progress-track{
-  height:6px;
-  width:100%;
-  overflow:hidden;
-  position:relative;
-  border-radius:999px;
-  border:1px solid rgba(121,157,224,.2);
-  background:rgba(56,78,125,.32);
-  box-shadow:inset 0 1px 3px rgba(0,0,0,.20);
-}
-.application-selector-progress-indicator{
-  display:block;
-  width:38%;
-  height:100%;
-  border-radius:inherit;
-  background:linear-gradient(90deg,#1765e9 0%,#57a5ff 68%,#8dd9ff 100%);
-  box-shadow:0 0 18px rgba(70,161,255,.45);
-  animation:owner-selector-progress-slide 1.35s cubic-bezier(.43,.02,.59,.98) infinite alternate;
-}
+/* Monotonic percentage progress: fills left-to-right only. */
+.application-selector-progress-wrapper{width:min(515px,100%);margin:0 auto 24px}
+.application-selector-progress-heading{display:flex;justify-content:space-between;align-items:center;gap:14px;margin-bottom:9px;color:#a5b9d9;font-size:11px}
+.application-selector-progress-value{color:#e6f4ff;font-size:15px;font-weight:700;font-variant-numeric:tabular-nums}
+.application-selector-progress-track{position:relative;width:100%;height:9px;overflow:hidden;border-radius:999px;border:1px solid rgba(121,157,224,.2);background:rgba(56,78,125,.32);box-shadow:inset 0 1px 3px rgba(0,0,0,.2)}
+.application-selector-progress-indicator{display:block;width:0;height:100%;border-radius:999px;background:linear-gradient(90deg,#1765e9,#57a5ff 68%,#8dd9ff);box-shadow:0 0 18px rgba(70,161,255,.45);transition:width 95ms linear}
 .application-selector-opening{
   display:flex;
   flex-direction:column;
@@ -263,10 +245,4 @@
 .application-selector-opening .application-selector-progress-wrapper{
   margin:0 auto;
 }
-@keyframes owner-selector-progress-slide{
-  from{transform:translateX(-100%)}
-  to{transform:translateX(265%)}
-}
-@media(prefers-reduced-motion:reduce){
-  .application-selector-progress-indicator{animation:none;transform:none;width:45%}
-}
+@media(prefers-reduced-motion:reduce){.application-selector-progress-indicator{transition:none}}
