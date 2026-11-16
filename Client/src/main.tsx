@@ -1374,7 +1374,7 @@ let content =
                 : name === 'New Onboarding' ? 'Customer Onboarding'
                 : name === 'Products & Plans' ? 'Products'
                 : name === 'Customer Settings' ? 'Configuration' : name) ? 'page' : undefined}
-              aria-label={collapsed ? name : undefined}
+              aria-label={name}
               title={collapsed ? name : undefined}
             >
               <span className="nav-icon">
