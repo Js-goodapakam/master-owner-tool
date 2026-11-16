@@ -453,3 +453,94 @@
     justify-content:center!important;
   }
 }
+
+
+/* Accessible, high-contrast workspace loading and opening progress.
+   Keep the bar and numbers readable over the transparent application canvas. */
+:root[data-owner-theme='light'] .application-selector{
+  --application-progress-text:#253347;
+  --application-progress-label:#445670;
+  --application-progress-track:#dfe7f0;
+  --application-progress-border:#c8d5e3;
+  --application-progress-fill:#1969dc;
+  --application-progress-panel:rgba(255,255,255,.88);
+}
+:root[data-owner-theme='dark'] .application-selector{
+  --application-progress-text:#f3f7ff;
+  --application-progress-label:#d0def3;
+  --application-progress-track:#263c59;
+  --application-progress-border:#496180;
+  --application-progress-fill:#55a4ff;
+  --application-progress-panel:rgba(17,31,52,.91);
+}
+:root[data-owner-theme] .application-selector .application-selector-opening{
+  width:min(470px,100%)!important;
+  margin:0 auto 24px!important;
+  padding:12px 18px!important;
+  border:1px solid var(--application-progress-border)!important;
+  border-radius:12px!important;
+  background:var(--application-progress-panel)!important;
+  color:var(--application-progress-text)!important;
+  font-size:14px!important;
+  font-weight:600!important;
+  line-height:1.5!important;
+  gap:10px!important;
+  box-shadow:0 3px 12px rgba(19,46,80,.07)!important;
+}
+:root[data-owner-theme] .application-selector .application-selector-opening > span{
+  color:var(--application-progress-text)!important;
+  opacity:1!important;
+}
+:root[data-owner-theme] .application-selector .application-selector-progress-wrapper{
+  width:min(430px,100%)!important;
+  margin:0 auto!important;
+}
+:root[data-owner-theme] .application-selector .application-selector-loading > .application-selector-progress-wrapper{
+  margin:0 auto 22px!important;
+}
+:root[data-owner-theme] .application-selector .application-selector-progress-heading {
+  display:flex!important;
+  align-items:center!important;
+  justify-content:space-between!important;
+  gap:12px!important;
+  color:var(--application-progress-label)!important;
+  font-size:13px!important;
+  font-weight:550!important;
+  line-height:1.4!important;
+  margin:0 0 10px!important;
+  opacity:1!important;
+}
+:root[data-owner-theme] .application-selector .application-selector-progress-heading > span{
+  color:var(--application-progress-label)!important;
+  opacity:1!important;
+}
+:root[data-owner-theme] .application-selector .application-selector-progress-value{
+  color:var(--application-progress-text)!important;
+  font-size:16px!important;
+  font-weight:700!important;
+  line-height:1.2!important;
+  font-variant-numeric:tabular-nums!important;
+  opacity:1!important;
+}
+:root[data-owner-theme] .application-selector .application-selector-progress-track{
+  width:100%!important;
+  height:10px!important;
+  border:1px solid var(--application-progress-border)!important;
+  background:var(--application-progress-track)!important;
+  border-radius:999px!important;
+  overflow:hidden!important;
+  box-shadow:none!important;
+}
+:root[data-owner-theme] .application-selector .application-selector-progress-indicator{
+  display:block!important;
+  height:100%!important;
+  background:var(--application-progress-fill)!important;
+  border-radius:999px!important;
+  box-shadow:none!important;
+}
+:root[data-owner-theme] .application-selector .application-selector-loading-message{
+  color:var(--application-progress-text)!important;
+  font-size:14px!important;
+  font-weight:600!important;
+  opacity:1!important;
+}
