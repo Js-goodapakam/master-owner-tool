@@ -423,6 +423,19 @@ const generatedTenantSlug = (signupId: string): string | null =>
     ? 'eh-' + signupId.replace(/-/g, '').toLowerCase()
     : null;
 
+async function reserveTenantAccountCode(signupId: string, environment: string): Promise<string> {
+  const response = await supabaseAdmin('/rest/v1/rpc/reserve_tenant_account_code', {
+    method: 'POST',
+    body: JSON.stringify({ p_signup_id: signupId, p_environment: environment }),
+  });
+  if (!response.ok) throw new Error('Unable to allocate a unique customer account ID.');
+  const code = await response.json() as string;
+  if (typeof code !== 'string' || !/^(ES|EF|ER|EC)-(TR|LV)-\d{6,}-\d{2}$/.test(code)) {
+    throw new Error('Tenant account ID service returned an invalid identifier.');
+  }
+  return code;
+}
+
 const customerSchema = z.object({
   companyName: z.string().min(2),
   legalName: z.string().min(2),
@@ -676,6 +689,11 @@ app.post('/api/customers', authorize('customer.create'), (q, r) => {
   }
 
   void (async () => {
+    const signupIdForAccount = typeof q.body?.signupRequestId === 'string' && generatedTenantSlug(q.body.signupRequestId)
+      ? q.body.signupRequestId : null;
+    const requestedEnvironment = q.body?.environment === 'Live' ? 'Live' : 'Trial';
+    const accountCode = signupIdForAccount
+      ? await reserveTenantAccountCode(signupIdForAccount, requestedEnvironment) : null;
     const normalizedName = parsed.data.legalName.trim().replace(/\s+/g, ' ').toLowerCase();
     const existing = await supabaseAdmin(`rest/v1/organizations?select=id&normalized_name=eq.${encodeURIComponent(normalizedName)}&limit=1`);
     if (!existing.ok) throw new Error('Could not validate the organization registry.');
@@ -692,7 +710,7 @@ app.post('/api/customers', authorize('customer.create'), (q, r) => {
     const organization = (await organizationResponse.json() as Array<{ id: string }>)[0];
     if (!organization?.id) throw new Error('Organization creation did not return an identifier.');
 
-    const customerCode = `EH-${Date.now()}-${randomUUID().slice(0, 8).toUpperCase()}`;
+    const customerCode = accountCode || `EH-${Date.now()}-${randomUUID().slice(0, 8).toUpperCase()}`;
     const customerResponse = await supabaseAdmin('/rest/v1/customers', {
       method: 'POST',
       headers: { Prefer: 'return=representation' },
@@ -730,7 +748,7 @@ app.post('/api/customers', authorize('customer.create'), (q, r) => {
         const tenantSlug = generatedTenantSlug(signupIdForTenant) || 'eh-' + randomUUID().replace(/-/g, '');
         let tenantId: string | null = null;
         if (tenantName && tenantSlug) {
-          const tenantResponse = await supabaseAdmin('/rest/v1/tenants', { method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ customer_id: item.id, name: tenantName, slug: tenantSlug, status: 'ONBOARDING' }) });
+          const tenantResponse = await supabaseAdmin('/rest/v1/tenants', { method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ customer_id: item.id, name: tenantName, slug: tenantSlug, account_code: accountCode, status: 'ONBOARDING' }) });
           if (!tenantResponse.ok) throw new Error('Could not create the requested tenant.');
           tenantId = (await tenantResponse.json() as Array<{ id: string }>)[0]?.id || null;
         }
@@ -867,8 +885,9 @@ app.post('/api/onboarding', authorize('customer.create'), (q, r) => {
   if (supabaseConfigured()) return void (async () => {
     const signupRequestId = typeof q.body.signupRequestId === 'string' && /^[0-9a-f-]{36}$/i.test(q.body.signupRequestId) ? q.body.signupRequestId : null;
     const clientPayload = q.body.data && typeof q.body.data === 'object' ? q.body.data : {};
-    const systemTenantId = signupRequestId ? generatedTenantSlug(signupRequestId) : null;
-    const payload = { ...clientPayload, tenantId: systemTenantId };
+    const environment = clientPayload?.environment === 'Live' ? 'Live' : 'Trial';
+    const systemAccountCode = signupRequestId ? await reserveTenantAccountCode(signupRequestId, environment) : null;
+    const payload = { ...clientPayload, tenantId: systemAccountCode };
     const existing = signupRequestId ? await supabaseAdmin(`rest/v1/onboarding_sessions?select=id&signup_request_id=eq.${encodeURIComponent(signupRequestId)}&limit=1`) : null;
     if (existing && !existing.ok) throw new Error('Could not read onboarding session.');
     const prior = existing ? (await existing.json() as Array<{ id: string }>)[0] : null;
@@ -878,7 +897,7 @@ app.post('/api/onboarding', authorize('customer.create'), (q, r) => {
     if (!response.ok) throw new Error('Could not save onboarding step.');
     const session = (await response.json() as Array<{ id: string; current_step: number }>)[0];
     await recordPlatformAudit(q, 'onboarding.step_saved', 'onboarding_session', session.id, undefined, { step });
-    return r.json({ sessionId: session.id, step: session.current_step });
+    return r.json({ sessionId: session.id, step: session.current_step, tenantId: systemAccountCode });
   })().catch((error) => { console.error('Onboarding step save failed:', error); if (!r.headersSent) r.status(500).json({ error: 'ONBOARDING_SAVE_FAILED' }); });
 
   const existing =
@@ -938,12 +957,17 @@ app.post('/api/onboarding', authorize('customer.create'), (q, r) => {
 app.get('/api/onboarding/signup/:signupRequestId', authorize('customer.create'), async (q, r) => {
   if (!supabaseConfigured()) return r.json(null);
   const id = String(q.params.signupRequestId);
-  const tenantId = generatedTenantSlug(id);
-  if (!tenantId) return r.status(400).json({ error: 'INVALID_SIGNUP_REQUEST_ID' });
+  if (!generatedTenantSlug(id)) return r.status(400).json({ error: 'INVALID_SIGNUP_REQUEST_ID' });
   const response = await supabaseAdmin(`rest/v1/onboarding_sessions?select=id,current_step,payload,status&signup_request_id=eq.${encodeURIComponent(id)}&status=eq.IN_PROGRESS&limit=1`);
   if (!response.ok) return r.status(502).json({ error: 'ONBOARDING_SESSION_UNAVAILABLE' });
   const session = (await response.json() as Array<any>)[0] || null;
-  return r.json({ ...(session || {}), tenantId, payload: session?.payload ? { ...session.payload, tenantId } : null });
+  const environment = session?.payload?.environment === 'Live' ? 'Live' : 'Trial';
+  try {
+    const tenantId = await reserveTenantAccountCode(id, environment);
+    return r.json({ ...(session || {}), tenantId, payload: session?.payload ? { ...session.payload, tenantId } : null });
+  } catch {
+    return r.status(502).json({ error: 'TENANT_ACCOUNT_ID_UNAVAILABLE' });
+  }
 });
 
 app.post('/api/customers/:id/engagestay', authorize('customer.update'), async (q, r) => {
