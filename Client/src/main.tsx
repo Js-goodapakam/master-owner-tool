@@ -15,6 +15,8 @@ import {
   FileClock,
   LayoutDashboard,
   LogOut,
+  Moon,
+  Sun,
   Package,
   PanelLeftClose,
   PanelLeftOpen,
@@ -47,6 +49,7 @@ import './auth.css';
 import './UsersAccess.css';
 import './application-selector.css';
 import './OwnerModules.css';
+import './OwnerTheme.css';
 
 import Dashboard from './Dashboard';
 import NewOnboarding from './NewOnboarding';
@@ -866,6 +869,16 @@ type ActiveProduct = { id: string; code: string; name: string; description: stri
 
 type OwnerIdentity = { name: string; email?: string; role: string };
 
+function OwnerThemeToggle({ theme, onToggle }: { theme: 'light' | 'dark'; onToggle: () => void }) {
+  return <button type="button" className="owner-theme-toggle"
+    onClick={onToggle} aria-label={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
+    title={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
+    aria-pressed={theme === 'light'}>
+    {theme === 'dark' ? <Sun size={17} aria-hidden="true"/> : <Moon size={17} aria-hidden="true"/>}
+    <span>{theme === 'dark' ? 'Light mode' : 'Dark mode'}</span>
+  </button>;
+}
+
 function OwnerAccountActions({ identity, onSignOut }: { identity: OwnerIdentity | null; onSignOut: () => void }) {
   const displayName = identity?.name || identity?.email || 'Owner account';
   const initials = displayName.trim().split(/\s+/).slice(0, 2).map(part => part.charAt(0).toUpperCase()).join('') || 'O';
@@ -908,7 +921,7 @@ function ApplicationLoadingProgress({ label, value }: { label: string; value: nu
   );
 }
 
-function ApplicationSelector({ onSelect, identity, onSignOut, sessionPending = false }: { onSelect: (product: ActiveProduct) => void; identity: OwnerIdentity | null; onSignOut: () => void; sessionPending?: boolean }) {
+function ApplicationSelector({ onSelect, identity, onSignOut, theme, onToggleTheme, sessionPending = false }: { onSelect: (product: ActiveProduct) => void; identity: OwnerIdentity | null; onSignOut: () => void; theme: 'light' | 'dark'; onToggleTheme: () => void; sessionPending?: boolean }) {
   const [products, setProducts] = useState<ActiveProduct[]>([]);
   const [error, setError] = useState('');
   const [entering, setEntering] = useState('');
@@ -1009,6 +1022,7 @@ function ApplicationSelector({ onSelect, identity, onSignOut, sessionPending = f
             <span className="application-selector-brand-badge">AI</span>
           </div>
           <div className="application-selector-account">
+            <OwnerThemeToggle theme={theme} onToggle={onToggleTheme} />
             <OwnerAccountActions identity={identity} onSignOut={onSignOut} />
           </div>
         </header>
@@ -1098,7 +1112,7 @@ function ApplicationSelector({ onSelect, identity, onSignOut, sessionPending = f
   );
 }
 
-function App({ product, backToApplications, identity, onSignOut }: { product: ActiveProduct; backToApplications: () => void; identity: OwnerIdentity | null; onSignOut: () => void }) {
+function App({ product, backToApplications, identity, onSignOut, theme, onToggleTheme }: { product: ActiveProduct; backToApplications: () => void; identity: OwnerIdentity | null; onSignOut: () => void; theme: 'light' | 'dark'; onToggleTheme: () => void }) {
 
   const [page, setPage] =
     useState('Dashboard');
@@ -1434,7 +1448,10 @@ let content =
             </div>
           )}
 
-          <OwnerAccountActions identity={identity} onSignOut={onSignOut} />
+          <div className="owner-topbar-controls">
+            <OwnerThemeToggle theme={theme} onToggle={onToggleTheme} />
+            <OwnerAccountActions identity={identity} onSignOut={onSignOut} />
+          </div>
 
         </header>
 
@@ -1482,6 +1499,18 @@ function readOwnerInvitation(): OwnerInvitation | null {
 }
 
 function Root() {
+  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
+    try {
+      const saved = localStorage.getItem('engage-owner-theme');
+      return saved === 'light' ? 'light' : 'dark';
+    } catch { return 'dark'; }
+  });
+  useEffect(() => {
+    document.documentElement.setAttribute('data-owner-theme', theme);
+    document.documentElement.style.colorScheme = theme;
+    try { localStorage.setItem('engage-owner-theme', theme); } catch { /* storage may be disabled */ }
+  }, [theme]);
+  const toggleTheme = () => setTheme(previous => previous === 'dark' ? 'light' : 'dark');
   const [signed, setSigned] = useState(
     () => Boolean(localStorage.getItem('friday-access-token')),
   );
@@ -1597,10 +1626,12 @@ function Root() {
       onSelect={setActiveProduct}
       identity={identity}
       onSignOut={signOut}
+      theme={theme}
+      onToggleTheme={toggleTheme}
       sessionPending={passwordGate === 'checking'}
     />;
   }
-  return <App product={activeProduct} backToApplications={() => setActiveProduct(null)} identity={identity} onSignOut={signOut} />;
+  return <App product={activeProduct} backToApplications={() => setActiveProduct(null)} identity={identity} onSignOut={signOut} theme={theme} onToggleTheme={toggleTheme} />;
 }
 
 
