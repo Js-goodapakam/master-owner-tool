@@ -5,22 +5,22 @@
  */
 :root[data-owner-theme] .application-selector {
   display:flex!important;
-  align-items:center!important;
-  justify-content:center!important;
+  align-items:stretch!important;
+  justify-content:flex-start!important;
   width:100%!important;
   min-height:100vh!important;
   min-height:100dvh!important;
-  padding:clamp(26px,5vh,64px) clamp(18px,4vw,52px)!important;
+  padding:clamp(22px,3.5vh,36px) clamp(18px,4vw,52px) 48px!important;
   box-sizing:border-box!important;
 }
 :root[data-owner-theme] .application-selector .application-selector-frame{
   width:min(1320px,100%)!important;
   min-width:0!important;
-  margin:auto!important;
+  margin:0 auto!important;
   display:flex!important;
   flex-direction:column!important;
   align-items:stretch!important;
-  justify-content:center!important;
+  justify-content:flex-start!important;
 }
 :root[data-owner-theme] .application-selector .application-selector-header {
   display:flex!important;
@@ -55,7 +55,7 @@
   justify-content:center!important;
   width:100%!important;
   max-width:none!important;
-  margin:36px auto 28px!important;
+  margin:clamp(54px,8vh,78px) auto 28px!important;
   padding:0!important;
   text-align:center!important;
 }
@@ -165,5 +165,20 @@
   :root[data-owner-theme] .application-selector .application-card{
     padding:20px!important;
     min-height:260px!important;
+  }
+}
+
+/* Always top-align the main app picker and centre the grid as one unit. */
+:root[data-owner-theme] .application-selector .application-selector-frame{
+  align-self:center!important;
+  flex:0 1 auto!important;
+}
+:root[data-owner-theme] .application-selector .application-selector-header,
+:root[data-owner-theme] .application-selector .application-grid{
+  box-sizing:border-box!important;
+}
+@media(max-width:760px){
+  :root[data-owner-theme] .application-selector .application-selector-intro{
+    margin:38px auto 22px!important;
   }
 }
