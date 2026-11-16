@@ -1,0 +1,631 @@
+/*
+ * ElevenLabs-reference Owner Tool refinement.
+ * Source reference: user-supplied light ElevenLabs home screenshot (16 Nov 2026).
+ * Visual treatment only; existing information, permissions and workflows stay unchanged.
+ * This is an original implementation, not copied ElevenLabs branding or assets.
+ */
+:root {
+  --owner-type: 'SF Pro Display', 'SF Pro Icons', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+}
+:root[data-owner-theme='light']{
+  --owner-paper:#ffffff;
+  --owner-text:#202124;
+  --owner-subtext:#64666b;
+  --owner-hairline:#e9e9e9;
+  --owner-hover:#f6f6f6;
+  --owner-selected:#f2f1ef;
+  --owner-accent:#2861b3;
+  --owner-accent-soft:#eef4ff;
+  --owner-radius:12px;
+  --color-background:#fff;
+  --color-surface:#fff;
+  --color-text-primary:#202124;
+  --color-text-secondary:#64666b;
+}
+:root[data-owner-theme='light'] body,
+:root[data-owner-theme='light'] .shell,
+:root[data-owner-theme='light'] .shell > main.owner-modules-main,
+:root[data-owner-theme='light'] .shell > main.owner-dashboard-main{
+  background:#fff!important;
+  color:var(--owner-text)!important;
+  font-family:var(--owner-type)!important;
+}
+:root[data-owner-theme='light'] .shell > aside{
+  width:224px!important;
+  flex:0 0 224px!important;
+  padding:18px 12px!important;
+  background:var(--owner-paper)!important;
+  border-right:1px solid var(--owner-hairline)!important;
+  box-shadow:none!important;
+  scrollbar-color:#d2d2d2 transparent;
+}
+:root[data-owner-theme='light'] .shell.collapsed > aside {
+  width:72px!important;
+  flex-basis:72px!important;
+}
+:root[data-owner-theme='light'] .shell > main{
+  width:auto!important;
+  max-width:calc(100% - 224px)!important;
+  flex:1 1 0!important;
+  padding-left:clamp(20px,3.5vw,54px)!important;
+  padding-right:clamp(20px,3.5vw,54px)!important;
+  overflow-x:clip;
+}
+:root[data-owner-theme='light'] .shell.collapsed > main{
+  max-width:calc(100% - 72px)!important;
+}
+:root[data-owner-theme='light'] .shell aside .brand{
+  gap:9px;
+  align-items:center;
+  min-height:62px;
+  padding:0 5px 22px!important;
+  margin-bottom:11px;
+  border-bottom:1px solid var(--owner-hairline);
+}
+:root[data-owner-theme='light'] .shell aside .brand img {
+  width:33px!important;
+  height:33px!important;
+  object-fit:contain;
+  filter:brightness(0)!important;
+  box-shadow:none!important;
+}
+:root[data-owner-theme='light'] .shell aside .brand span {
+  color:#171717!important;
+  font-size:14px!important;
+  letter-spacing:-.025em!important;
+  font-weight:730!important;
+  line-height:1.28!important;
+}
+:root[data-owner-theme='light'] .shell aside .brand b{
+  color:#747474!important;
+  font-size:9px!important;
+  letter-spacing:.03em!important;
+  text-transform:none!important;
+  font-weight:500!important;
+}
+:root[data-owner-theme='light'] .shell aside .collapse{
+  width:30px;height:30px;
+  top:21px;right:10px;
+  background:#fff!important;
+  border:1px solid #e4e4e4!important;
+  color:#404040!important;
+  border-radius:8px;
+}
+:root[data-owner-theme='light'] .shell aside nav {
+  padding:0 2px 0 0!important;
+  scrollbar-color:#d4d4d4 transparent!important;
+}
+.owner-nav-group {
+  display:block;
+  margin:16px 10px 6px;
+  color:#93a3bb;
+  font-size:11px;
+  font-weight:600;
+  letter-spacing:.005em;
+  line-height:1.6;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+:root[data-owner-theme='light'] .owner-nav-group{
+  color:#858585!important;
+  font-weight:500!important;
+}
+.shell.collapsed .owner-nav-group{display:none}
+:root[data-owner-theme='light'] .shell aside nav button {
+  display:flex;
+  min-height:36px!important;
+  margin:1px 0!important;
+  padding:7px 8px!important;
+  border:1px solid transparent!important;
+  border-radius:8px!important;
+  background:transparent!important;
+  box-shadow:none!important;
+  color:#4b4b4b!important;
+  font-size:12.5px!important;
+  font-weight:480!important;
+  transform:none!important;
+  line-height:1.3!important;
+  gap:9px!important;
+}
+:root[data-owner-theme='light'] .shell aside nav button .nav-icon,
+:root[data-owner-theme='light'] .shell aside nav button span:has(svg),
+:root[data-owner-theme='light'] .shell aside nav button .nav-icon svg {
+  width:23px!important;
+  min-width:23px!important;
+  height:23px!important;
+  flex:0 0 23px!important;
+  display:grid!important;
+  place-items:center!important;
+  background:transparent!important;
+  border:0!important;
+  box-shadow:none!important;
+  border-radius:0!important;
+  color:#656565!important;
+  stroke:currentColor!important;
+}
+:root[data-owner-theme='light'] .shell aside nav button .nav-icon svg {
+  width:17px!important;height:17px!important;
+}
+:root[data-owner-theme='light'] .shell aside nav button em {
+  color:#4b4b4b!important;
+  white-space:normal;
+  font-weight:inherit!important;
+}
+:root[data-owner-theme='light'] .shell aside nav button:hover {
+  background:#f7f7f7!important;
+  border-color:transparent!important;
+}
+:root[data-owner-theme='light'] .shell aside nav button.active,
+:root[data-owner-theme='light'] .shell aside nav button[aria-current='page']{
+  background:#f1f1f1!important;
+  border-color:transparent!important;
+  box-shadow:none!important;
+  color:#161616!important;
+  font-weight:600!important;
+}
+:root[data-owner-theme='light'] .shell aside nav button.active em,
+:root[data-owner-theme='light'] .shell aside nav button[aria-current='page'] em,
+:root[data-owner-theme='light'] .shell aside nav button.active .nav-icon,
+:root[data-owner-theme='light'] .shell aside nav button.active .nav-icon svg{
+  color:#191919!important;
+}
+:root[data-owner-theme='light'] .shell aside nav button:focus-visible,
+:root[data-owner-theme='light'] .shell .owner-theme-toggle:focus-visible{
+  outline:2px solid #447db8!important;
+  outline-offset:2px!important;
+}
+/* In the reference, the header is light, shallow, with small contextual controls. */
+:root[data-owner-theme='light'] .shell > main > header.topbar {
+  min-height:64px!important;
+  padding:12px 0!important;
+  border-bottom:1px solid #ededed!important;
+  background:#fff!important;
+  gap:18px!important;
+}
+:root[data-owner-theme='light'] .shell > main > header.topbar .topbar-title h1{
+  color:#222!important;
+  font-size:15.5px!important;
+  font-weight:620!important;
+  letter-spacing:-.02em!important;
+}
+:root[data-owner-theme='light'] .shell > main > header.topbar .workspace-switcher{
+  min-height:27px!important;
+  padding:4px 8px!important;
+  background:#fff!important;
+  color:#5e5e5e!important;
+  border:1px solid #e7e7e7!important;
+  font-size:11px!important;
+  font-weight:520!important;
+  border-radius:8px!important;
+}
+:root[data-owner-theme='light'] .shell > main > header.topbar .workspace-switcher:hover{
+  background:#f7f7f7!important;
+}
+:root[data-owner-theme='light'] .shell > main > header.topbar .topbar-profile{
+  gap:8px!important;
+}
+:root[data-owner-theme='light'] .shell > main > header.topbar .topbar-avatar,
+:root[data-owner-theme='light'] .application-selector .topbar-avatar{
+  background:#f3f3f3!important;
+  border:1px solid #e7e7e7!important;
+  color:#363636!important;
+}
+:root[data-owner-theme='light'] .shell > main > header.topbar .topbar-user-details span{
+  color:#303030!important;
+  font-size:11.5px!important;
+}
+:root[data-owner-theme='light'] .shell > main > header.topbar .topbar-user-details small{
+  color:#858585!important;
+  font-size:10px!important;
+}
+:root[data-owner-theme='light'] .owner-theme-toggle,
+:root[data-owner-theme='light'] .shell > main > header.topbar .topbar-signout,
+:root[data-owner-theme='light'] .application-selector .topbar-signout{
+  min-height:35px!important;
+  padding:6px 10px!important;
+  border:1px solid #e4e4e4!important;
+  background:#fff!important;
+  color:#353535!important;
+  box-shadow:0 2px 4px #00000008!important;
+  border-radius:9px!important;
+  font-size:11.5px!important;
+  font-weight:550!important;
+}
+:root[data-owner-theme='light'] .owner-theme-toggle:hover,
+:root[data-owner-theme='light'] .shell > main > header.topbar .topbar-signout:hover{
+  background:#f7f7f7!important;
+}
+:root[data-owner-theme='light'] .owner-modules-main .topbar .global-search{
+  background:#f9f9f9!important;
+  border-color:#e8e8e8!important;
+  box-shadow:none!important;
+}
+:root[data-owner-theme='light'] .owner-modules-main .topbar .global-search svg,
+:root[data-owner-theme='light'] .owner-modules-main .topbar .global-search input{
+  color:#666!important;
+}
+:root[data-owner-theme='light'] .owner-modules-main .topbar .global-search:focus-within{
+  border-color:#a7a7a7!important;
+  box-shadow:0 0 0 3px #00000008!important;
+}
+/* Main panel: no strong gradients, no excessive all-caps/tracking. */
+:root[data-owner-theme='light'] .owner-module-hero,
+:root[data-owner-theme='light'] .ehd-hero{
+  background:#fff!important;
+  border:0!important;
+  border-radius:0!important;
+  box-shadow:none!important;
+  padding:30px 0 19px!important;
+  min-height:0!important;
+  margin:0 0 12px!important;
+}
+:root[data-owner-theme='light'] .owner-module-hero-mark{display:none!important}
+:root[data-owner-theme='light'] .owner-module-hero h2,
+:root[data-owner-theme='light'] .ehd-hero h2 {
+  color:#202020!important;
+  font-weight:550!important;
+  font-size:clamp(23px,2.4vw,29px)!important;
+  letter-spacing:-.045em!important;
+}
+:root[data-owner-theme='light'] .owner-module-hero h2 span,
+:root[data-owner-theme='light'] .ehd-hero h2 span{
+  color:#202020!important;
+}
+:root[data-owner-theme='light'] .owner-module-eyebrow,
+:root[data-owner-theme='light'] .ehd-eyebrow{
+  color:#777!important;
+  font-weight:520!important;
+  font-size:10px!important;
+  letter-spacing:.04em!important;
+}
+:root[data-owner-theme='light'] .owner-module-hero p,
+:root[data-owner-theme='light'] .ehd-hero p{
+  color:#767676!important;
+  font-size:12.5px!important;
+}
+:root[data-owner-theme='light'] .owner-modules-content{
+  padding-top:9px!important;
+}
+:root[data-owner-theme='light'] .owner-modules-main .owner-module-body .card,
+:root[data-owner-theme='light'] .owner-modules-main .owner-module-body .fo-stepper,
+:root[data-owner-theme='light'] .owner-modules-main .owner-module-body .fo-onboarding-panel,
+:root[data-owner-theme='light'] .owner-modules-main .owner-module-body .fo-signups-card,
+:root[data-owner-theme='light'] .owner-modules-main .owner-module-body .ua-stat,
+:root[data-owner-theme='light'] .owner-modules-main .owner-module-body .ua-note,
+:root[data-owner-theme='light'] .ehd-root .ehd-kpi,
+:root[data-owner-theme='light'] .ehd-root .ehd-panel,
+:root[data-owner-theme='light'] .ehd-root .ehd-stage,
+:root[data-owner-theme='light'] .ehd-root .ehd-customer-card,
+:root[data-owner-theme='light'] .ehd-root .ehd-operation,
+:root[data-owner-theme='light'] .ehd-root .ehd-action-row{
+  border:1px solid #e7e7e7!important;
+  background:#fff!important;
+  box-shadow:none!important;
+  border-radius:13px!important;
+  color:#333!important;
+}
+:root[data-owner-theme='light'] .ehd-root .ehd-stage--live{
+  background:#fbfbfb!important;
+  border-color:#d9e4f2!important;
+}
+:root[data-owner-theme='light'] .owner-modules-main .owner-module-body h2,
+:root[data-owner-theme='light'] .owner-modules-main .owner-module-body h3,
+:root[data-owner-theme='light'] .owner-modules-main .owner-module-body h4,
+:root[data-owner-theme='light'] .owner-modules-main .owner-module-body .fo-step-copy b,
+:root[data-owner-theme='light'] .owner-modules-main .owner-module-body .fo-signups-table td strong,
+:root[data-owner-theme='light'] .ehd-root .ehd-panel h3,
+:root[data-owner-theme='light'] .ehd-root .ehd-stage-heading strong,
+:root[data-owner-theme='light'] .ehd-root .ehd-operation strong{
+  color:#252525!important;
+  font-weight:620!important;
+}
+:root[data-owner-theme='light'] .owner-modules-main .owner-module-body .fo-signups-head p,
+:root[data-owner-theme='light'] .owner-modules-main .owner-module-body .fo-panel-heading p,
+:root[data-owner-theme='light'] .owner-modules-main .owner-module-body .fo-section-title p,
+:root[data-owner-theme='light'] .owner-modules-main .owner-module-body .fo-step-copy small,
+:root[data-owner-theme='light'] .ehd-root .ehd-panel-heading p{
+  color:#767676!important;
+}
+:root[data-owner-theme='light'] .owner-modules-main .owner-module-body .fo-progress-count,
+:root[data-owner-theme='light'] .owner-modules-main .owner-module-body .fo-progress-count span{
+  color:#424242!important;
+}
+:root[data-owner-theme='light'] .owner-modules-main .owner-module-body .fo-step:not(.is-current){
+  color:#646464!important;
+}
+:root[data-owner-theme='light'] .owner-modules-main .owner-module-body .fo-step.is-current{
+  background:#f2f2f2!important;
+  border-color:#e4e4e4!important;
+  color:#202020!important;
+}
+:root[data-owner-theme='light'] .owner-modules-main .owner-module-body .fo-step-icon,
+:root[data-owner-theme='light'] .owner-modules-main .owner-module-body .fo-module-option{
+  background:#f6f6f6!important;
+  color:#444!important;
+  border-color:#ebebeb!important;
+}
+:root[data-owner-theme='light'] .owner-modules-main .owner-module-body .fo-step.is-current .fo-step-icon{
+  color:#245fa5!important;
+  background:#e9f1fd!important;
+}
+:root[data-owner-theme='light'] .owner-modules-main .owner-module-body .fo-step.is-complete .fo-step-icon{
+  color:#168369!important;
+  background:#e9f6f1!important;
+}
+:root[data-owner-theme='light'] .owner-modules-main .owner-module-body .fo-form-grid label,
+:root[data-owner-theme='light'] .owner-modules-main .owner-module-body .fo-notes-label,
+:root[data-owner-theme='light'] .owner-modules-main .owner-module-body .fo-date-picker-label{
+  color:#555!important;
+  font-size:11.5px!important;
+  font-weight:560!important;
+}
+:root[data-owner-theme='light'] .owner-modules-main .owner-module-body :is(
+ .fo-form-grid input,.fo-form-grid select,.fo-notes-label textarea,.fo-date-picker-trigger,
+ .ua-form input,.ua-form select
+){
+  min-height:42px!important;
+  border:1px solid #dedede!important;
+  border-radius:9px!important;
+  background:#fff!important;
+  box-shadow:none!important;
+  color:#333!important;
+  font-size:12.5px!important;
+}
+:root[data-owner-theme='light'] .owner-modules-main .owner-module-body input:focus-visible,
+:root[data-owner-theme='light'] .owner-modules-main .owner-module-body select:focus-visible,
+:root[data-owner-theme='light'] .owner-modules-main .owner-module-body textarea:focus-visible,
+:root[data-owner-theme='light'] .owner-modules-main .owner-module-body button:focus-visible{
+  outline:2px solid #6c97c5!important;
+  outline-offset:2px!important;
+}
+:root[data-owner-theme='light'] .owner-modules-main .owner-module-body .fo-trial-box,
+:root[data-owner-theme='light'] .owner-modules-main .owner-module-body .fo-notice,
+:root[data-owner-theme='light'] .owner-modules-main .owner-module-body .fo-review-trial{
+  background:#fafafa!important;
+  border:1px solid #ececec!important;
+  color:#666!important;
+}
+:root[data-owner-theme='light'] .owner-modules-main .owner-module-body .fo-environment-options button{
+  background:#fff!important;
+  color:#333!important;
+  border-color:#e4e4e4!important;
+}
+:root[data-owner-theme='light'] .owner-modules-main .owner-module-body .fo-environment-options button.selected{
+  background:#f3f7fd!important;
+  color:#202020!important;
+  border-color:#9bbadd!important;
+}
+:root[data-owner-theme='light'] .owner-modules-main .owner-module-body .fo-environment-options b,
+:root[data-owner-theme='light'] .owner-modules-main .owner-module-body .fo-trial-box h4{
+  color:#303030!important;
+}
+:root[data-owner-theme='light'] .owner-modules-main .owner-module-body .fo-environment-options small{
+  color:#777!important;
+}
+:root[data-owner-theme='light'] .owner-modules-main .owner-module-body .fo-signups-table-wrap{
+  border:1px solid #e7e7e7!important;
+  border-radius:11px!important;
+  box-shadow:none!important;
+}
+:root[data-owner-theme='light'] .owner-modules-main .owner-module-body .fo-signups-table thead th{
+  background:#f7f7f7!important;
+  color:#707070!important;
+  border-bottom:1px solid #ebebeb!important;
+  font-size:10px!important;
+  font-weight:590!important;
+  letter-spacing:.025em!important;
+}
+:root[data-owner-theme='light'] .owner-modules-main .owner-module-body .fo-signups-table tbody td{
+  color:#333!important;
+  background:#fff!important;
+}
+:root[data-owner-theme='light'] .owner-modules-main .owner-module-body .fo-signup-search{
+  background:#fff!important;border-color:#e0e0e0!important;
+}
+:root[data-owner-theme='light'] .owner-modules-main .owner-module-body .fo-signup-search input{
+  color:#333!important;
+  background:transparent!important;
+}
+:root[data-owner-theme='light'] .owner-modules-main .owner-module-body .fo-signup-search input::placeholder{
+  color:#858585!important;
+}
+:root[data-owner-theme='light'] .owner-modules-main .owner-module-body .fo-wizard-actions{
+  background:#fff!important;
+  border-color:#e8e8e8!important;
+  box-shadow:none!important;
+}
+:root[data-owner-theme='light'] .owner-modules-main .owner-module-body .fo-btn.secondary{
+  background:#fff!important;color:#414141!important;
+  border:1px solid #dedede!important;
+}
+:root[data-owner-theme='light'] .owner-modules-main .owner-module-body .fo-btn.primary{
+  background:#222!important;color:#fff!important;
+  box-shadow:none!important;
+  border:1px solid #222!important;
+}
+:root[data-owner-theme='light'] .owner-modules-main .owner-module-body .fo-btn.primary:hover:not(:disabled){
+  background:#454545!important;
+}
+:root[data-owner-theme='light'] .owner-modules-main .owner-module-body .fo-btn.danger{
+  background:#fff4f3!important;color:#a7473e!important;border:1px solid #f0d5d1!important;
+}
+:root[data-owner-theme='light'] .owner-modules-main .owner-module-body .fo-chip,
+:root[data-owner-theme='light'] .owner-modules-main .owner-module-body .fo-request-status{
+  background:#f8f8f8!important;
+  color:#666!important;
+  border-color:#e9e9e9!important;
+}
+:root[data-owner-theme='light'] .owner-modules-main .owner-module-body .fo-date-picker-popover{
+  background:#fff!important;
+  border:1px solid #e0e0e0!important;
+  color:#303030!important;
+  box-shadow:0 12px 36px #00000018!important;
+}
+:root[data-owner-theme='light'] .owner-modules-main .owner-module-body .fo-date-picker-weekday,
+:root[data-owner-theme='light'] .owner-modules-main .owner-module-body .fo-trial-duration{
+  color:#757575!important;
+}
+:root[data-owner-theme='light'] .owner-modules-main .owner-module-body .fo-generated-id-help{
+  color:#777!important;
+}
+/* Dashboard: dense information dashboard in the user's screenshot. */
+:root[data-owner-theme='light'] .ehd-root{padding-top:12px!important}
+:root[data-owner-theme='light'] .ehd-root .ehd-kpi-grid{gap:10px!important}
+:root[data-owner-theme='light'] .ehd-root .ehd-kpi{
+  min-height:117px!important;
+  padding:17px!important;
+}
+:root[data-owner-theme='light'] .ehd-root .ehd-kpi-header>span:first-child,
+:root[data-owner-theme='light'] .ehd-root .ehd-kpi small,
+:root[data-owner-theme='light'] .ehd-root .ehd-stage-helper,
+:root[data-owner-theme='light'] .ehd-root .ehd-operation small{
+  color:#737373!important;
+  font-weight:480!important;
+}
+:root[data-owner-theme='light'] .ehd-root .ehd-kpi-value{
+  font-size:clamp(22px,2vw,28px)!important;
+  color:#202020!important;
+  font-weight:610!important;
+}
+:root[data-owner-theme='light'] .ehd-root .ehd-panel{
+  padding:20px!important;
+}
+:root[data-owner-theme='light'] .ehd-root .ehd-panel h3{
+  color:#222!important;
+  font-weight:600!important;
+  font-size:15px!important;
+}
+:root[data-owner-theme='light'] .ehd-root .ehd-panel-heading p{
+  color:#7c7c7c!important;
+}
+:root[data-owner-theme='light'] .ehd-root .ehd-section-kicker{
+  color:#777!important;
+  letter-spacing:.05em!important;
+}
+:root[data-owner-theme='light'] .ehd-root .ehd-stage-heading strong,
+:root[data-owner-theme='light'] .ehd-root .ehd-plan-row strong,
+:root[data-owner-theme='light'] .ehd-root .ehd-action-body strong{
+  color:#2c2c2c!important;
+}
+:root[data-owner-theme='light'] .ehd-root .ehd-stage-count{
+  color:#404040!important;
+}
+:root[data-owner-theme='light'] .ehd-root .ehd-button-ghost,
+:root[data-owner-theme='light'] .ehd-root .ehd-link-button,
+:root[data-owner-theme='light'] .ehd-root .ehd-stage-action{
+  background:#fff!important;
+  color:#424242!important;
+  border:1px solid #e2e2e2!important;
+  box-shadow:none!important;
+}
+:root[data-owner-theme='light'] .ehd-root .ehd-refresh{
+  background:#222!important;
+  color:#fff!important;
+  border-color:#222!important;
+}
+:root[data-owner-theme='light'] .ehd-root .ehd-stage-dot{
+  background:#989898!important;
+  box-shadow:none!important;
+}
+:root[data-owner-theme='light'] .ehd-root .ehd-stage--live .ehd-stage-dot{
+  background:#3d9d85!important;
+}
+/* Keep other grouped administration pages neutral with crisp contrast. */
+:root[data-owner-theme='light'] .owner-modules-main .owner-module-body .ua-tabs button,
+:root[data-owner-theme='light'] .owner-modules-main .owner-module-body .owner-user-row-actions button{
+  background:#fff!important;
+  border-color:#e4e4e4!important;
+  color:#444!important;
+}
+:root[data-owner-theme='light'] .owner-modules-main .owner-module-body .ua-tabs button.active{
+  background:#f1f1f1!important;
+  color:#202020!important;
+}
+:root[data-owner-theme='light'] .application-selector{
+  background:#fff!important;color:#222!important;
+}
+:root[data-owner-theme='light'] .application-selector .application-card{
+  border-radius:13px!important;
+  background:#fff!important;
+  border-color:#e8e8e8!important;
+  box-shadow:none!important;
+  backdrop-filter:none!important;
+}
+:root[data-owner-theme='light'] .application-selector .application-card--connected{
+  border-color:#d8e4ef!important;
+  background:#fff!important;
+}
+:root[data-owner-theme='light'] .application-selector .application-card:hover{
+  border-color:#b8cadb!important;
+  box-shadow:0 8px 22px #0000000b!important;
+  transform:none!important;
+}
+:root[data-owner-theme='light'] .application-selector .application-card-top,
+:root[data-owner-theme='light'] .application-selector .application-card-copy{
+  color:#292929!important;
+}
+:root[data-owner-theme='light'] .application-selector .application-selector-brand-mark{
+  filter:brightness(0)!important;
+}
+:root[data-owner-theme='light'] .application-selector .application-selector-brand-name {
+  color:#191919!important;
+  font-size:23px!important;
+}
+:root[data-owner-theme='light'] .application-selector .application-selector-brand-badge{
+  color:#555!important;border-color:#dcdcdc!important;
+}
+:root[data-owner-theme='light'] .application-selector .application-selector-intro h1{
+  color:#222!important;
+  font-size:clamp(26px,3vw,35px)!important;
+  font-weight:560!important;
+}
+:root[data-owner-theme='light'] .application-selector .application-selector-intro p{
+  color:#787878!important;
+}
+:root[data-owner-theme='light'] .application-selector .application-card-icon {
+  background:#f5f5f5!important;
+  color:#444!important;
+  border-color:#e6e6e6!important;
+}
+:root[data-owner-theme='light'] .application-selector .application-card-action{
+  color:#333!important;
+}
+:root[data-owner-theme='light'] .application-selector .application-card-footer{
+  border-color:#ececec!important;
+}
+@media(max-width:1070px){
+  :root[data-owner-theme='light'] .shell > aside {
+    width:212px!important;flex-basis:212px!important;
+  }
+  :root[data-owner-theme='light'] .shell > main{
+    max-width:calc(100% - 212px)!important;
+  }
+}
+@media(max-width:760px){
+  :root[data-owner-theme='light'] .shell > aside{
+    width:72px!important;flex-basis:72px!important;
+    padding-left:9px!important;padding-right:9px!important;
+  }
+  :root[data-owner-theme='light'] .shell > main{
+    max-width:calc(100% - 72px)!important;
+    padding-left:16px!important;padding-right:16px!important;
+  }
+  :root[data-owner-theme='light'] .shell > aside .owner-nav-group{display:none}
+  :root[data-owner-theme='light'] .shell > aside nav button{
+    justify-content:center!important;
+  }
+  :root[data-owner-theme='light'] .shell > aside nav button em{display:none!important}
+  :root[data-owner-theme='light'] .shell > aside nav button .nav-icon{
+    margin:0!important;
+  }
+}
+@media(max-width:480px){
+  :root[data-owner-theme='light'] .shell > main{
+    padding-left:12px!important;padding-right:12px!important;
+  }
+  :root[data-owner-theme='light'] .ehd-root .ehd-hero,
+  :root[data-owner-theme='light'] .owner-module-hero{
+    padding-top:20px!important;
+  }
+}
