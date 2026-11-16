@@ -11,6 +11,7 @@ import {
   Building2,
   Hotel,
   CreditCard,
+  ChevronDown,
   DatabaseBackup,
   FileClock,
   LayoutDashboard,
@@ -51,6 +52,7 @@ import './application-selector.css';
 import './OwnerModules.css';
 import './OwnerTheme.css';
 import './OwnerElevenLabsRefinement.css';
+import './OwnerHeaderLayout.css';
 
 import Dashboard from './Dashboard';
 import NewOnboarding from './NewOnboarding';
@@ -900,6 +902,27 @@ function OwnerAccountActions({ identity, onSignOut }: { identity: OwnerIdentity 
   );
 }
 
+function OwnerHeaderProfile({ identity, onSignOut }: { identity: OwnerIdentity | null; onSignOut: () => void }) {
+  const displayName = identity?.name || identity?.email || 'Owner account';
+  const initials = displayName.trim().split(/\s+/).slice(0, 2).map(part => part.charAt(0).toUpperCase()).join('') || 'O';
+  return (
+    <details className="owner-header-profile">
+      <summary className="owner-header-profile-trigger" aria-label="Account menu">
+        <span className="owner-header-avatar" aria-hidden="true">{initials}</span>
+        <span className="owner-header-identity">
+          <strong>{displayName}</strong>
+          <small>{identity?.role || 'Owner'}</small>
+        </span>
+        <ChevronDown size={15} aria-hidden="true" />
+      </summary>
+      <div className="owner-header-profile-popover">
+        <div className="owner-header-profile-caption">Signed in as <strong>{displayName}</strong></div>
+        <button type="button" onClick={onSignOut}><LogOut size={16} aria-hidden="true" /> Sign out</button>
+      </div>
+    </details>
+  );
+}
+
 function ApplicationIcon({ code }: { code: string }) {
   const productCode = code.toLowerCase();
   if (productCode.includes('stay')) return <Hotel size={25} strokeWidth={1.8} />;
@@ -1322,6 +1345,7 @@ let content =
 
       <aside>
 
+        <div className="owner-sidebar-brand-row">
         <div className="brand">
 
           <img
@@ -1347,6 +1371,7 @@ let content =
         >
           {collapsed ? <PanelLeftOpen size={17} aria-hidden="true" /> : <PanelLeftClose size={17} aria-hidden="true" />}
         </button>
+        </div>
 
         <nav aria-label="Owner Tool modules">
           {nav.map(({ name, icon: Icon }, index) => (
@@ -1414,15 +1439,17 @@ let content =
       ================================================= */}
 
       <main className={isDashboard ? 'owner-dashboard-main' : 'owner-modules-main'}>
-        <header className="topbar">
-
-          <div className="topbar-title">
-            <button className="workspace-switcher" type="button" onClick={backToApplications} title="Return to application selection"><ArrowLeft size={15} aria-hidden="true" /> Switch application</button>
-            <h1>
-              {customer
-                ? 'View Customer'
-                : isDashboard ? `${product.name} · Dashboard` : `${product.name} · Owner Console`}
-            </h1>
+        <header className="topbar owner-header">
+          <div className="owner-header-leading">
+            <button className="workspace-switcher owner-header-switcher" type="button" onClick={backToApplications} title="Switch application" aria-label="Switch application">
+              <ArrowLeft size={16} aria-hidden="true" />
+              <span>Switch application</span>
+            </button>
+            <div className="owner-header-page" aria-label="Current page">
+              <h1>{product.name}</h1>
+              <span aria-hidden="true">/</span>
+              <span className="owner-header-current">{customer ? 'Customer details' : isDashboard ? 'Dashboard' : activeModule.title}</span>
+            </div>
           </div>
 
           {page !== 'Home' && page !== 'Dashboard' && (
@@ -1456,9 +1483,9 @@ let content =
             </div>
           )}
 
-          <div className="owner-topbar-controls">
+          <div className="owner-topbar-controls owner-header-trailing">
             <OwnerThemeToggle theme={theme} onToggle={onToggleTheme} />
-            <OwnerAccountActions identity={identity} onSignOut={onSignOut} />
+            <OwnerHeaderProfile identity={identity} onSignOut={onSignOut} />
           </div>
 
         </header>
