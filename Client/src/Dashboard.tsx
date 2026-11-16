@@ -245,7 +245,7 @@ export default function Dashboard({ productCode, productName, onNavigate, onOpen
     <header className="ehd-hero">
       <div className="ehd-hero-copy">
         <span className="ehd-eyebrow"><span aria-hidden="true" className="ehd-eyebrow-dot" /> OWNER WORKSPACE OVERVIEW</span>
-        <h2>Manage what matters<span>.</span></h2>
+        <h2>Dashboard</h2>
         <p>Customers, activations, subscriptions and operational priorities for {productName}.</p>
       </div>
       <div className="ehd-hero-aside">
@@ -257,19 +257,31 @@ export default function Dashboard({ productCode, productName, onNavigate, onOpen
       </div>
     </header>
 
-    <section className="ehd-kpi-grid" aria-label="Key performance metrics">
-      {stats.map(({ label, value, note, icon: Icon }) => (
+    <section className="ehd-kpi-grid" aria-label="Key customer metrics">
+      {stats.slice(0, 4).map(({ label, value, note, icon: Icon }) => (
         <article className="ehd-kpi" key={label}>
-          <div className="ehd-kpi-header"><span>{label}</span><span className="ehd-kpi-icon"><Icon size={18} aria-hidden="true" /></span></div>
+          <div className="ehd-kpi-header"><span>{label}</span><span className="ehd-kpi-icon"><Icon size={19} aria-hidden="true" /></span></div>
           <strong className={value === 'Not connected' || value === 'Restricted' ? 'ehd-kpi-value ehd-kpi-value--unavailable' : 'ehd-kpi-value'}>{value}</strong>
           <small>{note}</small>
+        </article>
+      ))}
+    </section>
+    <section className="ehd-secondary-metrics" aria-label="Additional business indicators">
+      {stats.slice(4).map(({ label, value, note, icon: Icon }) => (
+        <article className="ehd-secondary-metric" key={label}>
+          <span className="ehd-secondary-metric-icon"><Icon size={18} aria-hidden="true" /></span>
+          <div className="ehd-secondary-metric-copy">
+            <span>{label}</span>
+            <small>{note}</small>
+          </div>
+          <strong className={value === 'Not connected' || value === 'Restricted' ? 'ehd-secondary-unavailable' : ''}>{value}</strong>
         </article>
       ))}
     </section>
 
     <section className="ehd-panel ehd-pipeline" aria-labelledby="ehd-pipeline-title">
       <div className="ehd-panel-heading">
-        <div><span className="ehd-section-kicker">CUSTOMER JOURNEY</span><h3 id="ehd-pipeline-title">Customer lifecycle pipeline</h3><p>Track each stage from the first request through activation.</p></div>
+        <div><span className="ehd-section-kicker">Customer journey</span><h3 id="ehd-pipeline-title">Customer lifecycle</h3><p>Track each stage from the first request through activation.</p></div>
         <button type="button" className="ehd-button-ghost" onClick={() => onNavigate('Customer Onboarding')}>Open onboarding <ArrowUpRight size={16} /></button>
       </div>
       <div className="ehd-pipeline-grid">
