@@ -1001,3 +1001,22 @@
     min-width:0;
   }
 }
+
+
+/* System-issued tenant identity cannot be manually edited. */
+.owner-modules-main .owner-module-body .fo-form-grid input[readonly] {
+  background:#142842!important;
+  color:#e2efff!important;
+  cursor:default;
+  font-family:ui-monospace,SFMono-Regular,Consolas,monospace!important;
+  font-size:12px;
+  letter-spacing:.015em;
+}
+.owner-modules-main .owner-module-body .fo-form-grid .fo-generated-id-help{
+  display:block;
+  margin-top:0;
+  color:#aebfdd!important;
+  font-size:11px;
+  line-height:1.45;
+  font-weight:500;
+}
