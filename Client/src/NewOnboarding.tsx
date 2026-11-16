@@ -205,7 +205,7 @@ function SignupQueue({ onProceed }: { onProceed: (row: SignupRequestRow) => void
             {loading && rows.length === 0 ? <tr className="fo-signups-message"><td colSpan={4}>Loading signup requests…</td></tr>
               : visible.length === 0 ? <tr className="fo-signups-message"><td colSpan={4}>{error ? 'No signup requests to show.' : needle ? 'No signup requests match your search.' : 'No signup requests are waiting.'}</td></tr>
               : visible.map((row) => <tr key={row.id}>
-                <td data-label="Customer"><strong>{row.name || '—'}</strong></td>
+                <td data-label="Customer"><strong>{row.name || '—'}</strong>{row.emailVerified === false && <span className="fo-unverified-label" title="Email ownership has not been verified">Email unverified</span>}</td>
                 <td data-label="Email ID" className="fo-signups-wrap">{row.email || '—'}</td>
                 <td data-label="Mobile Number">{row.mobile || '—'}</td>
                 <td data-label="Actions" className="fo-signups-actions"><div className="fo-signups-actions-inner"><button type="button" className="fo-btn primary sm" onClick={() => onProceed(row)}>Proceed <ArrowRight size={15} aria-hidden="true"/></button><button type="button" className="fo-btn danger sm" onClick={() => { setDeleteError(''); setPendingDelete(row); }} aria-label={`Delete signup request for ${row.name || row.email}`}><Trash2 size={15} aria-hidden="true"/> Delete</button></div></td>
