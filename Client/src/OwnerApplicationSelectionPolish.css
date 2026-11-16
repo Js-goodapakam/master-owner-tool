@@ -182,3 +182,274 @@
     margin:38px auto 22px!important;
   }
 }
+
+
+/* FINAL APPLICATION PICKER PARITY
+   Single layout contract: no theme-dependent font metrics or dimensions.
+   Light/Dark may change colours and shadow contrast ONLY. */
+:root[data-owner-theme] .application-selector{
+  display:block!important;
+  width:100%!important;
+  min-height:100vh!important;
+  min-height:100dvh!important;
+  height:auto!important;
+  padding:26px clamp(18px,4vw,52px) 46px!important;
+  overflow-x:clip!important;
+}
+:root[data-owner-theme] .application-selector .application-selector-frame{
+  display:flex!important;
+  flex-direction:column!important;
+  align-items:stretch!important;
+  justify-content:flex-start!important;
+  width:min(1320px,100%)!important;
+  max-width:1320px!important;
+  margin:0 auto!important;
+  flex:none!important;
+  align-self:auto!important;
+}
+:root[data-owner-theme] .application-selector .application-selector-header {
+  display:flex!important;
+  flex-direction:row!important;
+  justify-content:space-between!important;
+  align-items:center!important;
+  flex-wrap:nowrap!important;
+  gap:24px!important;
+  width:100%!important;
+  height:64px!important;
+  min-height:64px!important;
+  max-height:none!important;
+  margin:0!important;
+  padding:0!important;
+}
+:root[data-owner-theme] .application-selector .application-selector-brand{
+  display:flex!important;
+  align-items:center!important;
+  justify-content:flex-start!important;
+  flex:0 1 auto!important;
+  gap:10px!important;
+  min-height:44px!important;
+  height:44px!important;
+}
+:root[data-owner-theme] .application-selector .application-selector-brand-mark{
+  display:block!important;
+  width:38px!important;
+  height:38px!important;
+  min-width:38px!important;
+  max-width:38px!important;
+  object-fit:contain!important;
+  padding:0!important;
+}
+:root[data-owner-theme] .application-selector .application-selector-brand-name{
+  font-size:26px!important;
+  font-weight:650!important;
+  line-height:32px!important;
+  letter-spacing:-.035em!important;
+}
+:root[data-owner-theme] .application-selector .application-selector-brand-badge{
+  flex:0 0 auto!important;
+  font-size:10px!important;
+  font-weight:550!important;
+  line-height:1.1!important;
+  padding:4px 6px!important;
+}
+:root[data-owner-theme] .application-selector .application-selector-account{
+  display:flex!important;
+  flex-direction:row!important;
+  align-items:center!important;
+  justify-content:flex-end!important;
+  flex-wrap:nowrap!important;
+  gap:12px!important;
+  margin:0 0 0 auto!important;
+  position:static!important;
+  transform:none!important;
+  min-width:0!important;
+}
+:root[data-owner-theme] .application-selector .application-selector-account .topbar-account-actions{
+  display:flex!important;
+  align-items:center!important;
+  gap:12px!important;
+}
+:root[data-owner-theme] .application-selector .application-selector-account :is(
+  .topbar-avatar,.topbar-signout
+){
+  flex-shrink:0!important;
+}
+:root[data-owner-theme] .application-selector .application-selector-account .topbar-user-details span{
+  font-size:12px!important;
+  font-weight:650!important;
+  line-height:1.25!important;
+}
+:root[data-owner-theme] .application-selector .application-selector-account .topbar-user-details small{
+  font-size:11px!important;
+  line-height:1.25!important;
+}
+:root[data-owner-theme] .application-selector .application-selector-intro{
+  width:100%!important;
+  max-width:none!important;
+  margin:50px auto 28px!important;
+  padding:0!important;
+  text-align:center!important;
+}
+:root[data-owner-theme] .application-selector .application-selector-intro h1{
+  font-family:var(--owner-font)!important;
+  font-size:clamp(30px,2.6vw,38px)!important;
+  line-height:1.2!important;
+  font-weight:620!important;
+  letter-spacing:-.04em!important;
+  margin:0!important;
+}
+:root[data-owner-theme] .application-selector .application-grid{
+  display:grid!important;
+  grid-template-columns:repeat(4,minmax(0,1fr))!important;
+  align-items:stretch!important;
+  width:100%!important;
+  max-width:1320px!important;
+  margin:0 auto!important;
+  gap:18px!important;
+}
+:root[data-owner-theme] .application-selector .application-card{
+  display:flex!important;
+  flex-direction:column!important;
+  min-width:0!important;
+  min-height:316px!important;
+  padding:24px!important;
+  margin:0!important;
+  border-radius:16px!important;
+  transform:none!important;
+}
+:root[data-owner-theme] .application-selector .application-card-top{
+  display:flex!important;
+  justify-content:space-between!important;
+  align-items:flex-start!important;
+  gap:10px!important;
+  min-height:50px!important;
+}
+:root[data-owner-theme] .application-selector .application-card-icon{
+  display:grid!important;
+  place-items:center!important;
+  width:48px!important;
+  height:48px!important;
+  min-width:48px!important;
+  flex:0 0 48px!important;
+  border-radius:12px!important;
+}
+:root[data-owner-theme] .application-selector .application-card-icon svg{
+  width:23px!important;
+  height:23px!important;
+}
+:root[data-owner-theme] .application-selector .application-card-status{
+  display:inline-flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  min-height:26px!important;
+  padding:5px 10px!important;
+  font-size:11px!important;
+  font-weight:600!important;
+  line-height:1.2!important;
+  white-space:nowrap!important;
+  border-radius:999px!important;
+}
+:root[data-owner-theme] .application-selector .application-card-copy{
+  flex:1 1 auto!important;
+  min-height:0!important;
+  padding:24px 0 19px!important;
+}
+:root[data-owner-theme] .application-selector .application-card h2{
+  font-size:20px!important;
+  font-weight:650!important;
+  line-height:1.28!important;
+  letter-spacing:-.025em!important;
+  margin:0 0 10px!important;
+}
+:root[data-owner-theme] .application-selector .application-card p{
+  font-size:13.5px!important;
+  font-weight:400!important;
+  line-height:1.55!important;
+  margin:0!important;
+}
+:root[data-owner-theme] .application-selector .application-card-footer{
+  display:flex!important;
+  align-items:center!important;
+  justify-content:space-between!important;
+  flex-wrap:wrap!important;
+  gap:12px!important;
+  min-height:62px!important;
+  margin-top:auto!important;
+  padding-top:16px!important;
+}
+:root[data-owner-theme] .application-selector .application-card-commercial{
+  font-size:12px!important;
+  font-weight:450!important;
+  line-height:1.4!important;
+}
+:root[data-owner-theme] .application-selector .application-card-action{
+  min-height:40px!important;
+  padding:0 13px!important;
+  font-size:12px!important;
+  font-weight:600!important;
+  line-height:1.3!important;
+  border-radius:10px!important;
+  letter-spacing:0!important;
+}
+:root[data-owner-theme] .application-selector .application-card--connected .application-card-action:not(:disabled){
+  color:#fff!important;
+}
+/* Explicit colour-only palette. Identical dimensions above. */
+:root[data-owner-theme="light"] .application-selector .application-card h2{
+  color:#20242c!important;
+}
+:root[data-owner-theme="dark"] .application-selector .application-card h2{
+  color:#f2f5fd!important;
+}
+:root[data-owner-theme="light"] .application-selector .application-card p{
+  color:#59677c!important;
+}
+:root[data-owner-theme="dark"] .application-selector .application-card p{
+  color:#b6c3db!important;
+}
+:root[data-owner-theme] .application-selector .application-card-status--connected{
+  color:#101810!important;background:#d9f8df!important;
+  border-color:#a9dcb3!important;
+}
+@media(max-width:1150px){
+  :root[data-owner-theme] .application-selector .application-grid{
+    grid-template-columns:repeat(2,minmax(0,1fr))!important;
+    max-width:850px!important;
+  }
+}
+@media(max-width:760px){
+  :root[data-owner-theme] .application-selector{
+    padding:20px 18px 40px!important;
+  }
+  :root[data-owner-theme] .application-selector .application-selector-header{
+    height:auto!important;
+    min-height:64px!important;
+    flex-wrap:wrap!important;
+    gap:12px!important;
+  }
+  :root[data-owner-theme] .application-selector .application-selector-intro{
+    margin:36px auto 23px!important;
+  }
+  :root[data-owner-theme] .application-selector .application-grid{
+    grid-template-columns:minmax(0,1fr)!important;
+    max-width:480px!important;
+    gap:14px!important;
+  }
+  :root[data-owner-theme] .application-selector .application-card{
+    min-height:275px!important;
+    padding:20px!important;
+  }
+  :root[data-owner-theme] .application-selector .application-card-copy{
+    padding:20px 0 16px!important;
+  }
+}
+@media(max-width:540px){
+  :root[data-owner-theme] .application-selector .application-selector-header{
+    flex-direction:column!important;
+    justify-content:center!important;
+  }
+  :root[data-owner-theme] .application-selector .application-selector-account{
+    margin:0!important;
+    justify-content:center!important;
+  }
+}
