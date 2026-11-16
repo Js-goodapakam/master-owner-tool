@@ -956,3 +956,48 @@
     padding:26px 8px!important;
   }
 }
+
+
+/* Step wizard footer must blend with dark onboarding panel rather than
+   inheriting the legacy white sticky bar. */
+.owner-modules-main .owner-module-body .fo-wizard-actions{
+  position:sticky;
+  bottom:0;
+  z-index:10;
+  display:flex;align-items:center;gap:12px;flex-wrap:wrap;
+  margin:24px -26px -24px;
+  padding:15px 26px;
+  background:#14233a!important;
+  border-top:1px solid rgba(120,156,213,.31)!important;
+  box-shadow:0 -9px 24px rgba(4,12,28,.28);
+  border-radius:0 0 16px 16px;
+}
+.owner-modules-main .owner-module-body .fo-required-note{
+  color:#afc2e0!important;
+}
+.owner-modules-main .owner-module-body .fo-step-error{
+  display:flex;align-items:flex-start;gap:9px;
+  margin:15px 0 0;padding:12px 14px;
+  border:1px solid rgba(231,128,149,.46);
+  background:#382439;border-radius:10px;
+  color:#ffd6de;font-size:12px;font-weight:580;line-height:1.5;
+}
+.owner-modules-main .owner-module-body .fo-step-error svg{
+  flex:0 0 auto;color:#ff9bab;
+}
+.owner-modules-main .owner-module-body .fo-trial-date-grid{
+  overflow:visible;
+}
+.owner-modules-main .owner-module-body .fo-trial-box{
+  overflow:visible;
+}
+@media(max-width:650px) {
+  .owner-modules-main .owner-module-body .fo-wizard-actions{
+    margin:22px -15px -18px;
+    padding:13px 15px;
+    border-radius:0 0 12px 12px;
+  }
+  .owner-modules-main .owner-module-body .fo-wizard-actions .fo-btn{
+    min-width:0;
+  }
+}
