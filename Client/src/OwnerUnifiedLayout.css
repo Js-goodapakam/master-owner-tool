@@ -540,10 +540,10 @@
   --owner-switch-icon:#c9ddf6;
 }
 /* Equal sidebar padding/height in both appearance modes. */
-:root .shell > aside {
+:root[data-owner-theme] .shell > aside {
   padding:18px 12px!important;
 }
-:root .shell > aside > .owner-sidebar-brand-row {
+:root[data-owner-theme] .shell > aside > .owner-sidebar-brand-row {
   min-height:76px!important;
   height:76px!important;
   padding:11px 2px 14px!important;
@@ -553,34 +553,34 @@
   grid-template-columns:minmax(0,1fr) 34px!important;
   column-gap:8px!important;
 }
-:root .shell > aside > .owner-sidebar-brand-row > .brand{
+:root[data-owner-theme] .shell > aside > .owner-sidebar-brand-row > .brand{
   gap:8px!important;
   min-width:0!important;
   min-height:0!important;
   align-items:center!important;
 }
-:root .shell > aside > .owner-sidebar-brand-row > .brand img{
+:root[data-owner-theme] .shell > aside > .owner-sidebar-brand-row > .brand img{
   width:34px!important;height:34px!important;flex:0 0 34px!important;
 }
-:root .shell > aside > .owner-sidebar-brand-row > .brand span {
+:root[data-owner-theme] .shell > aside > .owner-sidebar-brand-row > .brand span {
   font-size:13px!important;
   font-weight:700!important;
   letter-spacing:-.02em!important;
   line-height:16px!important;
 }
-:root .shell > aside > .owner-sidebar-brand-row > .brand b{
+:root[data-owner-theme] .shell > aside > .owner-sidebar-brand-row > .brand b{
   margin-top:3px!important;
   font-size:9px!important;
   font-weight:500!important;
   line-height:12px!important;
   letter-spacing:.015em!important;
 }
-:root .shell > aside nav {
+:root[data-owner-theme] .shell > aside nav {
   padding:0 2px 0 0!important;
   margin:0!important;
   min-width:0;
 }
-:root .shell > aside nav .owner-nav-group{
+:root[data-owner-theme] .shell > aside nav .owner-nav-group{
   display:block!important;
   height:21px!important;
   min-height:21px!important;
@@ -592,7 +592,7 @@
   padding:0!important;
   color:var(--owner-side-group)!important;
 }
-:root .shell > aside nav button {
+:root[data-owner-theme] .shell > aside nav button {
   box-sizing:border-box!important;
   display:flex!important;
   align-items:center!important;
@@ -617,8 +617,8 @@
   color:var(--owner-side-text)!important;
   text-align:left!important;
 }
-:root .shell > aside nav button .nav-icon,
-:root .shell > aside nav button span.nav-icon:has(svg) {
+:root[data-owner-theme] .shell > aside nav button .nav-icon,
+:root[data-owner-theme] .shell > aside nav button span.nav-icon:has(svg) {
   box-sizing:border-box!important;
   display:flex!important;
   align-items:center!important;
@@ -638,7 +638,7 @@
   box-shadow:none!important;
   color:var(--owner-side-icon)!important;
 }
-:root .shell > aside nav button .nav-icon svg {
+:root[data-owner-theme] .shell > aside nav button .nav-icon svg {
   display:block!important;
   width:var(--owner-side-icon-size)!important;
   height:var(--owner-side-icon-size)!important;
@@ -648,7 +648,7 @@
   stroke:currentColor!important;
   color:inherit!important;
 }
-:root .shell > aside nav button em{
+:root[data-owner-theme] .shell > aside nav button em{
   display:block!important;
   min-width:0!important;
   margin:0!important;
@@ -663,52 +663,52 @@
   overflow-wrap:normal!important;
   color:inherit!important;
 }
-:root .shell > aside nav button:hover {
+:root[data-owner-theme] .shell > aside nav button:hover {
   background:var(--owner-side-hover)!important;
   border-color:transparent!important;
 }
-:root .shell > aside nav button.active,
-:root .shell > aside nav button[aria-current='page'] {
+:root[data-owner-theme] .shell > aside nav button.active,
+:root[data-owner-theme] .shell > aside nav button[aria-current='page'] {
   background:var(--owner-side-active)!important;
   color:var(--owner-side-active-text)!important;
   font-weight:600!important;
   border-color:transparent!important;
   box-shadow:none!important;
 }
-:root .shell > aside nav button.active .nav-icon,
-:root .shell > aside nav button[aria-current='page'] .nav-icon,
-:root .shell > aside nav button.active .nav-icon svg,
-:root .shell > aside nav button[aria-current='page'] .nav-icon svg {
+:root[data-owner-theme] .shell > aside nav button.active .nav-icon,
+:root[data-owner-theme] .shell > aside nav button[aria-current='page'] .nav-icon,
+:root[data-owner-theme] .shell > aside nav button.active .nav-icon svg,
+:root[data-owner-theme] .shell > aside nav button[aria-current='page'] .nav-icon svg {
   color:var(--owner-side-active-text)!important;
   background:transparent!important;
 }
-:root .shell > aside nav button:focus-visible {
+:root[data-owner-theme] .shell > aside nav button:focus-visible {
   outline:2px solid var(--owner-dash-focus)!important;
   outline-offset:2px!important;
 }
-:root .shell.collapsed > aside > .owner-sidebar-brand-row{
+:root[data-owner-theme] .shell.collapsed > aside > .owner-sidebar-brand-row{
   min-height:103px!important;
   height:103px!important;
   grid-template-columns:1fr!important;
   gap:8px!important;
 }
-:root .shell.collapsed > aside nav .owner-nav-group{display:none!important}
-:root .shell.collapsed > aside nav button,
-:root .shell > aside nav button:has(.nav-icon):not(:has(em)) {
+:root[data-owner-theme] .shell.collapsed > aside nav .owner-nav-group{display:none!important}
+:root[data-owner-theme] .shell.collapsed > aside nav button,
+:root[data-owner-theme] .shell > aside nav button:has(.nav-icon):not(:has(em)) {
   justify-content:center!important;
 }
-:root .shell.collapsed > aside nav button em{display:none!important}
+:root[data-owner-theme] .shell.collapsed > aside nav button em{display:none!important}
 /* Match mobile icon-only nav in both modes. */
 @media(max-width:760px){
-  :root .shell > aside nav .owner-nav-group{display:none!important}
-  :root .shell > aside nav button{
+  :root[data-owner-theme] .shell > aside nav .owner-nav-group{display:none!important}
+  :root[data-owner-theme] .shell > aside nav button{
     justify-content:center!important;
     padding:9px!important;
   }
-  :root .shell > aside nav button em{display:none!important}
+  :root[data-owner-theme] .shell > aside nav button em{display:none!important}
 }
 /* Compact visual switch, no visible "Dark mode" or "Light mode" caption. */
-:root .owner-theme-switch {
+:root[data-owner-theme] .owner-theme-switch {
   position:relative;
   display:inline-flex!important;
   align-items:center!important;
@@ -731,14 +731,14 @@
   cursor:pointer;
   transition:background .18s ease,border-color .18s ease;
 }
-:root .owner-theme-switch svg{
+:root[data-owner-theme] .owner-theme-switch svg{
   width:15px!important;height:15px!important;
   flex:0 0 15px!important;
   position:relative;
   z-index:2;
   pointer-events:none;
 }
-:root .owner-theme-switch-thumb {
+:root[data-owner-theme] .owner-theme-switch-thumb {
   position:absolute!important;
   display:block!important;
   top:3px!important;
@@ -756,18 +756,18 @@
 :root[data-owner-theme='dark'] .owner-theme-switch-thumb{
   transform:translateX(32px);
 }
-:root .owner-theme-switch:hover{
+:root[data-owner-theme] .owner-theme-switch:hover{
   filter:brightness(.96);
 }
-:root .owner-theme-switch:focus-visible{
+:root[data-owner-theme] .owner-theme-switch:focus-visible{
   outline:2px solid var(--owner-dash-focus)!important;
   outline-offset:3px!important;
 }
-:root .shell > main > header.owner-header .owner-theme-switch{
+:root[data-owner-theme] .shell > main > header.owner-header .owner-theme-switch{
   flex:0 0 68px!important;
 }
 @media(max-width:600px){
-  :root .owner-theme-switch {
+  :root[data-owner-theme] .owner-theme-switch {
     width:60px!important;min-width:60px!important;max-width:60px!important;
     flex-basis:60px!important;
     padding:0 8px!important;
@@ -777,5 +777,5 @@
   }
 }
 @media(prefers-reduced-motion:reduce){
-  :root .owner-theme-switch,.owner-theme-switch-thumb{transition:none!important}
+  :root[data-owner-theme] .owner-theme-switch,.owner-theme-switch-thumb{transition:none!important}
 }
