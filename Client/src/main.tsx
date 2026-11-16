@@ -1445,9 +1445,9 @@ let content =
       <main className={isDashboard ? 'owner-dashboard-main' : 'owner-modules-main'}>
         <header className="topbar owner-header">
           <div className="owner-header-leading">
-            <button className="workspace-switcher owner-header-switcher" type="button" onClick={backToApplications} title="Switch application" aria-label="Switch application">
-              <ArrowLeft size={16} aria-hidden="true" />
-              <span>Switch application</span>
+            <button className="workspace-switcher owner-header-switcher" type="button" onClick={backToApplications} title="Applications" aria-label="Applications">
+              <img src={logo} alt="" aria-hidden="true" className="owner-applications-logo" />
+              <span>Applications</span>
             </button>
             <div className="owner-header-page" aria-label="Current page">
               <h1>{product.name}</h1>
