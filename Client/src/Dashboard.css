@@ -265,3 +265,55 @@
   .ehd-data-footnote{flex-direction:column;align-items:flex-start}
 }
 @media(prefers-reduced-motion:reduce){.ehd-skeleton,.ehd-rotate{animation:none!important} .ehd-root *{scroll-behavior:auto!important}}
+
+
+/* Dashboard legibility and keyboard usability pass. */
+.shell > main.owner-dashboard-main .ehd-root{
+  font-family:var(--font-family,'SF Pro Display','Helvetica Neue',Arial,sans-serif);
+  font-size:13px;
+}
+.shell > main.owner-dashboard-main .ehd-root :is(
+  .ehd-panel-heading p,.ehd-operation>div small,.ehd-stage-empty,
+  .ehd-action-body small,.ehd-activity-row small,.ehd-customer-card small,
+  .ehd-data-footnote,.ehd-list-more
+){
+  font-size:11px;
+  line-height:1.55;
+  color:#b5c7e3;
+}
+.shell > main.owner-dashboard-main .ehd-root :is(
+  .ehd-stage-heading strong,.ehd-operation>div strong,
+  .ehd-plan-row,.ehd-commercial-detail>span
+){
+  font-size:12px;line-height:1.5;
+}
+.shell > main.owner-dashboard-main .ehd-root .ehd-customer-card{
+  min-height:41px;line-height:1.4;
+}
+.shell > main.owner-dashboard-main .ehd-root :is(
+  .ehd-action-row,.ehd-link-button,.ehd-button-ghost,
+  .ehd-refresh,.ehd-stage-action
+){
+  min-height:39px;
+  font-size:12px;
+}
+.shell > main.owner-dashboard-main .ehd-root :is(
+  button,a,[tabindex]
+):focus-visible{
+  outline:2px solid #9acaff!important;
+  outline-offset:3px!important;
+}
+.shell > main.owner-dashboard-main .ehd-root .ehd-stage-empty {
+  min-height:88px;
+}
+@media(max-width:540px){
+  .shell > main.owner-dashboard-main .ehd-root .ehd-kpi-grid {
+    grid-template-columns:repeat(2,minmax(0,1fr));
+  }
+  .shell > main.owner-dashboard-main .ehd-root .ehd-kpi {
+    min-width:0;
+  }
+  .shell > main.owner-dashboard-main .ehd-root .ehd-hero{
+    padding:20px 16px;
+  }
+}
