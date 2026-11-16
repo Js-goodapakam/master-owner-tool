@@ -694,6 +694,12 @@ app.post('/api/customers', authorize('customer.create'), (q, r) => {
     const requestedEnvironment = q.body?.environment === 'Live' ? 'Live' : 'Trial';
     const accountCode = signupIdForAccount
       ? await reserveTenantAccountCode(signupIdForAccount, requestedEnvironment) : null;
+    const selectedProduct = typeof q.body?.product === 'string'
+      ? q.body.product.trim().toLowerCase().replace(/\s+/g, '_') : '';
+    const prefixes: Record<string, string> = { engage_stay: 'ES', engage_fit: 'EF', engage_realty: 'ER', engage_crm: 'EC' };
+    if (accountCode && prefixes[selectedProduct] !== accountCode.slice(0, 2)) {
+      return r.status(400).json({ error: 'SIGNUP_PRODUCT_MISMATCH', message: 'The onboarding product must match the registered signup product.' });
+    }
     const normalizedName = parsed.data.legalName.trim().replace(/\s+/g, ' ').toLowerCase();
     const existing = await supabaseAdmin(`rest/v1/organizations?select=id&normalized_name=eq.${encodeURIComponent(normalizedName)}&limit=1`);
     if (!existing.ok) throw new Error('Could not validate the organization registry.');
