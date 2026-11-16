@@ -11,12 +11,14 @@ export type SignupRequestRow = {
   mobile: string;
   /** Optional signup date as YYYY-MM-DD (or an ISO timestamp). Defaults to today. */
   signupDate?: string;
+  /** False for temporary unverified registration leads; never treat as verified. */
+  emailVerified?: boolean;
 };
 
 /**
  * Load the signup requests waiting for onboarding.
- * Only signups whose OTP verification already succeeded should be returned, so the
- * queue does not show any verified / pending status.
+ * Includes both verified signups and temporary unverified registration leads.
+ * Consumer UI must retain emailVerified=false until ownership is confirmed.
  * Never return or store the signup password or raw OTP values.
  */
 export async function listSignupRequests(): Promise<SignupRequestRow[]> {
