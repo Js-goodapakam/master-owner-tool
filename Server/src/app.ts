@@ -375,7 +375,15 @@ app.get('/api/auth/password-status', authenticate, (q, r) => {
   return r.json({ must_change_password: Boolean(actor?.mustChangePassword) });
 });
 
-app.use('/api', authenticate);
+// Engage Stay uses a server-to-server credential, not an Owner employee session.
+// This one endpoint performs its own constant-time service-token authorization.
+// All other /api routes retain the standard authenticated Owner session guard.
+app.use('/api', (req, res, next) => {
+  if (req.path === '/integrations/engagestay/signup' && req.method === 'POST') {
+    return next();
+  }
+  return authenticate(req, res, next);
+});
 
 // Employees using a temporary password may only call the password-change endpoint.
 app.use('/api', (q, r, next) => {
