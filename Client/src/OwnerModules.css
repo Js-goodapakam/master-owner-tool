@@ -572,3 +572,223 @@
   padding:24px!important;
   background:linear-gradient(135deg,#07131d,#10102b);
 }
+
+
+/* ================================================================
+   OWNER CONSOLE ACCESSIBILITY & UX AUDIT (November 2026)
+   Keep all overrides scoped to the authenticated dark Owner shell.
+   The legacy onboarding and staff styles were originally authored
+   on white surfaces: those dark text colours were invisible here.
+   ================================================================ */
+.shell > main.owner-modules-main {
+  --om-a11y-heading:#f5f2e5;
+  --om-a11y-body:#e4edfd;
+  --om-a11y-muted:#b6c8e3;
+  --om-a11y-focus:#92c5ff;
+  --om-a11y-input:#0e1c32;
+  --om-a11y-line:rgba(135,169,219,.36);
+}
+.owner-modules-main .owner-module-body :is(
+  .fo-signups-head h2, .fo-onboarding-heading h1, .fo-panel-heading h2,
+  .fo-section-title h3, .fo-step-copy b, .fo-signups-table td strong,
+  .fo-review-item b, .fo-module-option b, .ua-heading h2
+) {
+  color:var(--om-a11y-heading)!important;
+}
+.owner-modules-main .owner-module-body :is(
+  .fo-signups-head p, .fo-onboarding-heading p, .fo-panel-heading p,
+  .fo-section-title p, .fo-confirm p, .ua-note p
+) {
+  color:var(--om-a11y-muted)!important;
+  line-height:1.6;
+}
+.owner-modules-main .owner-module-body .fo-signups-table td,
+.owner-modules-main .owner-module-body .fo-signups-table td.fo-signups-wrap {
+  color:var(--om-a11y-body)!important;
+  font-size:12.5px;
+  line-height:1.55;
+}
+.owner-modules-main .owner-module-body .fo-signups-table td strong {
+  display:inline-block;font-weight:700;font-size:13px;letter-spacing:0;
+}
+.owner-modules-main .owner-module-body .fo-signups-table th {
+  font-size:11px;letter-spacing:.07em;font-weight:750;
+}
+.owner-modules-main .owner-module-body .fo-signups-table tbody tr {
+  transition:background-color 160ms ease;
+}
+.owner-modules-main .owner-module-body .fo-signups-table tbody tr:focus-within {
+  background:rgba(52,101,171,.20)!important;
+}
+.owner-modules-main .owner-module-body .fo-signup-search {
+  min-height:44px;
+  border:1px solid var(--om-a11y-line)!important;
+  background:#0d1c32!important;
+  color:#a7c5ed!important;
+  box-shadow:none;
+  overflow:hidden;
+}
+.owner-modules-main .owner-module-body .fo-signup-search:focus-within{
+  border-color:#74b3ff!important;
+  box-shadow:0 0 0 3px rgba(81,148,245,.24)!important;
+}
+.owner-modules-main .owner-module-body .fo-signup-search input{
+  display:block;flex:1 1 auto;width:100%;min-width:0;
+  min-height:42px;height:42px;padding:0;
+  font:500 13px var(--font-family)!important;
+  background:transparent!important;
+  color:#f2f6ff!important;
+  border:0!important;outline:0!important;
+  box-shadow:none!important;
+}
+.owner-modules-main .owner-module-body .fo-signup-search input::placeholder {
+  color:#a7bddb!important;opacity:1;
+}
+.owner-modules-main .owner-module-body .fo-signups-table-wrap {
+  background:#0e192b;border-color:var(--om-a11y-line)!important;
+}
+.owner-modules-main .owner-module-body .fo-signups-card {
+  padding:clamp(16px,2vw,25px);
+}
+.owner-modules-main .owner-module-body .fo-signups-head h2{
+  margin:7px 0 6px;font-weight:730;line-height:1.25;
+}
+.owner-modules-main .owner-module-body .fo-signups-head p{
+  font-size:12.5px;
+}
+.owner-modules-main .owner-module-body .fo-signups-message td{
+  color:#b8c9e3!important;
+}
+.owner-modules-main .owner-module-body :is(
+  .fo-form-grid input,.fo-form-grid select,.fo-notes-label textarea,
+  .ua-form input,.ua-form select,.ua-role-toolbar select,.ua-assignment select
+){
+  min-height:44px;
+  background:var(--om-a11y-input)!important;
+  border:1px solid var(--om-a11y-line)!important;
+  color:#f4f6ff!important;
+  font-family:var(--font-family)!important;
+  font-size:13px;
+  border-radius:10px;
+}
+.owner-modules-main .owner-module-body :is(
+  .fo-form-grid input,.fo-notes-label textarea,
+  .ua-form input,.owner-delete-email-input
+)::placeholder{color:#a2b7d5!important;opacity:1}
+.owner-modules-main .owner-module-body :is(
+  .fo-form-grid input,.fo-form-grid select,.fo-notes-label textarea,
+  .ua-form input,.ua-form select,.ua-role-toolbar select,.ua-assignment select
+):focus-visible{
+  outline:2px solid var(--om-a11y-focus)!important;
+  outline-offset:2px;
+  box-shadow:0 0 0 4px rgba(104,172,255,.17)!important;
+}
+.owner-modules-main .owner-module-body :is(
+  .fo-form-grid label,.fo-notes-label,.ua-form label,
+  .ua-role-toolbar label,.ua-assignment label
+){color:#c8d9f2!important;font-size:12px;line-height:1.45}
+.owner-modules-main .owner-module-body .fo-form-grid select option,
+.owner-modules-main .owner-module-body .ua-form select option{
+  background:#142641;color:#f4f6ff;
+}
+.owner-modules-main .owner-module-body :is(
+  .fo-step, .fo-environment-options button, .fo-module-option,
+  .ua-tabs button
+){transition:background-color 160ms ease,border-color 160ms ease}
+.owner-modules-main .owner-module-body :is(
+  .fo-step,.fo-environment-options button,.fo-module-option,
+  .fo-btn,.ua-tabs button,.owner-user-row-actions button
+):focus-visible{
+  outline:2px solid var(--om-a11y-focus)!important;
+  outline-offset:2px;
+}
+.owner-modules-main .owner-module-body .fo-step:not(.is-current){
+  color:#c5d6ee!important;
+}
+.owner-modules-main .owner-module-body .fo-module-option{
+  color:#d8e6fb!important;
+}
+.owner-modules-main .owner-module-body .fo-trial-duration{
+  color:#b8cbe6!important;
+}
+.owner-modules-main .owner-module-body .fo-review-item small{
+  font-size:11px;color:#acc0db!important;
+}
+.owner-modules-main .owner-module-body :is(.ua-stat,.ua-tabs,.ua-note){
+  color:#e5efff!important;
+}
+.owner-modules-main .owner-module-body .ua-table-wrap td,
+.owner-modules-main .owner-module-body .ua-permission-table td{
+  color:#e5efff!important;
+}
+.owner-modules-main .owner-module-body .ua-tabs button:hover:not(.active){
+  color:#f1f6ff!important;background:#1e385e!important;
+}
+.owner-modules-main .owner-module-body .ua-permission-table th{
+  color:#c5d8f4!important;
+}
+.owner-modules-main .owner-module-body .fo-confirm {
+  color:#f4f6ff!important;
+}
+.owner-modules-main .owner-module-body .fo-confirm h3{
+  color:#fff7e7!important;font-size:18px;
+}
+.owner-modules-main .owner-module-body .fo-signups-error{
+  color:#ffd1d7!important;background:#3c2032!important;
+  border-color:#ad5568!important;
+}
+.owner-modules-main .owner-module-body .fo-btn {
+  min-height:40px;font-family:var(--font-family)!important;
+  font-weight:650;
+}
+.owner-modules-main .owner-module-body .fo-btn.sm{
+  min-height:36px;
+}
+.owner-modules-main .owner-module-body .fo-btn.danger:hover:not(:disabled){
+  background:#6b2943!important;border-color:#e17d93!important;
+}
+.owner-modules-main .owner-module-body .fo-confirm-actions button{
+  min-width:95px;
+}
+.owner-modules-main .owner-module-body :is(button,input,select,textarea):disabled{
+  cursor:not-allowed;opacity:.56;
+}
+@container fo-signups (max-width:860px){
+  .owner-modules-main .owner-module-body .fo-signups-table tbody tr{
+    background:#15263f!important;
+    border-color:var(--om-a11y-line)!important;
+  }
+  .owner-modules-main .owner-module-body .fo-signups-table tbody tr:focus-within{
+    background:#1a3659!important;
+  }
+  .owner-modules-main .owner-module-body .fo-signups-table td{
+    color:#e5edff!important;
+  }
+  .owner-modules-main .owner-module-body .fo-signups-table td::before{
+    color:#adc6e8!important;
+  }
+}
+@media (max-width:650px){
+  .owner-modules-main .owner-module-body .fo-signups-toolbar {
+    align-items:stretch;flex-direction:column;
+  }
+  .owner-modules-main .owner-module-body .fo-signup-search{
+    width:100%;max-width:none;
+  }
+  .owner-modules-main .owner-module-body .fo-signups-toolbar-actions{
+    justify-content:stretch;
+  }
+  .owner-modules-main .owner-module-body .fo-signups-toolbar-actions .fo-btn{
+    flex:1;
+  }
+  .owner-modules-main .owner-module-body .fo-signups-actions-inner{
+    flex-wrap:wrap;white-space:normal;
+  }
+}
+@media (prefers-reduced-motion:reduce){
+  .owner-modules-main .owner-module-body .fo-signups-table tbody tr,
+  .owner-modules-main .owner-module-body .fo-step,
+  .owner-modules-main .owner-module-body .ua-tabs button{
+    transition:none!important;
+  }
+}
