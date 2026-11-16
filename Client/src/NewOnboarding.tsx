@@ -3,6 +3,7 @@ import { AlertCircle, ArrowRight, CalendarDays, Check, ChevronLeft, ChevronRight
 import { deleteSignupRequest, listSignupRequests, type SignupRequestRow } from './signupRequests';
 import { api } from './api';
 import './NewOnboarding.css';
+import CompactDatePicker, { validDate, addDays } from './CompactDatePicker';
 
 type Environment = 'Trial' | 'Live';
 type SignupRequest = {
@@ -47,7 +48,8 @@ function OnboardingWizard({ signup, onBackToQueue }: { signup: SignupRequestRow;
   const [product, setProduct] = useState('Engage Stay');
   const [deployment, setDeployment] = useState('Shared');
   const [trialStart, setTrialStart] = useState(today());
-  const [trialEnd, setTrialEnd] = useState('');
+  const [trialEnd, setTrialEnd] = useState(() => addDays(today(), 14));
+  const [validationError, setValidationError] = useState('');
   const [tenantName, setTenantName] = useState('');
   const [tenantId, setTenantId] = useState('');
   const [appUrl, setAppUrl] = useState('');
@@ -65,11 +67,11 @@ function OnboardingWizard({ signup, onBackToQueue }: { signup: SignupRequestRow;
     if (!session?.payload) return; const saved = session.payload;
     setStep(Math.max(0, Math.min(6, Number(session.current_step || 1) - 1)));
     setRequest(old => ({ ...old, businessName: saved.companyName || old.businessName, email: saved.email || old.email, mobile: saved.phone || old.mobile }));
-    setIndustry(saved.industry || 'Hospitality'); setProduct(saved.product || 'Engage Stay'); setDeployment(saved.deployment || 'Shared'); setEnvironment(saved.environment || 'Trial'); setTrialStart(saved.trialStart || today()); setTrialEnd(saved.trialEnd || ''); setTenantName(saved.tenantName || ''); setTenantId(saved.tenantId || ''); setAppUrl(saved.appUrl || ''); setAdminName(saved.adminName || ''); setAdminEmail(saved.adminEmail || ''); setModules(Array.isArray(saved.modules) ? saved.modules : []); setAssignedOwner(saved.accountOwner || ''); setProvisioning(saved.provisioning || 'Not Started'); setNotes(saved.notes || '');
+    setIndustry(saved.industry || 'Hospitality'); setProduct(saved.product || 'Engage Stay'); setDeployment(saved.deployment || 'Shared'); setEnvironment(saved.environment || 'Trial'); setTrialStart(saved.trialStart || today()); setTrialEnd(saved.trialEnd || addDays(today(),14)); setTenantName(saved.tenantName || ''); setTenantId(saved.tenantId || ''); setAppUrl(saved.appUrl || ''); setAdminName(saved.adminName || ''); setAdminEmail(saved.adminEmail || ''); setModules(Array.isArray(saved.modules) ? saved.modules : []); setAssignedOwner(saved.accountOwner || ''); setProvisioning(saved.provisioning || 'Not Started'); setNotes(saved.notes || '');
   }).catch(() => undefined); }, [signup.id]);
 
   const trialDays = useMemo(() => {
-    if (!trialStart || !trialEnd || trialEnd < trialStart) return null;
+    if (!validDate(trialStart) || !validDate(trialEnd) || trialEnd <= trialStart) return null;
     return Math.round((Date.parse(`${trialEnd}T00:00:00Z`) - Date.parse(`${trialStart}T00:00:00Z`)) / 86400000);
   }, [trialStart, trialEnd]);
 
@@ -77,7 +79,7 @@ function OnboardingWizard({ signup, onBackToQueue }: { signup: SignupRequestRow;
   const toggleModule = (value: string) => setModules((old) => old.includes(value) ? old.filter((x) => x !== value) : [...old, value]);
   const canContinue = () => {
     if (step === 0) return Boolean(request.businessName.trim() && request.email.trim() && request.mobile.trim() && assignedOwner.trim());
-    if (step === 1) return Boolean(product && environment && (environment === 'Live' || (trialStart && trialEnd && trialEnd >= trialStart)));
+    if (step === 1) return Boolean(product && environment && (environment === 'Live' || (validDate(trialStart) && validDate(trialEnd) && trialEnd > trialStart)));
     if (step === 2) return Boolean(tenantName.trim() && tenantId.trim());
     if (step === 3) return Boolean(adminName.trim() && adminEmail.trim());
     if (step === 4) return modules.length > 0;
@@ -94,12 +96,28 @@ function OnboardingWizard({ signup, onBackToQueue }: { signup: SignupRequestRow;
     trialEnd: environment === 'Trial' ? trialEnd : null, signupRequestId: signup.id,
   });
   const next = async () => {
-    if (!canContinue()) { alert('Complete the required fields before continuing.'); return; }
+    if (!canContinue()) {
+      const message = step === 1 && environment === 'Trial'
+        ? !validDate(trialStart) ? 'Select a valid trial start date.'
+          : !validDate(trialEnd) ? 'Select a valid trial expiry date.'
+          : trialEnd <= trialStart ? 'Trial expiry must be after the start date.'
+          : 'Select a product and environment.'
+        : step === 0 ? 'Complete the business name, email, mobile number, and assigned team member.'
+        : step === 2 ? 'Enter a workspace name and unique tenant ID.'
+        : step === 3 ? 'Enter the administrator name and email address.'
+        : step === 4 ? 'Select at least one product module.'
+        : step === 5 ? 'Confirm the provisioning status is Ready.'
+        : 'Complete the required fields.';
+      setValidationError(message);
+      return;
+    }
+    setValidationError('');
     if (step < steps.length - 1) {
       try {
         setSaving(true); setSaveError('');
         await api('/onboarding', { method: 'POST', body: JSON.stringify({ step: step + 1, signupRequestId: signup.id, data: payload() }) });
         setStep(step + 1);
+        setValidationError('');
       } catch (err) { setSaveError(err instanceof Error ? err.message : 'Could not save this onboarding step.'); }
       finally { setSaving(false); }
     }
@@ -121,15 +139,21 @@ function OnboardingWizard({ signup, onBackToQueue }: { signup: SignupRequestRow;
           : unverified
             ? 'Email verification is temporarily disabled. This lead is UNVERIFIED. Confirm email ownership before provisioning or granting access.'
             : 'Verify the signup request before provisioning. Do not store passwords or raw OTP values in this record.'}</span></div></div>}
-      {step === 1 && <div className="fo-section"><div className="fo-section-title"><div><h3>Product and environment</h3><p>Select the product and the type of environment to provision.</p></div></div><div className="fo-form-grid"><label>Product *<select value={product} onChange={e => setProduct(e.target.value)}><option>Engage Stay</option><option>Engage Fit</option><option>Engage Realty</option><option>Engage CRM</option></select></label><label>Industry<select value={industry} onChange={e => setIndustry(e.target.value)}><option>Hospitality</option><option>Real Estate</option><option>Sales</option><option>Fitness</option><option>Other</option></select></label></div><div className="fo-environment-options"><button type="button" className={environment === 'Trial' ? 'selected' : ''} onClick={() => setEnvironment('Trial')}><span className="fo-radio"/><span><b>Trial Environment</b><small>Time-limited evaluation access</small></span><Clock3 size={21}/></button><button type="button" className={environment === 'Live' ? 'selected' : ''} onClick={() => setEnvironment('Live')}><span className="fo-radio"/><span><b>Live / Production</b><small>Production-ready customer environment</small></span><Rocket size={21}/></button></div>{environment === 'Trial' && <div className="fo-trial-box"><h4><CalendarDays size={18}/> Trial access period</h4><div className="fo-form-grid"><label>Trial Start Date *<input type="date" value={trialStart} onChange={e => setTrialStart(e.target.value)}/></label><label>Trial Expiry Date *<input type="date" min={trialStart || undefined} value={trialEnd} onChange={e => setTrialEnd(e.target.value)}/></label></div><div className="fo-trial-duration"><span>Calculated trial duration</span><b>{trialDays === null ? 'Select valid start and expiry dates' : `${trialDays} ${trialDays === 1 ? 'day' : 'days'}`}</b></div></div>}<div className="fo-form-grid fo-single-row"><label>Deployment Model<select value={deployment} onChange={e => setDeployment(e.target.value)}><option>Shared</option><option>Dedicated</option></select></label></div></div>}
+      {step === 1 && <div className="fo-section"><div className="fo-section-title"><div><h3>Product and environment</h3><p>Select the product and the type of environment to provision.</p></div></div><div className="fo-form-grid"><label>Product *<select value={product} onChange={e => setProduct(e.target.value)}><option>Engage Stay</option><option>Engage Fit</option><option>Engage Realty</option><option>Engage CRM</option></select></label><label>Industry<select value={industry} onChange={e => setIndustry(e.target.value)}><option>Hospitality</option><option>Real Estate</option><option>Sales</option><option>Fitness</option><option>Other</option></select></label></div><div className="fo-environment-options"><button type="button" className={environment === 'Trial' ? 'selected' : ''} onClick={() => setEnvironment('Trial')}><span className="fo-radio"/><span><b>Trial Environment</b><small>Time-limited evaluation access</small></span><Clock3 size={21}/></button><button type="button" className={environment === 'Live' ? 'selected' : ''} onClick={() => setEnvironment('Live')}><span className="fo-radio"/><span><b>Live / Production</b><small>Production-ready customer environment</small></span><Rocket size={21}/></button></div>{environment === 'Trial' && <div className="fo-trial-box"><h4><CalendarDays size={18}/> Trial access period</h4><div className="fo-form-grid fo-trial-date-grid">
+          <CompactDatePicker label="Trial Start Date" value={trialStart}
+            onChange={date => { setTrialStart(date); if (!validDate(trialEnd) || trialEnd <= date) setTrialEnd(addDays(date,14)); setValidationError(''); }}/>
+          <CompactDatePicker label="Trial Expiry Date" value={trialEnd} min={trialStart} strictAfterMin
+            onChange={date => { setTrialEnd(date); setValidationError(''); }}/>
+        </div><div className="fo-trial-duration"><span>Calculated trial duration</span><b>{trialDays === null ? 'Select valid start and expiry dates' : `${trialDays} ${trialDays === 1 ? 'day' : 'days'}`}</b></div></div>}<div className="fo-form-grid fo-single-row"><label>Deployment Model<select value={deployment} onChange={e => setDeployment(e.target.value)}><option>Shared</option><option>Dedicated</option></select></label></div></div>}
       {step === 2 && <div className="fo-section"><div className="fo-section-title"><div><h3>Tenant configuration</h3><p>Define the tenant identity and workspace destination.</p></div></div><div className="fo-form-grid"><label>Tenant / Workspace Name *<input value={tenantName} onChange={e => setTenantName(e.target.value)} placeholder="e.g. Acme Hospitality"/></label><label>Unique Tenant ID *<input value={tenantId} onChange={e => setTenantId(e.target.value)} placeholder="Generated or assigned unique ID"/></label><label>Application URL<input value={appUrl} onChange={e => setAppUrl(e.target.value)} placeholder="https://customer.example.com"/></label><label>Region<select defaultValue="India" ><option>India</option><option>Singapore</option><option>United Kingdom</option><option>United States</option><option>Other</option></select></label></div><div className="fo-notice"><Building2 size={18}/><span>Tenant creation should be confirmed by the provisioning service before activation.</span></div></div>}
       {step === 3 && <div className="fo-section"><div className="fo-section-title"><div><h3>Customer administrator</h3><p>Set up the initial administrator and access invitation.</p></div></div><div className="fo-form-grid"><label>Administrator Name *<input value={adminName} onChange={e => setAdminName(e.target.value)} placeholder="Full name"/></label><label>Administrator Email *<input type="email" value={adminEmail} onChange={e => setAdminEmail(e.target.value)} placeholder="admin@company.com"/></label><label>Access Role<select defaultValue="Customer Admin"><option>Customer Admin</option><option>Tenant Admin</option></select></label><label>Invitation Status<select defaultValue="Not Sent"><option>Not Sent</option><option>Ready to Send</option></select></label></div><div className="fo-notice"><ShieldCheck size={18}/><span>Use a secure invitation flow. Do not enter a password manually.</span></div></div>}
       {step === 4 && <div className="fo-section"><div className="fo-section-title"><div><h3>Product configuration</h3><p>Select the modules required for this customer. Availability depends on the selected product.</p></div></div><div className="fo-module-options">{['operations','finance','inventory','communications'].map(m => <label key={m} className="fo-module-option"><input type="checkbox" checked={modules.includes(m)} onChange={() => toggleModule(m)}/><span><b>{m}</b><small>Enable this module for the Engage Stay tenant</small></span></label>)}</div></div>}
       {step === 5 && <div className="fo-section"><div className="fo-section-title"><div><h3>Infrastructure and deployment</h3><p>Track environment readiness. Fields can be adapted to your hosting architecture.</p></div></div><div className="fo-form-grid"><label>Hosting Target<select defaultValue={deployment}><option>Shared</option><option>Dedicated</option></select></label><label>Provisioning Status<select value={provisioning} onChange={e => setProvisioning(e.target.value)}><option>Not Started</option><option>In Progress</option><option>Ready</option><option>Failed</option></select></label><label>Domain / URL<input value={appUrl} onChange={e => setAppUrl(e.target.value)} placeholder="Customer application URL"/></label><label>SSL Status<select defaultValue="Pending"><option>Pending</option><option>Configured</option><option>Not Required</option></select></label></div><div className="fo-notice"><Server size={18}/><span>Production deployment must pass the required health and security checks before activation.</span></div></div>}
       {step === 6 && <div className="fo-section"><div className="fo-section-title"><div><h3>Review onboarding details</h3><p>Confirm the information before creating the customer onboarding record.</p></div></div><div className="fo-review-grid">{[['Business',request.businessName || 'Not provided'],['Email',request.email || 'Not provided'],['Mobile',request.mobile || 'Not provided'],['Industry',industry],['Product',product],['Environment',environment],['Tenant',tenantName || 'Not configured'],['Tenant ID',tenantId || 'Not configured'],['Administrator',adminEmail || 'Not configured'],['Deployment',deployment],['Provisioning',provisioning],['Modules',modules.length ? modules.join(', ') : 'No modules selected']].map(([k,v]) => <div className="fo-review-item" key={k}><small>{k}</small><b>{v}</b></div>)}</div>{environment === 'Trial' && <div className="fo-review-trial"><CalendarDays size={18}/><span>Trial: {trialStart || 'Start date not set'} → {trialEnd || 'Expiry date not set'} ({trialDays === null ? 'duration not set' : `${trialDays} days`})</span></div>}<label className="fo-notes-label">Onboarding notes<textarea rows={3} value={notes} onChange={e => setNotes(e.target.value)} placeholder="Internal notes or outstanding checks"/></label><div className="fo-notice"><ShieldCheck size={18}/><span>Creating this record adds the customer to the Owner onboarding workflow. Activation remains subject to your standard provisioning checks.</span></div></div>}
+      {validationError && <div className="fo-step-error" role="alert"><AlertCircle size={18}/><span>{validationError}</span></div>}
       {saveError && <div className="fo-signups-error" role="alert"><AlertCircle size={18}/><span>{saveError}</span></div>}
       {saved && <div className="fo-saved"><CircleCheck size={19}/> Onboarding record created and added to the Owner workflow.</div>}
-      <footer className="fo-wizard-actions"><button type="button" className="fo-btn secondary" title={step === 0 ? 'Back to signup requests' : undefined} onClick={() => { if (step === 0) { onBackToQueue(); return; } setSaved(false); setSaveError(''); setStep(step - 1); }}><ChevronLeft size={17}/> Back</button><span className="fo-required-note">* Required fields</span><button type="button" className="fo-btn primary" onClick={() => void next()} disabled={saving || saved}>{step === steps.length - 1 ? (saving ? 'Creating…' : 'Create onboarding record') : 'Save & continue'} <ChevronRight size={17}/></button></footer>
+      <footer className="fo-wizard-actions"><button type="button" className="fo-btn secondary" title={step === 0 ? 'Back to signup requests' : undefined} onClick={() => { if (step === 0) { onBackToQueue(); return; } setSaved(false); setSaveError(''); setValidationError(''); setStep(step - 1); }}><ChevronLeft size={17}/> Back</button><span className="fo-required-note">* Required fields</span><button type="button" className="fo-btn primary" onClick={() => void next()} disabled={saving || saved}>{step === steps.length - 1 ? (saving ? 'Creating…' : 'Create onboarding record') : 'Save & continue'} <ChevronRight size={17}/></button></footer>
       </div>
     </div>
   </section>;
