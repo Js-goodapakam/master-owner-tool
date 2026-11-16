@@ -331,3 +331,42 @@ html, body, button, input, textarea, select, option,
 @media(prefers-reduced-motion:reduce) {
   .owner-theme-toggle {transition:none}
 }
+
+
+/* Workspace selector cards and top-right identity in light mode. */
+:root[data-owner-theme='light'] .application-selector .application-card {
+  background:#fff!important;
+  border:1px solid #e1e8ef!important;
+  box-shadow:0 3px 13px rgba(24,41,65,.05)!important;
+}
+:root[data-owner-theme='light'] .application-selector .application-card:hover {
+  border-color:#aec8e5!important;
+  box-shadow:0 10px 24px rgba(24,67,112,.08)!important;
+}
+:root[data-owner-theme='light'] .application-selector .application-card h2,
+:root[data-owner-theme='light'] .application-selector .application-card h3,
+:root[data-owner-theme='light'] .application-selector .application-card strong,
+:root[data-owner-theme='light'] .application-selector .application-card-copy{
+  color:#25384e!important;
+}
+:root[data-owner-theme='light'] .application-selector .application-card p,
+:root[data-owner-theme='light'] .application-selector .application-card-commercial,
+:root[data-owner-theme='light'] .application-selector .application-card-footer {
+  color:#61758c!important;
+}
+:root[data-owner-theme='light'] .application-selector .application-card-icon {
+  background:#eef5fb!important;border-color:#deebf6!important;
+}
+:root[data-owner-theme='light'] .application-selector .topbar-user-details span {
+  color:#273a4e!important;
+}
+:root[data-owner-theme='light'] .application-selector .topbar-user-details small {
+  color:#718198!important;
+}
+:root[data-owner-theme='light'] .application-selector .topbar-avatar,
+:root[data-owner-theme='light'] .application-selector .topbar-signout {
+  background:#fff!important;color:#385578!important;border-color:#dce5ef!important;
+}
+:root[data-owner-theme='light'] .application-selector .application-selector-progress-track {
+  background:#e7edf4!important;
+}
