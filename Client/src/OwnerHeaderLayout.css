@@ -1,0 +1,444 @@
+/*
+ * Engagehubs Owner Console — structural toolbar and sidebar-brand layout.
+ * Applies to dark and light themes. Only Owner Console authenticated shell;
+ * application selection and customer-facing applications are unaffected.
+ */
+.shell > aside > .owner-sidebar-brand-row {
+  display:grid!important;
+  grid-template-columns:minmax(0,1fr) 34px;
+  align-items:center!important;
+  column-gap:8px;
+  min-height:76px;
+  padding:11px 2px 14px;
+  margin-bottom:11px;
+  border-bottom:1px solid rgba(128,156,192,.18);
+  position:relative;
+}
+.shell > aside > .owner-sidebar-brand-row > .brand {
+  min-height:0!important;
+  padding:0!important;
+  margin:0!important;
+  border:0!important;
+  display:flex!important;
+  align-items:center!important;
+  gap:8px!important;
+  overflow:hidden;
+}
+.shell > aside > .owner-sidebar-brand-row > .brand img {
+  width:34px!important;
+  height:34px!important;
+  flex:0 0 34px;
+  object-fit:contain;
+}
+.shell > aside > .owner-sidebar-brand-row > .brand span {
+  min-width:0;
+  overflow:hidden;
+  font-size:13px!important;
+  line-height:1.2;
+  white-space:nowrap;
+  text-overflow:ellipsis;
+}
+.shell > aside > .owner-sidebar-brand-row > .brand b{
+  display:block;
+  margin-top:3px;
+  font-size:9px!important;
+  letter-spacing:.015em!important;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  font-weight:500;
+}
+.shell > aside > .owner-sidebar-brand-row > button.collapse {
+  position:static!important;
+  margin:0!important;
+  inset:auto!important;
+  width:32px!important;
+  height:32px!important;
+  min-height:32px!important;
+  min-width:32px!important;
+  align-self:center;
+  justify-self:end;
+  display:grid!important;
+  place-items:center;
+}
+.shell.collapsed > aside > .owner-sidebar-brand-row{
+  grid-template-columns:1fr;
+  justify-items:center;
+  gap:8px;
+  padding-top:6px;
+  min-height:103px;
+}
+.shell.collapsed > aside > .owner-sidebar-brand-row > .brand{
+  justify-content:center!important;
+}
+.shell.collapsed > aside > .owner-sidebar-brand-row > .brand span{
+  display:none!important;
+}
+.shell.collapsed > aside > .owner-sidebar-brand-row > button.collapse{
+  justify-self:center!important;
+}
+.shell.collapsed aside nav {padding-top:0!important}
+
+/* Header: three zones. No inherited header auto-margin or fixed-height
+   account buttons can break vertical centring. */
+.shell > main > header.topbar.owner-header{
+  display:grid!important;
+  grid-template-columns:minmax(215px,1fr) minmax(0,410px) auto;
+  align-items:center!important;
+  column-gap:20px!important;
+  row-gap:10px!important;
+  min-height:76px!important;
+  height:auto!important;
+  padding:12px 0!important;
+  margin:0!important;
+  flex-wrap:nowrap!important;
+  overflow:visible!important;
+}
+.shell > main > header.owner-header .owner-header-leading{
+  grid-column:1;
+  display:flex!important;
+  flex-direction:column;
+  align-items:flex-start!important;
+  justify-content:center;
+  gap:5px;
+  min-width:0;
+  height:100%;
+}
+.shell > main > header.owner-header .owner-header-switcher{
+  display:inline-flex!important;
+  align-items:center!important;
+  justify-content:flex-start!important;
+  gap:6px;
+  min-height:26px!important;
+  padding:3px 8px!important;
+  margin:0!important;
+  flex:0 0 auto;
+  max-width:100%;
+  white-space:nowrap;
+}
+.shell > main > header.owner-header .owner-header-page{
+  display:flex;
+  align-items:baseline;
+  gap:8px;
+  max-width:100%;
+  min-width:0;
+  overflow:hidden;
+}
+.shell > main > header.owner-header .owner-header-page h1{
+  font-size:16px!important;
+  font-weight:650!important;
+  line-height:1.35!important;
+  margin:0!important;
+  white-space:nowrap;
+  letter-spacing:-.02em!important;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  min-width:0;
+}
+.shell > main > header.owner-header .owner-header-current{
+  display:inline-block;
+  font-size:13px!important;
+  line-height:1.35;
+  font-weight:510;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  min-width:0;
+}
+.shell > main > header.owner-header .owner-header-page > span:nth-child(2){
+  flex:0 0 auto;
+  font-size:12px;
+  opacity:.6;
+}
+.shell > main > header.owner-header > .global-search{
+  grid-column:2;
+  grid-row:1;
+  width:100%!important;
+  max-width:410px!important;
+  min-width:0!important;
+  height:40px!important;
+  margin:0!important;
+  justify-self:end;
+  flex:initial!important;
+}
+.shell > main > header.owner-header > .owner-header-trailing{
+  grid-column:3;
+  grid-row:1;
+  display:flex!important;
+  align-items:center!important;
+  justify-content:flex-end!important;
+  min-height:40px;
+  min-width:0;
+  gap:10px!important;
+  margin:0!important;
+  flex:initial!important;
+}
+.shell > main > header.owner-header .owner-theme-toggle{
+  display:inline-flex;
+  min-height:38px!important;
+  height:38px!important;
+  align-items:center!important;
+  gap:7px;
+  white-space:nowrap;
+}
+.shell > main > header.owner-header .owner-header-profile{
+  position:relative;
+  flex:0 0 auto;
+  min-width:0;
+}
+.shell > main > header.owner-header .owner-header-profile-trigger {
+  display:flex!important;
+  align-items:center!important;
+  gap:9px;
+  min-height:40px;
+  max-width:240px;
+  padding:3px 7px 3px 3px;
+  border:1px solid transparent;
+  border-radius:10px;
+  cursor:pointer;
+  list-style:none;
+  user-select:none;
+}
+.shell > main > header.owner-header .owner-header-profile-trigger::-webkit-details-marker{
+  display:none;
+}
+.shell > main > header.owner-header .owner-header-profile-trigger::marker{
+  display:none;
+}
+.shell > main > header.owner-header .owner-header-avatar{
+  display:grid;
+  place-items:center;
+  width:36px;
+  height:36px;
+  flex:0 0 36px;
+  border-radius:50%;
+  font-size:11px;
+  font-weight:650;
+}
+.shell > main > header.owner-header .owner-header-identity{
+  display:flex;
+  flex-direction:column;
+  gap:2px;
+  min-width:0;
+  max-width:150px;
+}
+.shell > main > header.owner-header .owner-header-identity strong{
+  display:block;
+  font-size:12px;
+  line-height:1.25;
+  font-weight:650;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+.shell > main > header.owner-header .owner-header-identity small{
+  display:block;
+  font-size:10px;
+  font-weight:450;
+  line-height:1.15;
+  margin:0;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+.shell > main > header.owner-header .owner-header-profile-trigger > svg{
+  flex-shrink:0;
+  transition:transform .16s ease;
+}
+.shell > main > header.owner-header .owner-header-profile[open] .owner-header-profile-trigger > svg{
+  transform:rotate(180deg);
+}
+.shell > main > header.owner-header .owner-header-profile-trigger:focus-visible,
+.shell > main > header.owner-header .owner-header-profile-popover button:focus-visible{
+  outline:2px solid #7daee9!important;
+  outline-offset:2px!important;
+}
+.shell > main > header.owner-header .owner-header-profile-popover{
+  position:absolute;
+  top:calc(100% + 9px);
+  right:0;
+  z-index:200;
+  width:min(240px,calc(100vw - 20px));
+  border-radius:12px;
+  border:1px solid rgba(128,152,191,.24);
+  padding:7px;
+  box-shadow:0 16px 45px rgba(0,0,0,.21);
+}
+.shell > main > header.owner-header .owner-header-profile-caption{
+  font-size:11px;
+  padding:10px 11px;
+  border-bottom:1px solid rgba(128,152,191,.17);
+  line-height:1.5;
+  overflow-wrap:anywhere;
+}
+.shell > main > header.owner-header .owner-header-profile-caption strong{
+  display:block;
+  font-size:11.5px;
+}
+.shell > main > header.owner-header .owner-header-profile-popover button{
+  display:flex;
+  align-items:center;
+  width:100%;
+  gap:10px;
+  border:0;
+  min-height:39px;
+  border-radius:8px;
+  text-align:left;
+  background:transparent;
+  padding:9px 11px;
+  cursor:pointer;
+  font-size:12px;
+}
+:root[data-owner-theme='light'] .shell > aside > .owner-sidebar-brand-row{
+  border-bottom:1px solid #eeeeee!important;
+}
+:root[data-owner-theme='light'] .shell > main > header.owner-header .owner-header-page h1{
+  color:#222!important;
+}
+:root[data-owner-theme='light'] .shell > main > header.owner-header .owner-header-current{
+  color:#747474!important;
+}
+:root[data-owner-theme='light'] .shell > main > header.owner-header .owner-header-avatar{
+  background:#f1f1f1!important;
+  color:#333!important;
+  border:1px solid #e7e7e7!important;
+}
+:root[data-owner-theme='light'] .shell > main > header.owner-header .owner-header-profile-trigger{
+  color:#333!important;
+}
+:root[data-owner-theme='light'] .shell > main > header.owner-header .owner-header-profile-trigger:hover,
+:root[data-owner-theme='light'] .shell > main > header.owner-header .owner-header-profile[open] .owner-header-profile-trigger{
+  background:#f7f7f7!important;
+  border-color:#ededed!important;
+}
+:root[data-owner-theme='light'] .shell > main > header.owner-header .owner-header-identity strong{
+  color:#262626!important;
+}
+:root[data-owner-theme='light'] .shell > main > header.owner-header .owner-header-identity small,
+:root[data-owner-theme='light'] .shell > main > header.owner-header .owner-header-page > span:nth-child(2){
+  color:#7b7b7b!important;
+}
+:root[data-owner-theme='light'] .shell > main > header.owner-header .owner-header-profile-popover{
+  background:#fff!important;
+  color:#333!important;
+  border-color:#e5e5e5!important;
+  box-shadow:0 12px 35px rgba(16,24,40,.11)!important;
+}
+:root[data-owner-theme='light'] .shell > main > header.owner-header .owner-header-profile-caption{
+  color:#777!important;
+  border-bottom-color:#ebebeb!important;
+}
+:root[data-owner-theme='light'] .shell > main > header.owner-header .owner-header-profile-caption strong{
+  color:#333!important;
+}
+:root[data-owner-theme='light'] .shell > main > header.owner-header .owner-header-profile-popover button{
+  color:#333!important;
+}
+:root[data-owner-theme='light'] .shell > main > header.owner-header .owner-header-profile-popover button:hover{
+  background:#f4f4f4!important;
+}
+:root[data-owner-theme='dark'] .shell > main > header.owner-header .owner-header-page h1,
+:root[data-owner-theme='dark'] .shell > main > header.owner-header .owner-header-identity strong{
+  color:#f4f1de!important;
+}
+:root[data-owner-theme='dark'] .shell > main > header.owner-header .owner-header-current,
+:root[data-owner-theme='dark'] .shell > main > header.owner-header .owner-header-identity small{
+  color:#aec0dc!important;
+}
+:root[data-owner-theme='dark'] .shell > main > header.owner-header .owner-header-avatar{
+  background:#1b2c46;
+  border:1px solid #304a70;
+  color:#e1ebff;
+}
+:root[data-owner-theme='dark'] .shell > main > header.owner-header .owner-header-profile-trigger{
+  color:#dce8f8;
+}
+:root[data-owner-theme='dark'] .shell > main > header.owner-header .owner-header-profile-trigger:hover{
+  background:#182c47;
+  border-color:#365174;
+}
+:root[data-owner-theme='dark'] .shell > main > header.owner-header .owner-header-profile-popover{
+  background:#14233b!important;
+  color:#e1ecff!important;
+}
+:root[data-owner-theme='dark'] .shell > main > header.owner-header .owner-header-profile-caption{
+  color:#b6c8e4!important;
+}
+:root[data-owner-theme='dark'] .shell > main > header.owner-header .owner-header-profile-popover button{
+  color:#e4efff!important;
+}
+:root[data-owner-theme='dark'] .shell > main > header.owner-header .owner-header-profile-popover button:hover{
+  background:#203e65!important;
+}
+/* The header search should occupy its centre column only on module screens.
+   Dashboard has no finder; keep the same header without an empty middle gap. */
+.shell > main > header.owner-header:not(:has(.global-search)){
+  grid-template-columns:minmax(210px,1fr) auto;
+}
+.shell > main > header.owner-header:not(:has(.global-search)) > .owner-header-trailing{
+  grid-column:2;
+}
+@media(max-width:1180px){
+  .shell > main > header.topbar.owner-header {
+    grid-template-columns:minmax(170px,1fr) minmax(0,255px) auto;
+    gap:12px!important;
+  }
+  .shell > main > header.owner-header .owner-header-identity{
+    max-width:100px;
+  }
+}
+@media(max-width:980px){
+  .shell > main > header.topbar.owner-header{
+    grid-template-columns:minmax(0,1fr) auto!important;
+    gap:10px!important;
+  }
+  .shell > main > header.owner-header > .owner-header-trailing{
+    grid-column:2!important;
+  }
+  .shell > main > header.owner-header > .global-search{
+    grid-row:2!important;
+    grid-column:1 / -1!important;
+    width:100%!important;
+    max-width:none!important;
+    justify-self:stretch!important;
+  }
+  .shell > main > header.owner-header .owner-header-identity{
+    max-width:112px;
+  }
+}
+@media(max-width:600px){
+  .shell > main > header.topbar.owner-header {
+    padding:11px 0!important;
+    min-height:65px!important;
+  }
+  .shell > main > header.owner-header .owner-header-page h1{
+    font-size:13.5px!important;
+  }
+  .shell > main > header.owner-header .owner-header-current{
+    font-size:11px!important;
+  }
+  .shell > main > header.owner-header .owner-header-switcher span,
+  .shell > main > header.owner-header .owner-header-identity,
+  .shell > main > header.owner-header .owner-theme-toggle span,
+  .shell > main > header.owner-header .owner-header-profile-trigger > svg{
+    display:none!important;
+  }
+  .shell > main > header.owner-header .owner-header-profile-trigger{
+    padding:2px;
+  }
+  .shell > main > header.owner-header .owner-header-avatar{
+    width:34px;height:34px;flex-basis:34px;
+  }
+  .shell > main > header.owner-header .owner-theme-toggle{
+    width:37px;
+    min-width:37px;
+    padding:7px!important;
+  }
+  .shell > main > header.owner-header .owner-header-leading{
+    gap:4px;
+  }
+}
+@media(prefers-reduced-motion:reduce){
+  .shell > main > header.owner-header .owner-header-profile-trigger > svg{
+    transition:none;
+  }
+}
