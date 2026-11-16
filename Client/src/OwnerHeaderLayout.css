@@ -442,3 +442,22 @@
     transition:none;
   }
 }
+
+/* Branded Applications navigation: image remains legible in both themes. */
+.shell > main > header.owner-header .owner-header-switcher .owner-applications-logo{
+  display:block;
+  flex:0 0 17px;
+  width:17px;
+  height:17px;
+  object-fit:contain;
+  border:0;
+  background:transparent;
+  box-shadow:none;
+  filter:brightness(0) invert(1);
+}
+:root[data-owner-theme='light'] .shell > main > header.owner-header .owner-header-switcher .owner-applications-logo{
+  filter:brightness(0);
+}
+:root[data-owner-theme='dark'] .shell > main > header.owner-header .owner-header-switcher .owner-applications-logo{
+  filter:brightness(0) invert(1);
+}
