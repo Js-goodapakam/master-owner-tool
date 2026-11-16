@@ -607,11 +607,11 @@ app.post('/api/integrations/engagestay/signup', async (q, r) => {
 
 app.get('/api/signup-requests', authorize('customer.create'), (_q, r) => {
   if (!supabaseConfigured()) return r.json(signupRequests);
-  void supabaseAdmin('rest/v1/signup_requests?select=id,organization_name,display_name,email,phone,source,requested_lifecycle,occurred_at&status=in.(NEW,IN_REVIEW)&order=occurred_at.desc')
+  void supabaseAdmin('rest/v1/signup_requests?select=id,organization_name,display_name,email,phone,source,external_user_id,requested_lifecycle,occurred_at&status=in.(NEW,IN_REVIEW)&order=occurred_at.desc')
     .then(async (response) => {
       if (!response.ok) throw new Error('Signup queue query failed.');
       const rows = await response.json() as Array<Record<string, string | null>>;
-      r.json(rows.map((row) => ({ id: row.id, name: row.organization_name || row.display_name || row.email, email: row.email, mobile: row.phone || '', signupDate: row.occurred_at, source: row.source, requestedLifecycle: row.requested_lifecycle })));
+      r.json(rows.map((row) => ({ id: row.id, name: row.organization_name || row.display_name || row.email, email: row.email, mobile: row.phone || '', signupDate: row.occurred_at, source: row.source, emailVerified: !String(row.external_user_id || '').startsWith('unverified:'), requestedLifecycle: row.requested_lifecycle })));
     })
     .catch(() => { if (!r.headersSent) r.status(502).json({ error: 'SIGNUP_QUEUE_UNAVAILABLE' }); });
 });
