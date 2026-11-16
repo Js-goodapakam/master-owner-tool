@@ -893,3 +893,29 @@
   color:#b0c5e3;
   font-size:12px;
 }
+
+
+/* Sidebar collapse control: visible on desktop, with a usable keyboard target. */
+.shell aside .collapse{
+  z-index:6;min-width:34px;min-height:34px;
+  display:grid;place-items:center;
+  background:#182b47;border:1px solid rgba(125,170,234,.42);
+  color:#e9f3ff;
+  border-radius:9px;
+  transition:background 160ms ease;
+}
+.shell aside .collapse:hover{background:#244b7e}
+.shell aside .collapse:focus-visible{
+  outline:2px solid #9fceff;outline-offset:3px;
+}
+.shell.collapsed aside .collapse{
+  top:80px;right:18px;
+}
+.shell.collapsed aside nav{
+  padding-top:44px;
+}
+@media (max-width:700px){
+  .shell aside .collapse{
+    display:none;
+  }
+}
