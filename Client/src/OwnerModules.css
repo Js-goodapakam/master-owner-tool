@@ -807,3 +807,23 @@
   font-size:10px;font-weight:720;line-height:1.3;
   letter-spacing:.015em;
 }
+
+
+/* The generic input:not(checkbox/radio) rule has greater specificity than
+   legacy .fo-signup-search input. Reset its nested input explicitly so
+   only the outer search control receives a border and focus outline. */
+.owner-modules-main .owner-module-body .fo-signups .fo-signup-search input[type="search"]:not([type="checkbox"]):not([type="radio"]){
+  min-height:42px!important;
+  height:42px!important;
+  border:0!important;
+  border-radius:0!important;
+  box-shadow:none!important;
+  outline:0!important;
+  padding:0!important;
+  background:transparent!important;
+  color:#f2f6ff!important;
+}
+.owner-modules-main .owner-module-body .fo-signups .fo-signup-search input[type="search"]:focus-visible{
+  outline:0!important;
+  box-shadow:none!important;
+}
