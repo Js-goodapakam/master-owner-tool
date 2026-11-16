@@ -16,6 +16,8 @@ import {
   LayoutDashboard,
   LogOut,
   Package,
+  PanelLeftClose,
+  PanelLeftOpen,
   PlugZap,
   Rocket,
   Search,
@@ -1320,7 +1322,18 @@ let content =
 
         </div>
 
-        <nav>
+        <button
+          type="button"
+          className="collapse"
+          onClick={() => setCollapsed(value => !value)}
+          aria-label={collapsed ? 'Expand navigation' : 'Collapse navigation'}
+          aria-expanded={!collapsed}
+          title={collapsed ? 'Expand navigation' : 'Collapse navigation'}
+        >
+          {collapsed ? <PanelLeftOpen size={17} aria-hidden="true" /> : <PanelLeftClose size={17} aria-hidden="true" />}
+        </button>
+
+        <nav aria-label="Owner Tool modules">
           {nav.map(({ name, icon: Icon }) => (
             <button
               key={name}
@@ -1357,6 +1370,11 @@ let content =
                 document.querySelector('main')?.scrollTo({ top: 0, left: 0, behavior: 'instant' });
                 document.querySelector('aside')?.scrollTo({ top: 0, left: 0, behavior: 'instant' });
               }}
+              aria-current={page === (name === 'Home' ? 'Dashboard'
+                : name === 'New Onboarding' ? 'Customer Onboarding'
+                : name === 'Products & Plans' ? 'Products'
+                : name === 'Customer Settings' ? 'Configuration' : name) ? 'page' : undefined}
+              aria-label={collapsed ? name : undefined}
               title={collapsed ? name : undefined}
             >
               <span className="nav-icon">
