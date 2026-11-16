@@ -1,0 +1,217 @@
+/*
+ * Engagehubs Owner Tool · restrained transparent glass system.
+ * Same blur, radii and spacing in both themes. Only opacity/colours vary.
+ * Imported after the shared structural CSS. Decorative surfaces only:
+ * no transparency on editable fields, dialogs requiring legibility or tables' text.
+ */
+:root[data-owner-theme="light"] {
+  --og-canvas:#f5f7fa;
+  --og-canvas-highlight:rgba(190,212,239,.20);
+  --og-panel:rgba(255,255,255,.79);
+  --og-panel-solid:#fff;
+  --og-panel-hover:rgba(255,255,255,.94);
+  --og-recessed:rgba(244,247,251,.78);
+  --og-frame:rgba(157,174,196,.32);
+  --og-line:rgba(140,157,181,.22);
+  --og-shadow:0 6px 24px rgba(32,52,81,.045),0 1px 3px rgba(32,52,81,.035);
+  --og-text:#202630;
+  --og-muted:#596777;
+}
+:root[data-owner-theme="dark"] {
+  --og-canvas:#080f1f;
+  --og-canvas-highlight:rgba(44,76,122,.18);
+  --og-panel:rgba(22,35,55,.77);
+  --og-panel-solid:#15243a;
+  --og-panel-hover:rgba(30,48,74,.91);
+  --og-recessed:rgba(29,44,66,.79);
+  --og-frame:rgba(146,175,218,.23);
+  --og-line:rgba(129,161,206,.19);
+  --og-shadow:0 8px 27px rgba(2,8,19,.13),0 1px 4px rgba(0,0,0,.10);
+  --og-text:#f0f5ff;
+  --og-muted:#b3c4df;
+}
+/* A soft translucent layer needs material behind it to blur. Keep this
+   anchored to the scroll surfaces, not a floating pseudo element. */
+:root[data-owner-theme] .shell,
+:root[data-owner-theme] .application-selector {
+  background:
+    radial-gradient(ellipse 58% 53% at 86% -5%,var(--og-canvas-highlight),transparent 78%),
+    radial-gradient(ellipse 42% 46% at 2% 85%,var(--og-canvas-highlight),transparent 82%),
+    var(--og-canvas)!important;
+}
+:root[data-owner-theme] .shell > main.owner-dashboard-main,
+:root[data-owner-theme] .shell > main.owner-modules-main {
+  background:transparent!important;
+}
+/* Global navigation stays compact, with an understated frosted surface. */
+:root[data-owner-theme] .shell > aside {
+  background:var(--og-panel)!important;
+  border-right:1px solid var(--og-frame)!important;
+  box-shadow:0 1px 17px rgba(0,0,0,.025)!important;
+  -webkit-backdrop-filter:blur(18px) saturate(115%);
+  backdrop-filter:blur(18px) saturate(115%);
+}
+:root[data-owner-theme] .shell > main > header.topbar.owner-header {
+  background:var(--og-panel)!important;
+  border:1px solid var(--og-line)!important;
+  border-top:0!important;
+  border-radius:0 0 15px 15px!important;
+  padding-left:16px!important;
+  padding-right:16px!important;
+  margin-bottom:12px!important;
+  box-shadow:var(--og-shadow)!important;
+  -webkit-backdrop-filter:blur(16px) saturate(115%);
+  backdrop-filter:blur(16px) saturate(115%);
+}
+/* All principal dashboard and application cards use ONE material rule. */
+:root[data-owner-theme] .shell > main.owner-dashboard-main .ehd-root :is(
+  .ehd-kpi,.ehd-panel,.ehd-secondary-metric,.ehd-stage,.ehd-operation,
+  .ehd-customer-card,.ehd-action-row,.ehd-activity-row
+),
+:root[data-owner-theme] .shell > main.owner-modules-main .owner-module-body :is(
+  .card,.fo-signups-card,.fo-stepper,.fo-onboarding-panel,.fo-panel,
+  .fo-trial-box,.fo-review-item,.fo-environment-options > button,
+  .fo-module-option,.ua-stat,.ua-note,.ua-table-wrap,
+  .owner-delete-dialog,.owner-credential-dialog
+),
+:root[data-owner-theme] .application-selector :is(
+  .application-card,.application-selector-empty,.application-selector-error
+) {
+  background:var(--og-panel)!important;
+  border:1px solid var(--og-frame)!important;
+  box-shadow:var(--og-shadow)!important;
+  -webkit-backdrop-filter:blur(14px) saturate(115%);
+  backdrop-filter:blur(14px) saturate(115%);
+}
+/* Layered/recessed surfaces remain visibly differentiated, not washed out. */
+:root[data-owner-theme] .shell > main.owner-dashboard-main .ehd-root :is(
+  .ehd-stage,.ehd-customer-card,.ehd-operation,.ehd-action-row,.ehd-activity-row
+),
+:root[data-owner-theme] .shell > main.owner-modules-main .owner-module-body :is(
+  .fo-trial-box,.fo-review-item,.fo-module-option,.fo-notice,.fo-step,
+  .fo-environment-options > button
+){
+  background:var(--og-recessed)!important;
+  box-shadow:none!important;
+  border-color:var(--og-line)!important;
+}
+/* Selected controls must still be immediately distinguishable. */
+:root[data-owner-theme="light"] .shell > main.owner-modules-main .owner-module-body :is(
+  .fo-step.is-current,.fo-environment-options > button.selected,
+  .ua-tabs button.active
+){
+  background:rgba(225,236,249,.93)!important;
+  border-color:#b4cce7!important;
+}
+:root[data-owner-theme="dark"] .shell > main.owner-modules-main .owner-module-body :is(
+  .fo-step.is-current,.fo-environment-options > button.selected,
+  .ua-tabs button.active
+){
+  background:rgba(37,71,114,.94)!important;
+  border-color:#507db3!important;
+}
+/* Keep text and inputs opaque enough to pass practical readability checks. */
+:root[data-owner-theme] .shell > main.owner-modules-main .owner-module-body :is(
+  input:not([type="checkbox"]):not([type="radio"]),select,textarea
+){
+  -webkit-backdrop-filter:none!important;
+  backdrop-filter:none!important;
+}
+:root[data-owner-theme] .shell > main.owner-modules-main .owner-module-body :is(
+  .fo-signups-table-wrap,.fo-calendar-popover,.fo-date-picker-popover
+){
+  background:var(--og-panel-hover)!important;
+  border-color:var(--og-frame)!important;
+  box-shadow:var(--og-shadow)!important;
+  -webkit-backdrop-filter:blur(16px);
+  backdrop-filter:blur(16px);
+}
+:root[data-owner-theme] .shell > main.owner-modules-main .owner-module-body .fo-signups-table tbody tr {
+  background:transparent!important;
+}
+:root[data-owner-theme] .shell > main.owner-modules-main .owner-module-body .fo-signups-table tbody td {
+  background:transparent!important;
+}
+/* Light theme tables are not pure white sheets over frosted containers. */
+:root[data-owner-theme="light"] .shell > main.owner-modules-main .owner-module-body .fo-signups-table thead th{
+  background:rgba(238,242,248,.78)!important;
+  color:#515f70!important;
+}
+:root[data-owner-theme="dark"] .shell > main.owner-modules-main .owner-module-body .fo-signups-table thead th{
+  background:rgba(32,55,82,.88)!important;
+  color:#c1d6f6!important;
+}
+/* Small surfaces: dropdowns, module finder and header switch. */
+:root[data-owner-theme] .shell > main > header.owner-header .owner-header-profile-popover,
+:root[data-owner-theme] .shell > main > header.owner-header .owner-module-results{
+  background:var(--og-panel-hover)!important;
+  border:1px solid var(--og-frame)!important;
+  box-shadow:0 12px 30px rgba(0,0,0,.14)!important;
+  -webkit-backdrop-filter:blur(18px);
+  backdrop-filter:blur(18px);
+}
+:root[data-owner-theme] .shell > main > header.owner-header :is(
+  .owner-header-switcher,.owner-theme-switch
+){
+  box-shadow:none!important;
+}
+:root[data-owner-theme] .application-selector {
+  min-height:100vh;
+}
+:root[data-owner-theme] .application-selector .application-card:hover{
+  background:var(--og-panel-hover)!important;
+  border-color:var(--og-frame)!important;
+  box-shadow:0 10px 27px rgba(27,48,79,.10)!important;
+}
+/* Page headings stay unboxed and legible (avoid a glass panel everywhere). */
+:root[data-owner-theme] .shell > main.owner-dashboard-main .ehd-hero,
+:root[data-owner-theme] .shell > main.owner-modules-main .owner-module-hero{
+  background:transparent!important;
+  border:0!important;
+  box-shadow:none!important;
+  -webkit-backdrop-filter:none;
+  backdrop-filter:none;
+}
+/* Sticky wizard footer: frosted without turning white in dark mode. */
+:root[data-owner-theme] .shell > main.owner-modules-main .owner-module-body .fo-wizard-actions{
+  background:var(--og-panel-hover)!important;
+  border-top:1px solid var(--og-frame)!important;
+  -webkit-backdrop-filter:blur(16px);
+  backdrop-filter:blur(16px);
+}
+/* Contrast-safe fallback on browsers without backdrop filter. */
+@supports not ((backdrop-filter:blur(2px)) or (-webkit-backdrop-filter:blur(2px))){
+  :root[data-owner-theme] .shell > aside,
+  :root[data-owner-theme] .shell > main > header.topbar.owner-header,
+  :root[data-owner-theme] .shell > main.owner-dashboard-main .ehd-root :is(.ehd-kpi,.ehd-panel,.ehd-secondary-metric,.ehd-stage,.ehd-customer-card),
+  :root[data-owner-theme] .shell > main.owner-modules-main .owner-module-body :is(.card,.fo-signups-card,.fo-stepper,.fo-onboarding-panel,.fo-panel,.fo-trial-box,.ua-stat),
+  :root[data-owner-theme] .application-selector .application-card{
+    background:var(--og-panel-solid)!important;
+  }
+}
+/* Do not sacrifice performance or motion preferences on smaller devices. */
+@media(max-width:760px){
+  :root[data-owner-theme] .shell > aside,
+  :root[data-owner-theme] .shell > main > header.topbar.owner-header,
+  :root[data-owner-theme] .shell > main.owner-dashboard-main .ehd-root :is(.ehd-kpi,.ehd-panel,.ehd-secondary-metric,.ehd-stage),
+  :root[data-owner-theme] .shell > main.owner-modules-main .owner-module-body :is(.card,.fo-signups-card,.fo-stepper,.fo-onboarding-panel){
+    -webkit-backdrop-filter:blur(7px);
+    backdrop-filter:blur(7px);
+  }
+  :root[data-owner-theme] .shell > main > header.topbar.owner-header{
+    border-radius:0 0 12px 12px!important;
+    padding-left:10px!important;
+    padding-right:10px!important;
+  }
+}
+@media(prefers-reduced-transparency:reduce){
+  :root[data-owner-theme] .shell > aside,
+  :root[data-owner-theme] .shell > main > header.topbar.owner-header,
+  :root[data-owner-theme] .shell > main.owner-dashboard-main .ehd-root :is(.ehd-kpi,.ehd-panel,.ehd-secondary-metric,.ehd-stage,.ehd-customer-card),
+  :root[data-owner-theme] .shell > main.owner-modules-main .owner-module-body :is(.card,.fo-signups-card,.fo-stepper,.fo-onboarding-panel,.fo-panel,.fo-trial-box,.ua-stat),
+  :root[data-owner-theme] .application-selector .application-card{
+    background:var(--og-panel-solid)!important;
+    -webkit-backdrop-filter:none!important;
+    backdrop-filter:none!important;
+  }
+}
