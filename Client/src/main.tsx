@@ -874,12 +874,15 @@ type ActiveProduct = { id: string; code: string; name: string; description: stri
 type OwnerIdentity = { name: string; email?: string; role: string };
 
 function OwnerThemeToggle({ theme, onToggle }: { theme: 'light' | 'dark'; onToggle: () => void }) {
-  return <button type="button" className="owner-theme-toggle"
-    onClick={onToggle} aria-label={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
-    title={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
-    aria-pressed={theme === 'light'}>
-    {theme === 'dark' ? <Sun size={17} aria-hidden="true"/> : <Moon size={17} aria-hidden="true"/>}
-    <span>{theme === 'dark' ? 'Light mode' : 'Dark mode'}</span>
+  return <button type="button" className="owner-theme-switch"
+    role="switch"
+    aria-checked={theme === 'dark'}
+    onClick={onToggle}
+    aria-label="Dark theme"
+    title={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}>
+    <Sun size={15} aria-hidden="true" className="owner-theme-switch-sun" />
+    <span className="owner-theme-switch-thumb" aria-hidden="true" />
+    <Moon size={15} aria-hidden="true" className="owner-theme-switch-moon" />
   </button>;
 }
 
