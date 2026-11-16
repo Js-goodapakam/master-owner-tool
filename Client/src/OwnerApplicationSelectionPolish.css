@@ -1,0 +1,169 @@
+/*
+ * Engagehubs Application Selection: centered content and contrast corrections.
+ * Uses real JSX classes in main.tsx. Imported after OwnerGlass.css so these
+ * appearance rules take priority without changing application activation logic.
+ */
+:root[data-owner-theme] .application-selector {
+  display:flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  width:100%!important;
+  min-height:100vh!important;
+  min-height:100dvh!important;
+  padding:clamp(26px,5vh,64px) clamp(18px,4vw,52px)!important;
+  box-sizing:border-box!important;
+}
+:root[data-owner-theme] .application-selector .application-selector-frame{
+  width:min(1320px,100%)!important;
+  min-width:0!important;
+  margin:auto!important;
+  display:flex!important;
+  flex-direction:column!important;
+  align-items:stretch!important;
+  justify-content:center!important;
+}
+:root[data-owner-theme] .application-selector .application-selector-header {
+  display:flex!important;
+  align-items:center!important;
+  justify-content:space-between!important;
+  gap:20px!important;
+  width:100%!important;
+  min-height:46px!important;
+  margin:0!important;
+  position:relative!important;
+}
+:root[data-owner-theme] .application-selector .application-selector-brand{
+  display:flex!important;
+  align-items:center!important;
+  justify-content:flex-start!important;
+  flex:0 1 auto;
+  min-width:0;
+}
+:root[data-owner-theme] .application-selector .application-selector-account {
+  display:flex!important;
+  align-items:center!important;
+  justify-content:flex-end!important;
+  position:static!important;
+  transform:none!important;
+  margin-left:auto!important;
+  flex:0 1 auto;
+}
+:root[data-owner-theme] .application-selector .application-selector-intro{
+  display:flex!important;
+  flex-direction:column!important;
+  align-items:center!important;
+  justify-content:center!important;
+  width:100%!important;
+  max-width:none!important;
+  margin:36px auto 28px!important;
+  padding:0!important;
+  text-align:center!important;
+}
+:root[data-owner-theme] .application-selector .application-selector-intro h1{
+  text-align:center!important;
+  margin:0!important;
+  font-weight:600!important;
+  line-height:1.15!important;
+  letter-spacing:-.04em!important;
+}
+:root[data-owner-theme] .application-selector .application-grid{
+  display:grid!important;
+  grid-template-columns:repeat(4,minmax(0,1fr))!important;
+  align-items:stretch!important;
+  width:100%!important;
+  max-width:none!important;
+  margin:0 auto!important;
+  gap:18px!important;
+}
+:root[data-owner-theme] .application-selector .application-card{
+  min-width:0!important;
+  display:flex!important;
+  flex-direction:column!important;
+  min-height:290px!important;
+  padding:24px!important;
+}
+:root[data-owner-theme] .application-selector .application-card-copy{
+  flex:1 1 auto!important;
+}
+:root[data-owner-theme] .application-selector .application-card-footer{
+  margin-top:auto!important;
+}
+/* Clear Connected status: light-green fill and BLACK text in both themes. */
+:root[data-owner-theme] .application-selector .application-card-status--connected{
+  display:inline-flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  background:#D9F8DF!important;
+  color:#101810!important;
+  border:1px solid #A9DCB3!important;
+  box-shadow:none!important;
+  opacity:1!important;
+  font-weight:650!important;
+  letter-spacing:0!important;
+}
+:root[data-owner-theme] .application-selector .application-card-status--connected .application-card-status-dot{
+  background:#23864C!important;
+  opacity:1!important;
+}
+/* Primary action uses WHITE text and icon against the blue button,
+   including in minimalist Light mode where earlier styles turned it black. */
+:root[data-owner-theme] .application-selector .application-card--connected .application-card-action:not(:disabled){
+  background:#1F68DF!important;
+  border:1px solid #1F68DF!important;
+  color:#FFFFFF!important;
+  opacity:1!important;
+  font-weight:600!important;
+  box-shadow:0 4px 12px rgba(31,104,223,.15)!important;
+}
+:root[data-owner-theme] .application-selector .application-card--connected .application-card-action:not(:disabled) svg,
+:root[data-owner-theme] .application-selector .application-card--connected .application-card-action:not(:disabled) span{
+  color:#FFFFFF!important;
+  stroke:#FFFFFF!important;
+}
+:root[data-owner-theme] .application-selector .application-card--connected .application-card-action:not(:disabled):hover{
+  background:#1757C0!important;
+  border-color:#1757C0!important;
+}
+:root[data-owner-theme] .application-selector .application-card--connected .application-card-action:not(:disabled):focus-visible{
+  outline:3px solid #7FB5FF!important;
+  outline-offset:3px!important;
+}
+@media(max-width:1150px){
+  :root[data-owner-theme] .application-selector .application-grid{
+    grid-template-columns:repeat(2,minmax(0,1fr))!important;
+    max-width:850px!important;
+  }
+}
+@media(max-width:760px){
+  :root[data-owner-theme] .application-selector{
+    align-items:flex-start!important;
+    padding:24px 18px 40px!important;
+  }
+  :root[data-owner-theme] .application-selector .application-selector-header{
+    flex-wrap:wrap!important;
+    justify-content:center!important;
+    row-gap:14px!important;
+  }
+  :root[data-owner-theme] .application-selector .application-selector-brand,
+  :root[data-owner-theme] .application-selector .application-selector-account{
+    justify-content:center!important;
+    margin-left:0!important;
+  }
+  :root[data-owner-theme] .application-selector .application-selector-intro{
+    margin:32px auto 24px!important;
+  }
+  :root[data-owner-theme] .application-selector .application-grid{
+    grid-template-columns:minmax(0,1fr)!important;
+    max-width:480px!important;
+    gap:14px!important;
+  }
+}
+@media(max-width:420px){
+  :root[data-owner-theme] .application-selector .application-selector-header{
+    flex-direction:column!important;
+  }
+  :root[data-owner-theme] .application-selector .application-card{
+    padding:20px!important;
+    min-height:260px!important;
+  }
+}
