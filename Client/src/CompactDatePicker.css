@@ -1,0 +1,93 @@
+/* Compact, keyboard-accessible trial calendar for the dark Owner Tool. */
+.owner-modules-main .owner-module-body .fo-date-picker {
+  position:relative;
+  min-width:0;
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+}
+.owner-modules-main .owner-module-body .fo-date-picker-label {
+  color:#c8d9f2;
+  font-weight:650;
+  font-size:12px;
+}
+.owner-modules-main .owner-module-body .fo-date-picker-trigger {
+  display:flex;align-items:center;gap:10px;
+  width:100%;min-height:44px;
+  padding:10px 12px;border:1px solid rgba(135,169,219,.36);
+  border-radius:10px;background:#0e1c32;color:#f4f6ff;
+  font:600 13px 'SF Pro Display','Helvetica Neue',Arial,sans-serif;
+  cursor:pointer;text-align:left;
+}
+.owner-modules-main .owner-module-body .fo-date-picker-trigger svg{color:#8ebdff;flex-shrink:0}
+.owner-modules-main .owner-module-body .fo-date-picker-trigger span:nth-child(2){flex:1}
+.owner-modules-main .owner-module-body .fo-date-picker-arrow{color:#a5bfe3}
+.owner-modules-main .owner-module-body .fo-date-picker-trigger:hover{border-color:#70a6f2}
+.owner-modules-main .owner-module-body .fo-date-picker-trigger:focus-visible,
+.owner-modules-main .owner-module-body .fo-date-picker-popover button:focus-visible{
+  outline:2px solid #9acaff;outline-offset:2px;
+}
+.owner-modules-main .owner-module-body .fo-date-picker-popover{
+  position:absolute;z-index:80;
+  left:0;top:calc(100% + 8px);
+  width:min(310px,calc(100vw - 65px));
+  padding:12px;border:1px solid rgba(120,169,240,.43);
+  border-radius:14px;background:#152640;color:#edf3ff;
+  box-shadow:0 16px 42px rgba(0,0,0,.47);
+}
+.owner-modules-main .owner-module-body .fo-date-picker-toolbar{
+  display:flex;align-items:center;justify-content:space-between;gap:6px;
+  margin-bottom:9px;
+}
+.owner-modules-main .owner-module-body .fo-date-picker-toolbar strong{
+  color:#f5f2e5;font-size:13px;font-weight:730;
+}
+.owner-modules-main .owner-module-body .fo-date-picker-toolbar button{
+  display:grid;place-items:center;
+  width:32px;height:32px;border-radius:8px;
+  border:1px solid rgba(120,164,225,.24);
+  background:#1a3558;color:#d8eaff;cursor:pointer;
+}
+.owner-modules-main .owner-module-body .fo-date-picker-grid{
+  display:grid;grid-template-columns:repeat(7,minmax(0,1fr));
+  gap:3px;
+}
+.owner-modules-main .owner-module-body .fo-date-picker-weekday{
+  display:grid;place-items:center;height:29px;
+  color:#b4c7e3;font-size:10px;font-weight:750;
+}
+.owner-modules-main .owner-module-body .fo-date-picker-grid button{
+  display:grid;place-items:center;height:33px;
+  border:1px solid transparent;border-radius:8px;
+  background:transparent;color:#e9f2ff;
+  font-size:12px;cursor:pointer;
+}
+.owner-modules-main .owner-module-body .fo-date-picker-grid button:hover:not(:disabled){
+  background:#285187;border-color:#4b83cd;
+}
+.owner-modules-main .owner-module-body .fo-date-picker-grid button.selected{
+  color:#fff;background:#1668e5;border-color:#62a6ff;
+  font-weight:800;
+}
+.owner-modules-main .owner-module-body .fo-date-picker-grid button:disabled,
+.owner-modules-main .owner-module-body .fo-date-picker-toolbar button:disabled {
+  opacity:.27;cursor:not-allowed;
+}
+.owner-modules-main .owner-module-body .fo-date-picker-actions{
+  display:flex;align-items:center;justify-content:space-between;gap:10px;
+  border-top:1px solid rgba(120,164,225,.24);
+  margin-top:9px;padding-top:10px;
+}
+.owner-modules-main .owner-module-body .fo-date-picker-actions button{
+  min-height:30px;border:0;border-radius:7px;
+  background:rgba(40,91,161,.3);color:#cce0ff;
+  font-size:11px;padding:5px 10px;cursor:pointer;
+}
+.owner-modules-main .owner-module-body .fo-date-picker-actions button:hover{
+  background:#285187;
+}
+@media (max-width:750px) {
+  .owner-modules-main .owner-module-body .fo-date-picker-popover{
+    width:min(300px,calc(100vw - 98px));
+  }
+}
