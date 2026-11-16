@@ -415,6 +415,14 @@ app.get('/api/auth/me', async (q, r) => {
   }
 });
 
+
+// System-owned tenant slug: deterministic for each signup request, ensuring
+// refresh/resume/retry always uses the same unique tenant identity.
+const generatedTenantSlug = (signupId: string): string | null =>
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(signupId)
+    ? 'eh-' + signupId.replace(/-/g, '').toLowerCase()
+    : null;
+
 const customerSchema = z.object({
   companyName: z.string().min(2),
   legalName: z.string().min(2),
@@ -717,7 +725,9 @@ app.post('/api/customers', authorize('customer.create'), (q, r) => {
       const product = productResponse.ok ? (await productResponse.json() as Array<{ id: string }>)[0] : null;
       if (product) {
         const tenantName = typeof q.body?.tenantName === 'string' ? q.body.tenantName.trim() : '';
-        const tenantSlug = typeof q.body?.tenantId === 'string' ? q.body.tenantId.trim().toLowerCase().replace(/[^a-z0-9-]/g, '-') : '';
+        const signupIdForTenant = typeof q.body?.signupRequestId === 'string' ? q.body.signupRequestId : '';
+        // Ignore client-supplied tenantId. Only server generates the unique ID.
+        const tenantSlug = generatedTenantSlug(signupIdForTenant) || 'eh-' + randomUUID().replace(/-/g, '');
         let tenantId: string | null = null;
         if (tenantName && tenantSlug) {
           const tenantResponse = await supabaseAdmin('/rest/v1/tenants', { method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ customer_id: item.id, name: tenantName, slug: tenantSlug, status: 'ONBOARDING' }) });
@@ -856,7 +866,9 @@ app.post('/api/onboarding', authorize('customer.create'), (q, r) => {
 
   if (supabaseConfigured()) return void (async () => {
     const signupRequestId = typeof q.body.signupRequestId === 'string' && /^[0-9a-f-]{36}$/i.test(q.body.signupRequestId) ? q.body.signupRequestId : null;
-    const payload = q.body.data && typeof q.body.data === 'object' ? q.body.data : {};
+    const clientPayload = q.body.data && typeof q.body.data === 'object' ? q.body.data : {};
+    const systemTenantId = signupRequestId ? generatedTenantSlug(signupRequestId) : null;
+    const payload = { ...clientPayload, tenantId: systemTenantId };
     const existing = signupRequestId ? await supabaseAdmin(`rest/v1/onboarding_sessions?select=id&signup_request_id=eq.${encodeURIComponent(signupRequestId)}&limit=1`) : null;
     if (existing && !existing.ok) throw new Error('Could not read onboarding session.');
     const prior = existing ? (await existing.json() as Array<{ id: string }>)[0] : null;
@@ -926,9 +938,12 @@ app.post('/api/onboarding', authorize('customer.create'), (q, r) => {
 app.get('/api/onboarding/signup/:signupRequestId', authorize('customer.create'), async (q, r) => {
   if (!supabaseConfigured()) return r.json(null);
   const id = String(q.params.signupRequestId);
+  const tenantId = generatedTenantSlug(id);
+  if (!tenantId) return r.status(400).json({ error: 'INVALID_SIGNUP_REQUEST_ID' });
   const response = await supabaseAdmin(`rest/v1/onboarding_sessions?select=id,current_step,payload,status&signup_request_id=eq.${encodeURIComponent(id)}&status=eq.IN_PROGRESS&limit=1`);
   if (!response.ok) return r.status(502).json({ error: 'ONBOARDING_SESSION_UNAVAILABLE' });
-  return r.json((await response.json() as Array<any>)[0] || null);
+  const session = (await response.json() as Array<any>)[0] || null;
+  return r.json({ ...(session || {}), tenantId, payload: session?.payload ? { ...session.payload, tenantId } : null });
 });
 
 app.post('/api/customers/:id/engagestay', authorize('customer.update'), async (q, r) => {
