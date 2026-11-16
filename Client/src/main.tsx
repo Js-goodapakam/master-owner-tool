@@ -1107,6 +1107,24 @@ function App({ product, backToApplications, identity, onSignOut }: { product: Ac
   const [customer, setCustomer] =
     useState('');
 
+  // Header search is a real navigation control, not an inert text box.
+  const [moduleQuery, setModuleQuery] = useState('');
+  const suggestedModules = moduleQuery.trim()
+    ? nav.filter(({ name }) => name.toLowerCase().includes(moduleQuery.trim().toLowerCase()))
+    : [];
+  const navigateModule = (name: string) => {
+    const target = name === 'Home' ? 'Dashboard'
+      : name === 'New Onboarding' ? 'Customer Onboarding'
+      : name === 'Products & Plans' ? 'Products'
+      : name === 'Customer Settings' ? 'Configuration'
+      : name;
+    setPage(target);
+    setCustomer('');
+    setModuleQuery('');
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+    document.querySelector('.shell > main')?.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+  };
+
 let content =
   page === 'Dashboard' ? (
     <Dashboard
@@ -1368,12 +1386,33 @@ let content =
           </div>
 
           {page !== 'Home' && page !== 'Dashboard' && (
-            <div className="global-search">
-              <Search size={18} />
+            <div className="global-search owner-module-finder">
+              <Search size={18} aria-hidden="true" />
               <input
                 type="search"
-                aria-label="Search all modules"
+                placeholder="Find a module…"
+                aria-label="Find Owner Tool module"
+                aria-controls="owner-module-results"
+                aria-expanded={moduleQuery.trim().length > 0}
+                value={moduleQuery}
+                onChange={event => setModuleQuery(event.target.value)}
+                onKeyDown={event => {
+                  if (event.key === 'Escape') setModuleQuery('');
+                  if (event.key === 'Enter' && suggestedModules[0]) {
+                    event.preventDefault();
+                    navigateModule(suggestedModules[0].name);
+                  }
+                }}
               />
+              {moduleQuery.trim() && (
+                <div id="owner-module-results" className="owner-module-results" role="region" aria-label="Matching modules">
+                  {suggestedModules.length ? suggestedModules.map(({ name, icon: Icon }) => (
+                    <button key={name} type="button" onClick={() => navigateModule(name)}>
+                      <Icon size={16} aria-hidden="true" /><span>{name}</span>
+                    </button>
+                  )) : <p>No matching modules</p>}
+                </div>
+              )}
             </div>
           )}
 
