@@ -1,4 +1,4 @@
-import { useEffect, useState, type ChangeEvent, type FormEvent } from 'react';
+import React, { useEffect, useState, type ChangeEvent, type FormEvent } from 'react';
 import { createRoot } from 'react-dom/client';
 import Login from './Login';
 import InviteActivation, { type OwnerInvitation } from './InviteActivation';
@@ -50,6 +50,7 @@ import './UsersAccess.css';
 import './application-selector.css';
 import './OwnerModules.css';
 import './OwnerTheme.css';
+import './OwnerElevenLabsRefinement.css';
 
 import Dashboard from './Dashboard';
 import NewOnboarding from './NewOnboarding';
@@ -1348,7 +1349,13 @@ let content =
         </button>
 
         <nav aria-label="Owner Tool modules">
-          {nav.map(({ name, icon: Icon }) => (
+          {nav.map(({ name, icon: Icon }, index) => (
+            <React.Fragment key={name}>
+              {({ 1: 'Customers', 5: 'Operations', 8: 'Platform', 11: 'Administration' } as Record<number,string>)[index] && (
+                <span className="owner-nav-group" aria-hidden="true">
+                  {({ 1: 'Customers', 5: 'Operations', 8: 'Platform', 11: 'Administration' } as Record<number,string>)[index]}
+                </span>
+              )}
             <button
               key={name}
               type="button"
@@ -1396,6 +1403,7 @@ let content =
               </span>
               <em>{name}</em>
             </button>
+            </React.Fragment>
           ))}
         </nav>
 
