@@ -662,10 +662,11 @@ app.post('/api/integrations/engagestay/signup', async (q, r) => {
   }
 });
 
-app.get('/api/signup-requests', authorize('customer.create'), (_q, r) => {
+app.get('/api/signup-requests', authorize('customer.create'), (q, r) => {
   if (!supabaseConfigured()) return r.json(signupRequests);
-  void supabaseAdmin('rest/v1/signup_requests?select=id,organization_name,display_name,email,phone,source,external_user_id,requested_lifecycle,occurred_at&status=in.(NEW,IN_REVIEW)&order=occurred_at.desc')
+  void requireProductContext(q, r).then(product => product && supabaseAdmin(`rest/v1/signup_requests?select=id,organization_name,display_name,email,phone,source,external_user_id,requested_lifecycle,occurred_at&product_code=eq.${encodeURIComponent(product.code)}&status=in.(NEW,IN_REVIEW)&order=occurred_at.desc`))
     .then(async (response) => {
+      if (!response) return;
       if (!response.ok) throw new Error('Signup queue query failed.');
       const rows = await response.json() as Array<Record<string, string | null>>;
       r.json(rows.map((row) => ({ id: row.id, name: row.organization_name || row.display_name || row.email, email: row.email, mobile: row.phone || '', signupDate: row.occurred_at, source: row.source, emailVerified: !String(row.external_user_id || '').startsWith('unverified:'), requestedLifecycle: row.requested_lifecycle })));
@@ -676,8 +677,12 @@ app.get('/api/signup-requests', authorize('customer.create'), (_q, r) => {
 app.delete('/api/signup-requests/:id', authorize('customer.create'), (q, r) => {
   const signupRequestId = String(q.params.id);
   if (supabaseConfigured()) {
-    return void supabaseAdmin(`rest/v1/signup_requests?id=eq.${encodeURIComponent(signupRequestId)}`, { method: 'PATCH', body: JSON.stringify({ status: 'DISMISSED', updated_at: new Date().toISOString() }) })
+    return void requireProductContext(q, r).then(async product => {
+      if (!product) return null;
+      return supabaseAdmin(`rest/v1/signup_requests?id=eq.${encodeURIComponent(signupRequestId)}&product_code=eq.${encodeURIComponent(product.code)}`, { method: 'PATCH', body: JSON.stringify({ status: 'DISMISSED', updated_at: new Date().toISOString() }) });
+    })
       .then(async (response) => {
+        if (!response) return;
         if (!response.ok) return r.status(502).json({ error: 'SIGNUP_REQUEST_UPDATE_FAILED' });
         await recordPlatformAudit(q, 'signup_request.dismissed', 'signup_request', signupRequestId);
         return r.status(204).send();
@@ -994,6 +999,10 @@ app.get('/api/onboarding/signup/:signupRequestId', authorize('customer.create'),
   if (!supabaseConfigured()) return r.json(null);
   const id = String(q.params.signupRequestId);
   if (!generatedTenantSlug(id)) return r.status(400).json({ error: 'INVALID_SIGNUP_REQUEST_ID' });
+  const signup = await supabaseAdmin(`rest/v1/signup_requests?select=product_code&id=eq.${encodeURIComponent(id)}&limit=1`);
+  const row = signup.ok ? (await signup.json() as Array<{ product_code: string }>)[0] : null;
+  if (!row) return r.status(404).json({ error: 'SIGNUP_REQUEST_NOT_FOUND' });
+  const product = await requireProductContext(q, r); if (!product || product.code !== row.product_code) return r.status(404).json({ error: 'SIGNUP_REQUEST_NOT_FOUND' });
   const response = await supabaseAdmin(`rest/v1/onboarding_sessions?select=id,current_step,payload,status&signup_request_id=eq.${encodeURIComponent(id)}&status=eq.IN_PROGRESS&limit=1`);
   if (!response.ok) return r.status(502).json({ error: 'ONBOARDING_SESSION_UNAVAILABLE' });
   const session = (await response.json() as Array<any>)[0] || null;
@@ -1009,6 +1018,7 @@ app.get('/api/onboarding/signup/:signupRequestId', authorize('customer.create'),
 app.post('/api/customers/:id/engagestay', authorize('customer.update'), async (q, r) => {
   const customer = await loadCustomer(String(q.params.id));
   if (!customer) return r.status(404).json({ error: 'NOT_FOUND' });
+  const product = await requireProductContext(q, r); if (!product || product.code !== 'engage_stay' || !await requireCustomerProduct(q, r, customer.id, product)) return;
   const action = q.body?.action;
   if (!['approve', 'configure', 'suspend', 'reactivate'].includes(action)) {
     return r.status(400).json({ error: 'Invalid lifecycle action.' });
@@ -1072,7 +1082,8 @@ app.get('/api/customers/:id/provisioning-jobs', authorize('customer.view'), asyn
   if (!supabaseConfigured()) return r.json([]);
   const customer = await loadCustomer(String(q.params.id));
   if (!customer) return r.status(404).json({ error: 'NOT_FOUND' });
-  const response = await supabaseAdmin(`rest/v1/provisioning_jobs?select=id,operation,status,attempt_count,correlation_id,failure_code,failure_detail,created_at,updated_at&customer_id=eq.${encodeURIComponent(customer.id)}&order=created_at.desc&limit=20`);
+  const product = await requireProductContext(q, r); if (!product || !await requireCustomerProduct(q, r, customer.id, product)) return;
+  const response = await supabaseAdmin(`rest/v1/provisioning_jobs?select=id,operation,status,attempt_count,correlation_id,failure_code,failure_detail,created_at,updated_at&customer_id=eq.${encodeURIComponent(customer.id)}&product_id=eq.${encodeURIComponent(product.id)}&order=created_at.desc&limit=20`);
   if (!response.ok) return r.status(502).json({ error: 'PROVISIONING_JOBS_UNAVAILABLE' });
   return r.json(await response.json());
 });
