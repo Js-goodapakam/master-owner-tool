@@ -4,6 +4,8 @@ const base = (
   import.meta.env.VITE_API_URL ||
   (import.meta.env.DEV ? 'http://localhost:4000/api' : '/api')
 ).replace(/\/$/, '');
+let activeProductCode: string | null = null;
+export function setActiveProductContext(productCode: string | null) { activeProductCode = productCode; }
 
 export async function api<T>(
   path: string,
@@ -24,7 +26,10 @@ export async function api<T>(
 
   let response: Response;
   try {
-    response = await fetch(`${base}${path.startsWith('/') ? path : `/${path}`}`, {
+    const relativePath = path.startsWith('/') ? path : `/${path}`;
+    const url = new URL(`${base}${relativePath}`, window.location.origin);
+    if (activeProductCode && !relativePath.startsWith('/products') && !relativePath.startsWith('/auth')) url.searchParams.set('productCode', activeProductCode);
+    response = await fetch(url.toString(), {
       ...init,
       headers,
     });
