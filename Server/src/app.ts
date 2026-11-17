@@ -154,7 +154,10 @@ async function loadProductRegistry() {
 }
 
 async function allowedProductCodes(actor: Express.Request['actor']): Promise<string[] | null> {
-  if (!actor || actor.roleKey === 'owner' || actor.roleKey === 'super_admin') return null;
+  // Fail closed: an omitted authentication middleware must never become
+  // unrestricted product access.
+  if (!actor) return [];
+  if (actor.roleKey === 'owner' || actor.roleKey === 'super_admin') return null;
   if (!supabaseConfigured()) return [];
   const response = await supabaseAdmin(`rest/v1/owner_product_access?select=products(product_code)&owner_user_id=eq.${encodeURIComponent(actor.id)}&is_active=eq.true`);
   if (!response.ok) throw new Error('Could not load product access.');
@@ -164,6 +167,26 @@ async function requireProductAccess(req: express.Request, response: express.Resp
   const allowed = await allowedProductCodes(req.actor);
   if (allowed === null || allowed.includes(code)) return true;
   response.status(403).json({ error: 'PRODUCT_ACCESS_DENIED', message: 'You are not authorized to access this application.' });
+  return false;
+}
+type ProductContext = { id: string; code: string };
+async function requireProductContext(req: express.Request, response: express.Response): Promise<ProductContext | null> {
+  const code = typeof req.query.productCode === 'string' ? req.query.productCode : '';
+  if (!/^(engage_stay|engage_fit|engage_realty|engage_crm)$/.test(code)) {
+    response.status(400).json({ error: 'PRODUCT_CONTEXT_REQUIRED', message: 'Select a valid application before accessing product data.' });
+    return null;
+  }
+  if (!await requireProductAccess(req, response, code)) return null;
+  const product = (await loadProductRegistry()).find(item => (item as any).code === code);
+  if (!product) { response.status(404).json({ error: 'PRODUCT_NOT_FOUND' }); return null; }
+  return { id: product.id, code };
+}
+async function requireCustomerProduct(req: express.Request, response: express.Response, customerId: string, product: ProductContext): Promise<boolean> {
+  if (!supabaseConfigured()) return true;
+  const assignment = await supabaseAdmin(`rest/v1/customer_products?select=customer_id&customer_id=eq.${encodeURIComponent(customerId)}&product_id=eq.${encodeURIComponent(product.id)}&limit=1`);
+  if (!assignment.ok) throw new Error('Could not verify customer product access.');
+  if ((await assignment.json() as Array<{ customer_id: string }>).length) return true;
+  response.status(404).json({ error: 'CUSTOMER_NOT_FOUND' });
   return false;
 }
 function can(req: express.Request, permission: string): boolean {
@@ -580,9 +603,14 @@ app.get('/api/dashboard/overview', authorize('customer.view'), async (q, r) => {
   }
 });
 
-app.get('/api/customers', authorize('customer.view'), (_q, r) => {
-  void loadCustomers()
-    .then((items) => r.json(items))
+app.get('/api/customers', authorize('customer.view'), (q, r) => {
+  void requireProductContext(q, r).then(async product => {
+    if (!product) return;
+    if (!supabaseConfigured()) return r.json(await loadCustomers());
+    const response = await supabaseAdmin(`rest/v1/customers?select=id,customer_code,company_name,legal_name,display_name,email,phone,industry,status,account_owner,created_at,city,country,customer_products!inner(product_id)&customer_products.product_id=eq.${encodeURIComponent(product.id)}&order=created_at.desc`);
+    if (!response.ok) throw new Error('Customer registry query failed.');
+    return r.json((await response.json() as CustomerDatabaseRow[]).map(toCustomer));
+  })
     .catch((error) => {
       console.error('Customer registry query failed:', error);
       if (!r.headersSent) r.status(502).json({ error: 'CUSTOMER_REGISTRY_UNAVAILABLE' });
@@ -789,6 +817,7 @@ app.post('/api/customers', authorize('customer.create'), (q, r) => {
 app.get('/api/customers/:id', authorize('customer.view'), (q, r) => {
   void loadCustomer(String(q.params.id)).then(async (c) => {
   if (!c) return r.status(404).json({ error: 'NOT_FOUND' });
+  const product = await requireProductContext(q, r); if (!product || !await requireCustomerProduct(q, r, c.id, product)) return;
   if (supabaseConfigured()) {
     const [productResponse, subscriptionResponse, userResponse, configurationResponse, activityResponse] = await Promise.all([
       supabaseAdmin(`rest/v1/customer_products?select=status,products(id,name,version,status,product_modules(name,status,implementation_state))&customer_id=eq.${encodeURIComponent(c.id)}`),
@@ -835,6 +864,7 @@ app.patch('/api/customers/:id', authorize('customer.update'), (q, r) => {
     return void (async () => {
       const existing = await loadCustomer(String(q.params.id));
       if (!existing) return r.status(404).json({ error: 'NOT_FOUND' });
+      const product = await requireProductContext(q, r); if (!product || !await requireCustomerProduct(q, r, existing.id, product)) return;
       const input = parsed.data;
       const update: Record<string, unknown> = { updated_at: new Date().toISOString(), updated_by: (q as any).actor?.id || null };
       if (input.companyName !== undefined) { update.company_name = input.companyName.trim(); update.display_name = input.companyName.trim(); }
@@ -1215,7 +1245,8 @@ const entitlementOverrideSchema = z.object({
 
 app.get('/api/customers/:id/entitlements', authorize('entitlement.view'), async (q, r) => {
   if (!supabaseConfigured()) return r.json([]);
-  const response = await supabaseAdmin(`rest/v1/entitlement_overrides?select=id,product_id,entitlement_key,value,starts_at,expires_at,reason,created_at&customer_id=eq.${encodeURIComponent(String(q.params.id))}&order=created_at.desc`);
+  const product = await requireProductContext(q, r); if (!product || !await requireCustomerProduct(q, r, String(q.params.id), product)) return;
+  const response = await supabaseAdmin(`rest/v1/entitlement_overrides?select=id,product_id,entitlement_key,value,starts_at,expires_at,reason,created_at&customer_id=eq.${encodeURIComponent(String(q.params.id))}&product_id=eq.${encodeURIComponent(product.id)}&order=created_at.desc`);
   if (!response.ok) return r.status(502).json({ error: 'ENTITLEMENTS_UNAVAILABLE' });
   return r.json(await response.json());
 });
@@ -1226,12 +1257,14 @@ app.post('/api/customers/:id/entitlements', authorize('entitlement.manage'), asy
   if (!parsed.success) return r.status(400).json({ error: 'VALIDATION', details: parsed.error.flatten() });
   const customer = await loadCustomer(String(q.params.id));
   if (!customer) return r.status(404).json({ error: 'CUSTOMER_NOT_FOUND' });
+  const product = await requireProductContext(q, r); if (!product || !await requireCustomerProduct(q, r, customer.id, product)) return;
   const input = parsed.data;
+  if (input.productId !== product.id) return r.status(400).json({ error: 'PRODUCT_CONTEXT_MISMATCH' });
   const response = await supabaseAdmin('/rest/v1/entitlement_overrides', { method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ customer_id: customer.id, product_id: input.productId, entitlement_key: input.entitlementKey, value: input.value, reason: input.reason, expires_at: input.expiresAt || null, created_by: (q as any).actor?.id || null, approved_by: (q as any).actor?.id || null }) });
   if (!response.ok) return r.status(502).json({ error: 'ENTITLEMENT_CREATE_FAILED' });
   const row = (await response.json() as Array<any>)[0];
-  const product = await supabaseAdmin(`rest/v1/products?select=product_code& id=eq.${encodeURIComponent(input.productId)}&limit=1`.replace('& ', '&'));
-  const productCode = product.ok ? (await product.json() as Array<{ product_code: string }>)[0]?.product_code : undefined;
+  const productLookup = await supabaseAdmin(`rest/v1/products?select=product_code& id=eq.${encodeURIComponent(input.productId)}&limit=1`.replace('& ', '&'));
+  const productCode = productLookup.ok ? (await productLookup.json() as Array<{ product_code: string }>)[0]?.product_code : undefined;
   if (productCode === 'engage_stay') {
     const origin = process.env.ENGAGE_STAY_API_ORIGIN;
     const token = process.env.ENGAGE_OWNER_SERVICE_TOKEN;
@@ -1253,12 +1286,14 @@ const customerDocumentSchema = z.object({
 });
 app.get('/api/customers/:id/documents', authorize('customer.view'), async (q, r) => {
   const customer = await loadCustomer(String(q.params.id)); if (!customer) return r.status(404).json({ error: 'NOT_FOUND' });
+  const product = await requireProductContext(q, r); if (!product || !await requireCustomerProduct(q, r, customer.id, product)) return;
   const response = await supabaseAdmin(`rest/v1/customer_documents?select=id,category,original_name,content_type,size_bytes,version,status,created_at,uploaded_by,replaces_id&customer_id=eq.${encodeURIComponent(customer.id)}&status=eq.ACTIVE&order=created_at.desc`);
   if (!response.ok) return r.status(502).json({ error: 'DOCUMENTS_UNAVAILABLE' }); return r.json(await response.json());
 });
 app.post('/api/customers/:id/documents', authorize('customer.update'), async (q, r) => {
   const parsed = customerDocumentSchema.safeParse(q.body); if (!parsed.success) return r.status(400).json({ error: 'VALIDATION', details: parsed.error.flatten() });
   const customer = await loadCustomer(String(q.params.id)); if (!customer) return r.status(404).json({ error: 'NOT_FOUND' });
+  const product = await requireProductContext(q, r); if (!product || !await requireCustomerProduct(q, r, customer.id, product)) return;
   const input = parsed.data; const bytes = Buffer.from(input.dataBase64.replace(/^data:[^;]+;base64,/, ''), 'base64');
   if (!bytes.length || bytes.length > 10 * 1024 * 1024) return r.status(400).json({ error: 'INVALID_DOCUMENT_SIZE' });
   const safeName = input.name.replace(/[^A-Za-z0-9._-]/g, '_'); const path = `${customer.id}/${randomUUID()}-${safeName}`;
@@ -1271,13 +1306,16 @@ app.post('/api/customers/:id/documents', authorize('customer.update'), async (q,
 });
 app.get('/api/customers/:id/documents/:documentId/download', authorize('customer.view'), async (q, r) => {
   const customerId = String(q.params.id); const documentId = String(q.params.documentId);
+  const product = await requireProductContext(q, r); if (!product || !await requireCustomerProduct(q, r, customerId, product)) return;
   const found = await supabaseAdmin(`rest/v1/customer_documents?select=id,storage_path,original_name,content_type&customer_id=eq.${encodeURIComponent(customerId)}&id=eq.${encodeURIComponent(documentId)}&status=eq.ACTIVE&limit=1`);
   const doc = found.ok ? (await found.json() as Array<any>)[0] : null; if (!doc) return r.status(404).json({ error: 'DOCUMENT_NOT_FOUND' });
   const file = await supabaseAdmin(`/storage/v1/object/private-customer-documents/${encodeURIComponent(doc.storage_path)}`); if (!file.ok) return r.status(502).json({ error: 'DOCUMENT_STORAGE_UNAVAILABLE' });
   r.setHeader('Content-Type', doc.content_type); r.setHeader('Content-Disposition', `attachment; filename="${doc.original_name.replace(/[\"\\]/g, '_')}"`); r.setHeader('Cache-Control', 'private, no-store'); return r.send(Buffer.from(await file.arrayBuffer()));
 });
 app.delete('/api/customers/:id/documents/:documentId', authorize('customer.update'), async (q, r) => {
-  const customerId = String(q.params.id); const documentId = String(q.params.documentId); const found = await supabaseAdmin(`rest/v1/customer_documents?select=id,storage_path&customer_id=eq.${encodeURIComponent(customerId)}&id=eq.${encodeURIComponent(documentId)}&status=eq.ACTIVE&limit=1`);
+  const customerId = String(q.params.id); const documentId = String(q.params.documentId);
+  const product = await requireProductContext(q, r); if (!product || !await requireCustomerProduct(q, r, customerId, product)) return;
+  const found = await supabaseAdmin(`rest/v1/customer_documents?select=id,storage_path&customer_id=eq.${encodeURIComponent(customerId)}&id=eq.${encodeURIComponent(documentId)}&status=eq.ACTIVE&limit=1`);
   const doc = found.ok ? (await found.json() as Array<any>)[0] : null; if (!doc) return r.status(404).json({ error: 'DOCUMENT_NOT_FOUND' });
   const removed = await supabaseAdmin(`/storage/v1/object/private-customer-documents/${encodeURIComponent(doc.storage_path)}`, { method: 'DELETE' }); if (!removed.ok) return r.status(502).json({ error: 'DOCUMENT_DELETE_FAILED' });
   await supabaseAdmin(`rest/v1/customer_documents?id=eq.${encodeURIComponent(documentId)}`, { method: 'PATCH', body: JSON.stringify({ status: 'DELETED', deleted_at: new Date().toISOString() }) }); await recordPlatformAudit(q, 'customer_document.deleted', 'customer_document', documentId, { customerId }, undefined); return r.status(204).send();

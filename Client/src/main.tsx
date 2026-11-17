@@ -32,7 +32,7 @@ import {
   Users,
 } from 'lucide-react';
 
-import { api } from './api';
+import { api, setActiveProductContext } from './api';
 
 import {
   Badge,
@@ -1556,6 +1556,10 @@ function Root() {
     () => Boolean(localStorage.getItem('friday-access-token')),
   );
   const [activeProduct, setActiveProduct] = useState<ActiveProduct | null>(null);
+  useEffect(() => {
+    setActiveProductContext(activeProduct?.code || null);
+    return () => setActiveProductContext(null);
+  }, [activeProduct]);
   const [identity, setIdentity] = useState<OwnerIdentity | null>(null);
   const [invitation, setInvitation] = useState<OwnerInvitation | null>(readOwnerInvitation);
   const [identityRevision, setIdentityRevision] = useState(0);
