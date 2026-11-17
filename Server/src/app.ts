@@ -825,10 +825,10 @@ app.get('/api/customers/:id', authorize('customer.view'), (q, r) => {
   const product = await requireProductContext(q, r); if (!product || !await requireCustomerProduct(q, r, c.id, product)) return;
   if (supabaseConfigured()) {
     const [productResponse, subscriptionResponse, userResponse, configurationResponse, activityResponse] = await Promise.all([
-      supabaseAdmin(`rest/v1/customer_products?select=status,products(id,name,version,status,product_modules(name,status,implementation_state))&customer_id=eq.${encodeURIComponent(c.id)}`),
-      supabaseAdmin(`rest/v1/subscriptions?select=id,product_id,plan_id,status,starts_at,expires_at,renewal_mode,plans(name),products(name)&customer_id=eq.${encodeURIComponent(c.id)}&order=created_at.desc&limit=1`),
+      supabaseAdmin(`rest/v1/customer_products?select=status,products(id,name,version,status,product_modules(name,status,implementation_state))&customer_id=eq.${encodeURIComponent(c.id)}&product_id=eq.${encodeURIComponent(product.id)}`),
+      supabaseAdmin(`rest/v1/subscriptions?select=id,product_id,plan_id,status,starts_at,expires_at,renewal_mode,plans(name),products(name)&customer_id=eq.${encodeURIComponent(c.id)}&product_id=eq.${encodeURIComponent(product.id)}&order=created_at.desc&limit=1`),
       supabaseAdmin(`rest/v1/users?select=id,name,email,status,last_login_at&customer_id=eq.${encodeURIComponent(c.id)}&order=created_at.asc`),
-      supabaseAdmin(`rest/v1/customer_configurations?select=config_key,config_value,scope,environment,updated_at&customer_id=eq.${encodeURIComponent(c.id)}&order=updated_at.desc`),
+      supabaseAdmin(`rest/v1/customer_configurations?select=config_key,config_value,scope,environment,updated_at&customer_id=eq.${encodeURIComponent(c.id)}&product_id=eq.${encodeURIComponent(product.id)}&order=updated_at.desc`),
       supabaseAdmin(`rest/v1/audit_logs?select=id,operator_id,action,resource_type,resource_id,created_at,result&resource_id=eq.${encodeURIComponent(c.id)}&order=created_at.desc&limit=100`),
     ]);
     if (![productResponse, subscriptionResponse, userResponse, configurationResponse, activityResponse].every((response) => response.ok)) return r.status(502).json({ error: 'CUSTOMER_360_UNAVAILABLE' });
@@ -1140,10 +1140,11 @@ app.get('/api/products/:code/context', authorize('product.view'), async (q, r) =
   return r.json({ product, environments });
 });
 
-app.get('/api/plans', authorize('subscription.view'), (_q, r) => {
+app.get('/api/plans', authorize('subscription.view'), (q, r) => {
   if (!supabaseConfigured()) return r.json(plans);
-  void supabaseAdmin('rest/v1/plans?select=id,name,status,user_limit,storage_gb,api_limit,products(name,product_code)&order=name')
+  void requireProductContext(q, r).then(product => product && supabaseAdmin(`rest/v1/plans?select=id,name,status,user_limit,storage_gb,api_limit,products(name,product_code)&product_id=eq.${encodeURIComponent(product.id)}&order=name`))
     .then(async (response) => {
+      if (!response) return;
       if (!response.ok) throw new Error('Plan catalogue query failed.');
       const rows = await response.json() as Array<Record<string, any>>;
       r.json(rows.map((row) => ({ id: row.id, name: row.name, status: row.status, product: row.products?.name || 'Unknown product', productCode: row.products?.product_code, userLimit: row.user_limit, storageGb: row.storage_gb, apiLimit: row.api_limit })));
@@ -1151,10 +1152,11 @@ app.get('/api/plans', authorize('subscription.view'), (_q, r) => {
     .catch(() => { if (!r.headersSent) r.status(502).json({ error: 'PLAN_CATALOGUE_UNAVAILABLE' }); });
 });
 
-app.get('/api/subscriptions', authorize('subscription.view'), (_q, r) => {
+app.get('/api/subscriptions', authorize('subscription.view'), (q, r) => {
   if (!supabaseConfigured()) return r.json(customers.map((c, i) => ({ id: `s${i + 1}`, customer: c.companyName, product: 'Friday AI Desk', plan: i === 1 ? 'Premium' : 'Enterprise', status: c.status === 'TRIAL' ? 'Trial' : 'Active', expiryDate: '2027-09-19' })));
-  void supabaseAdmin('rest/v1/subscriptions?select=id,status,starts_at,expires_at,customers(company_name,display_name),products(name),plans(name)&order=created_at.desc')
+  void requireProductContext(q, r).then(product => product && supabaseAdmin(`rest/v1/subscriptions?select=id,status,starts_at,expires_at,customers(company_name,display_name),products(name),plans(name)&product_id=eq.${encodeURIComponent(product.id)}&order=created_at.desc`))
     .then(async (response) => {
+      if (!response) return;
       if (!response.ok) throw new Error('Subscription query failed.');
       const rows = await response.json() as Array<Record<string, any>>;
       r.json(rows.map((row) => ({ id: row.id, customer: row.customers?.display_name || row.customers?.company_name || 'Unknown customer', product: row.products?.name || 'Unknown product', plan: row.plans?.name || 'Custom', status: row.status, expiryDate: row.expires_at || 'No expiry' })));
@@ -1185,6 +1187,7 @@ app.post('/api/subscriptions', authorize('subscription.manage'), async (q, r) =>
     if (!(await customer.json() as unknown[]).length) return r.status(404).json({ error: 'CUSTOMER_NOT_FOUND' });
     const planRow = (await plan.json() as Array<{ id: string; product_id: string; status: string }>)[0];
     if (!planRow || planRow.status !== 'ACTIVE') return r.status(400).json({ error: 'PLAN_NOT_AVAILABLE' });
+    const product = await requireProductContext(q, r); if (!product || product.id !== planRow.product_id || !await requireCustomerProduct(q, r, input.customerId, product)) return;
     const existing = await supabaseAdmin(`rest/v1/subscriptions?select=id&customer_id=eq.${encodeURIComponent(input.customerId)}&product_id=eq.${encodeURIComponent(planRow.product_id)}&status=in.(TRIAL,ACTIVE)&limit=1`);
     if (!existing.ok) return r.status(502).json({ error: 'SUBSCRIPTION_LOOKUP_FAILED' });
     if ((await existing.json() as unknown[]).length) return r.status(409).json({ error: 'ACTIVE_SUBSCRIPTION_EXISTS', message: 'End or change the existing subscription before activating another.' });
@@ -1223,6 +1226,7 @@ app.patch('/api/subscriptions/:id', authorize('subscription.manage'), async (q, 
     if (!source.ok) return r.status(502).json({ error: 'SUBSCRIPTION_LOOKUP_FAILED' });
     const existing = (await source.json() as Array<any>)[0];
     if (!existing) return r.status(404).json({ error: 'SUBSCRIPTION_NOT_FOUND' });
+    const product = await requireProductContext(q, r); if (!product || product.id !== existing.product_id || !await requireCustomerProduct(q, r, existing.customer_id, product)) return;
     const update: Record<string, unknown> = {};
     let customerStatus: 'ACTIVE' | 'SUSPENDED' | undefined;
     if (input.action === 'CHANGE_PLAN') {
