@@ -1447,10 +1447,11 @@ app.patch(
   },
 );
 
-app.get('/api/audit-logs', authorize('audit.view'), (_q, r) => {
+app.get('/api/audit-logs', authorize('audit.view'), (q, r) => {
   if (!supabaseConfigured()) return r.json(audit);
-  void supabaseAdmin('rest/v1/audit_logs?select=id,operator_id,action,resource_type,resource_id,before_value,after_value,created_at,result,correlation_id&order=created_at.desc&limit=200')
+  void requireProductContext(q, r).then(product => product && supabaseAdmin(`rest/v1/audit_logs?select=id,operator_id,action,resource_type,resource_id,before_value,after_value,created_at,result,correlation_id&product_id=eq.${encodeURIComponent(product.id)}&order=created_at.desc&limit=200`))
     .then(async (response) => {
+      if (!response) return;
       if (!response.ok) throw new Error('Audit query failed.');
       const rows = await response.json() as Array<Record<string, unknown>>;
       r.json(rows.map((row) => ({
