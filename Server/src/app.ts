@@ -1475,7 +1475,10 @@ app.get('/api/audit-logs', authorize('audit.view'), (q, r) => {
 
 // Owner-facing operational inventories. These are explicit control-plane records,
 // not direct access to a customer's application data.
-app.get('/api/integrations', authorize('configuration.view'), async (_q, r) => {
+app.get('/api/integrations', authorize('configuration.view'), async (q, r) => {
+  const product = await requireProductContext(q, r); if (!product) return;
+  // Do not present a connector belonging to another application as available.
+  if (product.code !== 'engage_stay') return r.json([]);
   const origin = process.env.ENGAGE_STAY_API_ORIGIN;
   const token = process.env.ENGAGE_OWNER_SERVICE_TOKEN;
   let engageStayStatus = 'Not configured';
@@ -1514,8 +1517,9 @@ app.get('/api/backups', authorize('infrastructure.view'), (_q, r) => {
   ]);
 });
 
-app.get('/api/users-access', (q, r, next) => {
+app.get('/api/users-access', async (q, r, next) => {
   if (!can(q, 'users.view')) return r.status(403).json({ error: 'FORBIDDEN', message: 'Permission required: users.view' });
+  const product = await requireProductContext(q, r); if (!product) return;
   if (!supabaseConfigured()) {
     if (process.env.NODE_ENV === 'production') return r.status(503).json({ error: 'SUPABASE_NOT_CONFIGURED', message: 'Owner user directory requires Supabase Auth configuration.' });
     return r.json(ownerUsers); // local demo only
@@ -1524,7 +1528,14 @@ app.get('/api/users-access', (q, r, next) => {
     const response = await supabaseAdmin('/rest/v1/owner_profiles?select=user_id,email,full_name,role_key,is_active,is_primary_owner,must_change_password,created_at&order=created_at.desc');
     if (!response.ok) return r.status(502).json({ error: 'PROFILE_QUERY_FAILED', message: await response.text() });
     const rows = await response.json() as Array<Record<string, any>>;
-    return r.json(rows.map((row) => ({
+    const allowed = await allowedProductCodes((q as any).actor);
+    let visibleIds: Set<string> | null = null;
+    if (allowed !== null) {
+      const access = await supabaseAdmin(`/rest/v1/owner_product_access?select=owner_user_id&product_id=eq.${encodeURIComponent(product.id)}&is_active=eq.true`);
+      if (!access.ok) return r.status(502).json({ error: 'PRODUCT_ASSIGNMENT_UNAVAILABLE' });
+      visibleIds = new Set((await access.json() as Array<{ owner_user_id: string }>).map(row => row.owner_user_id));
+    }
+    return r.json(rows.filter(row => visibleIds === null || visibleIds.has(row.user_id)).map((row) => ({
       id: row.user_id, name: row.full_name, email: row.email,
       role: roleNames[row.role_key] || row.role_key,
       status: row.is_active ? (row.must_change_password ? 'Password Change Required' : 'Active') : 'Disabled',
