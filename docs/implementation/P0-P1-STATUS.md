@@ -4,7 +4,7 @@ Last verified: 2026-11-17
 
 | ID | Priority | Status | Evidence / next action |
 | --- | --- | --- | --- |
-| P0-S1 | P0 | Implemented and smoke-tested | Product context is fail-closed and applied to customer list, Customer 360, updates, documents and entitlement overrides in `63a618b`. Extend coverage to subscription, provisioning, onboarding and audit routes. |
+| P0-S1 | P0 | Partially implemented and tested | Product context is fail-closed and enforced for customer, Customer 360, documents, entitlement, signup queue, onboarding lookup, Engage Stay lifecycle, provisioning history, plans, subscriptions and audit history (`63a618b`, `2bd7ab9`, `a0897d0`, `96879d4`). Remaining: integration/configuration routes, user-access scope and dedicated negative HTTP tests. |
 | P0-S2 | P0 | Implemented but unverified end-to-end | Engage Stay signup intake uses authenticated idempotent service-to-service requests. A controlled external identity is required for a real OAuth signup test. |
 | P0-O1 | P0 | Partially implemented | Seven-step onboarding persists sessions and creates customer/product/tenant records. Refresh/resume and activation paths require further automated integration coverage. |
 | P0-P1 | P0 | Partially implemented | Engage Stay managed workspace API supports provisioning and entitlement synchronization. Safe production test identity is still required for end-to-end provisioning. |
