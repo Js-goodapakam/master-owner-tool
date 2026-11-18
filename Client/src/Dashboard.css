@@ -43,7 +43,7 @@
   width:100%;min-width:0;
   padding:18px 0 34px;
   color:var(--ehd-soft);
-  font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;
+  font-family:var(--owner-font);
   font-size:13px;
 }
 .ehd-root button{font-family:inherit}
@@ -270,7 +270,7 @@
 
 /* Dashboard legibility and keyboard usability pass. */
 .shell > main.owner-dashboard-main .ehd-root{
-  font-family:var(--font-family,'SF Pro Display','Helvetica Neue',Arial,sans-serif);
+  font-family:var(--owner-font);
   font-size:13px;
 }
 .shell > main.owner-dashboard-main .ehd-root :is(
