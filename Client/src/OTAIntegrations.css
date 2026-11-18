@@ -72,3 +72,95 @@
 .ota-detail-toolbar span{font-size:11px;color:var(--text-secondary,#64748b)}
 .ota-detail-toolbar button{display:inline-flex;align-items:center;gap:7px;border:1px solid #9da9b744;border-radius:8px;background:transparent;color:inherit;padding:7px 10px;font:600 12px 'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;cursor:pointer}
 .ota-detail-toolbar button:hover{border-color:#778D7A}
+
+/* Provider connection as a centered modal over the WORKSPACE ONLY.
+   Sidebar width is controlled by App and stays visible without being covered. */
+.shell .ota-connection-overlay{
+  position:fixed!important;
+  top:0;right:0;bottom:0;left:var(--owner-sidebar-width,244px);
+  z-index:800;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:clamp(14px,2.7vw,36px);
+  background:rgba(9,19,34,.58);
+  -webkit-backdrop-filter:blur(3px);
+  backdrop-filter:blur(3px);
+}
+.shell.collapsed .ota-connection-overlay{left:72px}
+.ota-connection-dialog{
+  display:flex;
+  flex-direction:column;
+  width:min(1020px,100%);
+  max-height:calc(100vh - 40px);
+  max-height:calc(100dvh - 40px);
+  min-height:0;
+  background:var(--owner-dash-surface,#fff);
+  color:var(--owner-dash-text,#0D1B2A);
+  border:1px solid var(--owner-dash-border,#dce3e9);
+  border-radius:18px;
+  box-shadow:0 28px 75px rgba(3,12,25,.34);
+  overflow:hidden;
+  outline:none;
+  font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;
+}
+.ota-modal-head{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:20px;
+  padding:22px 26px 18px;
+  flex-shrink:0;
+  background:var(--owner-dash-surface,#fff);
+  border-bottom:1px solid var(--owner-dash-border,#e2e8f0);
+}
+.ota-modal-eyebrow{display:block;font-size:10px;font-weight:750;letter-spacing:.08em;text-transform:uppercase;color:#778D7A;margin:0 0 6px}
+.ota-modal-head h2{margin:0 0 6px;font-size:20px!important;line-height:1.3;font-weight:700!important;color:inherit!important}
+.ota-modal-head p{margin:0;font-size:12px;line-height:1.55;color:var(--owner-dash-muted,#617083)}
+.ota-modal-close{
+  display:grid;place-items:center;flex:0 0 36px;width:36px;height:36px;
+  border:1px solid var(--owner-dash-border,#dce3e9);border-radius:9px;
+  background:transparent;color:inherit;cursor:pointer;
+}
+.ota-modal-close:hover{background:rgba(119,141,122,.13)}
+.ota-modal-body{
+  padding:20px 26px 24px;
+  flex:1 1 auto;min-height:0;
+  overflow-y:auto;
+  overscroll-behavior:contain;
+  scrollbar-gutter:stable;
+}
+.ota-connection-dialog .ota-detail-grid{gap:34px;grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+.ota-modal-body .ota-detail-toolbar{margin:0 0 21px}
+.ota-modal-body .ota-warning{margin-bottom:12px}
+.ota-modal-body .ota-config-form label{line-height:1.4}
+.ota-modal-footer{
+  display:flex;align-items:center;justify-content:space-between;gap:16px;
+  flex-shrink:0;
+  padding:13px 26px;
+  background:var(--owner-dash-inset,#f8f9fa);
+  border-top:1px solid var(--owner-dash-border,#e2e8f0);
+}
+.ota-modal-footer span{font-size:11px;line-height:1.4;color:var(--owner-dash-muted,#617083)}
+.ota-modal-footer button{font:600 12px 'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;cursor:pointer;min-width:90px;padding:9px 14px;border-radius:8px;border:1px solid var(--owner-dash-border,#dce3e9);background:var(--owner-dash-surface,#fff);color:inherit}
+.ota-modal-footer button:hover{border-color:#778D7A}
+.ota-modal-footer button:disabled,.ota-modal-close:disabled{opacity:.5;cursor:not-allowed}
+.ota-connection-dialog :is(button,a,input,select,textarea):focus-visible{outline:2px solid #778D7A;outline-offset:2px}
+:root[data-owner-theme='dark'] .ota-connection-dialog .ota-config-form :is(input,select,textarea){background:#14243a;color:#f4f1de;border-color:#344663}
+:root[data-owner-theme='light'] .ota-connection-dialog .ota-config-form :is(input,select,textarea){background:#fff;color:#0D1B2A;border-color:#cbd5df}
+@media(max-width:1050px){
+  .shell:not(.collapsed) .ota-connection-overlay{left:220px}
+  .ota-connection-dialog .ota-detail-grid{grid-template-columns:1fr;gap:22px}
+}
+@media(max-width:760px){
+  .shell .ota-connection-overlay,.shell.collapsed .ota-connection-overlay{left:72px}
+  .ota-connection-overlay{padding:10px!important}
+  .ota-connection-dialog{max-height:calc(100dvh - 20px);border-radius:12px}
+  .ota-modal-head{padding:16px}
+  .ota-modal-body{padding:14px 16px}
+  .ota-modal-footer{padding:12px 16px}
+}
+@media(max-width:520px){
+  .ota-modal-head h2{font-size:18px!important}
+  .ota-modal-footer span{max-width:190px}
+}
