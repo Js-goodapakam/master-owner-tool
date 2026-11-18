@@ -1654,13 +1654,41 @@ app.get('/api/integrations', authorize('configuration.view'), async (q, r) => {
       lastSync = new Date().toISOString();
     } catch { engageStayStatus = 'Unavailable'; }
   }
-  const records = [
-  { id: 'int-engagestay', integration: 'EngageStay workspace control', provider: 'EngageStay', scope: 'Friday Owner', status: engageStayStatus, lastSync },
-  ];
-  r.json(supabaseConfigured() ? records : [...records,
-    { id: 'int-1', integration: 'WhatsApp Business', provider: 'Meta', scope: 'Friday Communication', status: 'Connected', lastSync: '2026-10-11 10:35' },
-    { id: 'int-2', integration: 'CRM sync', provider: 'Friday AI CRM', scope: 'Friday AI Desk', status: 'Connected', lastSync: '2026-10-11 10:28' },
-    { id: 'int-3', integration: 'Email delivery', provider: 'SendGrid', scope: 'Platform', status: 'Action required', lastSync: '2026-10-10 18:02' },
+  let configuredProviders: OtaConfigRow[] = [];
+  let otaRegistryUnavailable = false;
+  if (supabaseConfigured()) {
+    try {
+      configuredProviders = await readOtaConfig(product.id);
+    } catch (error) {
+      console.error('Connected Integrations could not load OTA configurations:', error);
+      otaRegistryUnavailable = true;
+    }
+  }
+
+  const otaRows = otaProviders.map(provider => {
+    const config = configuredProviders.find(row => row.provider_id === provider.id);
+    const connectionStatus = config?.connection_status;
+    const status = otaRegistryUnavailable ? 'Status unavailable'
+      : connectionStatus === 'VERIFIED' ? 'API verified'
+      : connectionStatus === 'FAILED' ? 'Verification failed'
+      : config?.approval_status === 'REQUESTED' ? 'Approval pending'
+      : config?.approval_status === 'APPROVED' || config?.approval_status === 'CERTIFIED'
+        ? 'Ready to configure'
+        : 'Not connected';
+    return {
+      id: 'int-ota-' + provider.id,
+      integration: provider.name,
+      provider: provider.name,
+      scope: 'Engage Stay · ' + provider.type,
+      status,
+      lastSync: config?.verified_at || '—',
+      kind: 'ota',
+      providerId: provider.id,
+    };
+  });
+  return r.json([
+    { id: 'int-engagestay', integration: 'EngageStay workspace control', provider: 'EngageStay', scope: 'Owner Tool', status: engageStayStatus, lastSync, kind: 'platform' },
+    ...otaRows,
   ]);
 });
 
