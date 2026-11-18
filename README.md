@@ -44,3 +44,32 @@ npm run build
 - `Database/` — PostgreSQL/Supabase migrations
 
 See [architecture](docs/architecture.md), [database](docs/database.md), [API](docs/api.md), and [design system](docs/design-system.md).
+
+## Engage Stay OTA provider connectivity
+
+Select **Engage Stay → Connected Integrations → OTA connectivity and feasibility**.
+The provider catalog includes current official developer-documentation links, supported
+capabilities, approval requirements, authentication prerequisites, and setup records
+for Go-MMT, Booking.com, Agoda, Airbnb, Expedia, Channex, and SiteMinder.
+
+**Production setup:**
+1. Apply `Database/migrations/010_owner_ota_integrations.sql` to the Owner Tool Supabase project.
+2. Set `OTA_CREDENTIAL_ENCRYPTION_KEY` **only on the Owner API server** to a
+   randomly generated 64-character hex string (32 bytes). Protect and back up
+   the key; losing it prevents decryption of saved credentials. Do not set `VITE_*`
+   secrets or commit credentials to Git.
+3. Redeploy Owner API and web client with the migration and environment changes.
+4. Open the provider record and record only legitimate provider-issued IDs and
+   access status. Save credentials using the protected backend form.
+5. **Channex only:** After account approval, verify the API key against Channex
+   `GET /api/v1/properties` (staging or production). A successful test verifies
+   the Channex account, not connected hotel channels or OTA inventory sync.
+
+All other providers remain unverified pending approved API access, completed
+provider adapters and any required certification. **Do not mark OTA services
+connected merely because their documentation exists or a credential has been stored.**
+
+Property-specific hotel-code authorization, room/rate mapping, reservations,
+webhooks and operational OTA synchronization belong in the Engage Stay app and
+its secure backend. This Owner Tool feature is provider-level integration
+administration, not the completed property/channel synchronization engine.
