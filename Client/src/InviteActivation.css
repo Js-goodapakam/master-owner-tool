@@ -5,7 +5,7 @@
 .ia-page .ia-back-link{
   display:block;margin:19px auto 0;padding:8px 12px;
   border:0;background:transparent;color:#91bbff;
-  font:600 12px 'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;
+  font:600 12px var(--owner-font);
   cursor:pointer;text-align:center;
 }
 .ia-page .ia-back-link:hover{color:#cfe4ff;text-decoration:underline}
