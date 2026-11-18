@@ -1,8 +1,9 @@
 import express from 'express';
 import cors from 'cors';
 import { z } from 'zod';
-import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
+import { createCipheriv, createDecipheriv, createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import { authenticate, authorize } from './auth.js';
+import { otaProviders, otaProviderIds } from './otaCatalog.js';
 import { createLocalDemoSession, isLocalDemoEnabled, isLoopbackRequest } from './localAuth.js';
 import {
   addAudit,
@@ -1475,6 +1476,169 @@ app.get('/api/audit-logs', authorize('audit.view'), (q, r) => {
 
 // Owner-facing operational inventories. These are explicit control-plane records,
 // not direct access to a customer's application data.
+
+type OtaConfigRow = {
+  product_id: string; provider_id: string; approval_status: string; environment: string;
+  partner_reference: string; client_id: string; notes: string; credential_ciphertext: string | null;
+  connection_status: string; verified_at: string | null; last_error: string | null; updated_at: string;
+};
+const otaConfigSchema = z.object({
+  approvalStatus: z.enum(['NOT_STARTED', 'REQUESTED', 'APPROVED', 'CERTIFIED']),
+  environment: z.enum(['sandbox', 'production']),
+  partnerReference: z.string().trim().max(150),
+  clientId: z.string().trim().max(200),
+  notes: z.string().trim().max(1000),
+  credential: z.string().min(1).max(4000).optional(),
+}).strict();
+
+function otaEncryptionKey(): Buffer | null {
+  const value = process.env.OTA_CREDENTIAL_ENCRYPTION_KEY || '';
+  return /^[a-fA-F0-9]{64}$/.test(value) ? Buffer.from(value, 'hex') : null;
+}
+function encryptOtaCredential(value: string): string {
+  const key = otaEncryptionKey();
+  if (!key) throw new Error('OTA encryption key is not configured.');
+  const iv = randomBytes(12);
+  const cipher = createCipheriv('aes-256-gcm', key, iv);
+  const encrypted = Buffer.concat([cipher.update(value, 'utf8'), cipher.final()]);
+  return [iv.toString('base64'), cipher.getAuthTag().toString('base64'), encrypted.toString('base64')].join('.');
+}
+function decryptOtaCredential(value: string): string {
+  const key = otaEncryptionKey();
+  if (!key) throw new Error('OTA encryption key is not configured.');
+  const [iv, tag, encrypted] = value.split('.');
+  if (!iv || !tag || !encrypted) throw new Error('Invalid credential ciphertext.');
+  const decipher = createDecipheriv('aes-256-gcm', key, Buffer.from(iv, 'base64'));
+  decipher.setAuthTag(Buffer.from(tag, 'base64'));
+  return Buffer.concat([decipher.update(Buffer.from(encrypted, 'base64')), decipher.final()]).toString('utf8');
+}
+function publicOtaConfig(row?: OtaConfigRow) {
+  return {
+    approvalStatus: row?.approval_status ?? 'NOT_STARTED',
+    environment: row?.environment ?? 'sandbox',
+    partnerReference: row?.partner_reference ?? '',
+    clientId: row?.client_id ?? '',
+    notes: row?.notes ?? '',
+    hasCredential: Boolean(row?.credential_ciphertext),
+    connectionStatus: row?.connection_status ?? 'NOT_CONNECTED',
+    verifiedAt: row?.verified_at ?? null,
+    lastError: row?.last_error ?? null,
+    updatedAt: row?.updated_at ?? null,
+  };
+}
+async function otaProductContext(q: express.Request, r: express.Response) {
+  const product = await requireProductContext(q, r);
+  if (!product) return null;
+  if (product.code !== 'engage_stay') {
+    r.status(403).json({ error: 'NOT_AVAILABLE', message: 'OTA integrations are available only for Engage Stay.' });
+    return null;
+  }
+  return product;
+}
+async function readOtaConfig(productId: string, providerId?: string): Promise<OtaConfigRow[]> {
+  const clause = providerId ? '&provider_id=eq.' + encodeURIComponent(providerId) : '';
+  const response = await supabaseAdmin('rest/v1/owner_ota_integrations?select=*&product_id=eq.' + encodeURIComponent(productId) + clause);
+  if (!response.ok) throw new Error('OTA provider configuration storage unavailable. Apply database migration 010.');
+  return await response.json() as OtaConfigRow[];
+}
+
+// Official OTA reference catalog + real configuration state. No provider is marked
+// connected by documentation alone, and secrets never leave the server.
+app.get('/api/integrations/ota', authorize('configuration.view'), async (q, r) => {
+  const product = await otaProductContext(q, r); if (!product) return;
+  r.setHeader('Cache-Control', 'no-store');
+  let rows: OtaConfigRow[] = [];
+  let storageReady = supabaseConfigured();
+  if (storageReady) {
+    try { rows = await readOtaConfig(product.id); }
+    catch (error) {
+      console.error('OTA integration registry unavailable:', error);
+      storageReady = false;
+    }
+  }
+  return r.json({
+    providers: otaProviders.map(provider => ({ ...provider,
+      configuration: publicOtaConfig(rows.find(row => row.provider_id === provider.id)),
+    })),
+    storageReady,
+    credentialVaultReady: Boolean(otaEncryptionKey()),
+    guidance: 'Owner Tool manages provider access. Property-level hotel codes, room mapping and bookings belong in Engage Stay.',
+  });
+});
+
+app.put('/api/integrations/ota/:providerId', authorize('configuration.manage'), async (q, r) => {
+  const product = await otaProductContext(q, r); if (!product) return;
+  const provider = otaProviders.find(item => item.id === q.params.providerId);
+  if (!provider) return r.status(404).json({ message: 'Unknown OTA provider.' });
+  const parsed = otaConfigSchema.safeParse(q.body);
+  if (!parsed.success) return r.status(400).json({ message: 'Invalid OTA provider configuration.', issues: parsed.error.issues });
+  if (!supabaseConfigured()) return r.status(503).json({ message: 'Database required to securely save provider settings.' });
+  const input = parsed.data;
+  if (input.credential && !otaEncryptionKey()) {
+    return r.status(503).json({ message: 'Set the 32-byte hex OTA_CREDENTIAL_ENCRYPTION_KEY in the Owner API before storing secrets.' });
+  }
+  const row: Record<string, unknown> = {
+    product_id: product.id, provider_id: provider.id,
+    approval_status: input.approvalStatus, environment: input.environment,
+    partner_reference: input.partnerReference, client_id: input.clientId, notes: input.notes,
+    connection_status: 'NOT_CONNECTED', verified_at: null, last_error: null,
+    updated_by: q.actor?.id, updated_at: new Date().toISOString(),
+  };
+  if (input.credential) row.credential_ciphertext = encryptOtaCredential(input.credential);
+  try {
+    const response = await supabaseAdmin('rest/v1/owner_ota_integrations?on_conflict=product_id,provider_id', {
+      method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=representation' },
+      body: JSON.stringify(row),
+    });
+    if (!response.ok) throw new Error('OTA provider settings could not be saved. Apply database migration 010.');
+    const saved = (await response.json() as OtaConfigRow[])[0];
+    addAudit('ota.provider.configuration.updated', 'integration', provider.id, {}, { approvalStatus: input.approvalStatus, environment: input.environment });
+    return r.json({ configuration: publicOtaConfig(saved), message: 'Provider setup saved; connection is not verified.' });
+  } catch (error) {
+    console.error('OTA provider update failed:', error);
+    return r.status(503).json({ message: 'OTA provider storage is not ready. Apply migration 010 and check database connectivity.' });
+  }
+});
+
+app.post('/api/integrations/ota/:providerId/verify', authorize('configuration.manage'), async (q, r) => {
+  const product = await otaProductContext(q, r); if (!product) return;
+  if (!otaProviderIds.includes(String(q.params.providerId))) return r.status(404).json({ message: 'Unknown provider.' });
+  if (q.params.providerId !== 'channex') {
+    return r.status(409).json({ message: 'Live verification is not available for this OTA without an approved provider-specific adapter.' });
+  }
+  if (!supabaseConfigured()) return r.status(503).json({ message: 'Provider configuration database is required.' });
+  try {
+    const row = (await readOtaConfig(product.id, 'channex'))[0];
+    if (!row?.credential_ciphertext) return r.status(400).json({ message: 'Save the Channex API key before testing.' });
+    if (!['APPROVED', 'CERTIFIED'].includes(row.approval_status)) {
+      return r.status(409).json({ message: 'Mark partner access as approved after receiving the Channex account.' });
+    }
+    const key = decryptOtaCredential(row.credential_ciphertext);
+    const base = row.environment === 'production' ? 'https://app.channex.io' : 'https://staging.channex.io';
+    // Fixed trusted hosts: no caller-controlled URL or arbitrary outbound request.
+    const check = await fetch(base + '/api/v1/properties', {
+      headers: { 'user-api-key': key, accept: 'application/json' },
+      signal: AbortSignal.timeout(8000), cache: 'no-store',
+    });
+    const success = check.ok;
+    const status = success ? 'VERIFIED' : 'FAILED';
+    const lastError = success ? null : 'Channex API authentication failed (HTTP ' + check.status + ').';
+    const now = new Date().toISOString();
+    const update = await supabaseAdmin('rest/v1/owner_ota_integrations?product_id=eq.' + encodeURIComponent(product.id) + '&provider_id=eq.channex', {
+      method: 'PATCH', headers: { Prefer: 'return=minimal' },
+      body: JSON.stringify({ connection_status: status, verified_at: success ? now : null, last_error: lastError, updated_at: now }),
+    });
+    if (!update.ok) throw new Error('Unable to store verification result.');
+    addAudit('ota.provider.connection.tested', 'integration', 'channex', {}, { success, environment: row.environment });
+    return r.json({ verified: success, connectionStatus: status, message: success
+      ? 'Channex API credentials verified. Individual OTA mappings are not yet connected.'
+      : lastError });
+  } catch (error) {
+    console.error('Channex credential test failed:', error);
+    return r.status(502).json({ message: 'Channex credential verification could not be completed. Verify the key, network access, and encryption configuration.' });
+  }
+});
+
 app.get('/api/integrations', authorize('configuration.view'), async (q, r) => {
   const product = await requireProductContext(q, r); if (!product) return;
   // Do not present a connector belonging to another application as available.
