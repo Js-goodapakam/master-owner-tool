@@ -1315,14 +1315,13 @@ let content =
     ) :
 
     page === 'Connected Integrations' ? (
-      <div style={{ display: 'grid', gap: 20 }}>
+      product.code === 'engage_stay' ? <OTAIntegrations /> : (
         <Collection
           endpoint="/integrations"
           title="Connected integrations"
           headers={['integration', 'provider', 'scope', 'status', 'lastSync']}
         />
-        {product.code === 'engage_stay' && <OTAIntegrations />}
-      </div>
+      )
     ) :
 
     page === 'Live Monitoring' ? (
