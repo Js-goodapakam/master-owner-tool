@@ -59,6 +59,7 @@ import './OwnerApplicationSelectionPolish.css';
 
 import Dashboard from './Dashboard';
 import NewOnboarding from './NewOnboarding';
+import OTAIntegrations from './OTAIntegrations';
 
 
 /* =========================================================
@@ -133,7 +134,7 @@ const ownerModuleDescriptions: Record<string, { title: string; description: stri
   'Infrastructure': { title: 'Infrastructure', description: 'Review registered infrastructure providers, environments and recorded capacity.' },
   'Deployments': { title: 'Deployments', description: 'Inspect deployment records, versions and release status across environments.' },
   'Configuration': { title: 'Customer settings', description: 'Inspect and manage the stored configuration of customer application environments.' },
-  'Connected Integrations': { title: 'Connected integrations', description: 'Review integration connections, providers and synchronization records.' },
+  'Connected Integrations': { title: 'Connected integrations', description: 'Manage verified connections, OTA developer feasibility, partner approvals and secure provider setup.' },
   'Live Monitoring': { title: 'Live monitoring', description: 'View monitoring records and service availability reported by connected providers.' },
   'Backup & Restore': { title: 'Backup & restore', description: 'Review available backup schedules, retention and recovery records.' },
   'Users & Access': { title: 'Users & access', description: 'Manage internal Owner Console accounts and role-based access.' },
@@ -1278,11 +1279,14 @@ let content =
     ) :
 
     page === 'Connected Integrations' ? (
-      <Collection
-        endpoint="/integrations"
-        title="Connected integrations"
-        headers={['integration', 'provider', 'scope', 'status', 'lastSync']}
-      />
+      <div style={{ display: 'grid', gap: 20 }}>
+        <Collection
+          endpoint="/integrations"
+          title="Connected integrations"
+          headers={['integration', 'provider', 'scope', 'status', 'lastSync']}
+        />
+        {product.code === 'engage_stay' && <OTAIntegrations />}
+      </div>
     ) :
 
     page === 'Live Monitoring' ? (
