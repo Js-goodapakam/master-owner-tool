@@ -135,7 +135,7 @@ export default function OTAIntegrations() {
           <RefreshCw size={15} /> Refresh
         </button>
       </div>
-      <Card title="Connected integrations" subtitle="EngageStay workspace and all OTA providers — connection status is based on actual verification records">
+      <Card title="Connected integrations" subtitle="OTA providers only — connection status is based on actual API verification records">
         <div className="ota-integration-table-scroll">
           <table className="ota-integration-table">
             <thead><tr>

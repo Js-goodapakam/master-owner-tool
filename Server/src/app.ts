@@ -1643,17 +1643,6 @@ app.get('/api/integrations', authorize('configuration.view'), async (q, r) => {
   const product = await requireProductContext(q, r); if (!product) return;
   // Do not present a connector belonging to another application as available.
   if (product.code !== 'engage_stay') return r.json([]);
-  const origin = process.env.ENGAGE_STAY_API_ORIGIN;
-  const token = process.env.ENGAGE_OWNER_SERVICE_TOKEN;
-  let engageStayStatus = 'Not configured';
-  let lastSync = '—';
-  if (origin && token) {
-    try {
-      const response = await fetch(new URL('/api/health', origin), { signal: AbortSignal.timeout(5000) });
-      engageStayStatus = response.ok ? 'Connected' : 'Action required';
-      lastSync = new Date().toISOString();
-    } catch { engageStayStatus = 'Unavailable'; }
-  }
   let configuredProviders: OtaConfigRow[] = [];
   let otaRegistryUnavailable = false;
   if (supabaseConfigured()) {
@@ -1686,10 +1675,9 @@ app.get('/api/integrations', authorize('configuration.view'), async (q, r) => {
       providerId: provider.id,
     };
   });
-  return r.json([
-    { id: 'int-engagestay', integration: 'EngageStay workspace control', provider: 'EngageStay', scope: 'Owner Tool', status: engageStayStatus, lastSync, kind: 'platform' },
-    ...otaRows,
-  ]);
+  // Provider connectivity table includes OTA channels only; EngageStay health
+  // belongs in operational monitoring, not the OTA integrations inventory.
+  return r.json(otaRows);
 });
 
 app.get('/api/monitoring', authorize('infrastructure.view'), (_q, r) => {
