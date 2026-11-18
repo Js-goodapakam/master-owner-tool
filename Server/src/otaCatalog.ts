@@ -28,7 +28,7 @@ export const otaProviders = [
     priority: 'High', feasibility: 'Certification required',
     auth: 'OAuth 2.0 client credentials with approved property authorization and IP allowlist',
     capabilities: ['GetProduct', 'SetAriV2', 'GetBookingList', 'GetBookingDetails', 'BookingHint (on approval)'],
-    requirements: ['Apply to Agoda Connectivity', 'Implement the four mandatory YCS certification endpoints', 'Complete self-certification and 2–3-property pilot', 'Use OAuth 2.0; legacy API keys are being phased out by end-2026'],
+    requirements: ['Apply to Agoda Connectivity', 'Implement GetProduct, SetAriV2, GetBookingList and GetBookingDetails', 'Complete self-certification and 2–3-property pilot', 'Use OAuth 2.0; legacy API keys are being phased out by end-2026'],
     docsUrl: 'https://developer.agoda.com/supply/docs/ycs-api',
     notes: 'BookingHint is a separate near-real-time notification option; full reservation retrieval must still be implemented.',
     supportsLiveVerification: false,
