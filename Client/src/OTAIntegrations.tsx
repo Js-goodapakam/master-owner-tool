@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { ArrowUpRight, CheckCircle2, ClipboardCheck, KeyRound, LockKeyhole, RefreshCw, ShieldAlert } from 'lucide-react';
+import { ArrowUpRight, CheckCircle2, ChevronRight, ClipboardCheck, KeyRound, LockKeyhole, RefreshCw, ShieldAlert, X } from 'lucide-react';
 import { api } from './api';
 import { Badge, Button, Card, ErrorState, Loading } from './components';
 import './OTAIntegrations.css';
@@ -17,6 +17,7 @@ type OtaProvider = {
   notes: string; supportsLiveVerification: boolean; configuration: OtaConfiguration;
 };
 type OtaResponse = { providers: OtaProvider[]; storageReady: boolean; credentialVaultReady: boolean; guidance: string };
+type IntegrationRow = { id: string; integration: string; provider: string; scope: string; status: string; lastSync: string; kind?: 'ota' | 'platform'; providerId?: string };
 type FormState = {
   approvalStatus: Approval; environment: Environment; partnerReference: string;
   clientId: string; notes: string; credential: string;
@@ -49,25 +50,39 @@ export default function OTAIntegrations() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
-  const [selectedId, setSelectedId] = useState('go-mmt');
-  const [filter, setFilter] = useState<'all' | 'ota' | 'aggregator'>('all');
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [integrationRows, setIntegrationRows] = useState<IntegrationRow[]>([]);
   const [form, setForm] = useState<FormState | null>(null);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
 
   async function refresh() {
-    const result = await api<OtaResponse>('/integrations/ota');
-    setData(result);
-    return result;
+    const [catalog, rows] = await Promise.all([
+      api<OtaResponse>('/integrations/ota'),
+      api<IntegrationRow[]>('/integrations'),
+    ]);
+    setData(catalog);
+    setIntegrationRows(rows);
+    return catalog;
   }
   useEffect(() => {
     let live = true;
-    api<OtaResponse>('/integrations/ota')
-      .then(result => { if (live) { setData(result); const first = result.providers.find(p => p.id === 'go-mmt'); if (first) setForm(blankForm(first)); } })
-      .catch(e => { if (live) setError(e instanceof Error ? e.message : 'Could not load OTA catalog.'); })
+    Promise.all([
+      api<OtaResponse>('/integrations/ota'),
+      api<IntegrationRow[]>('/integrations'),
+    ])
+      .then(([catalog, rows]) => {
+        if (!live) return;
+        setData(catalog);
+        setIntegrationRows(rows);
+      })
+      .catch(e => { if (live) setError(e instanceof Error ? e.message : 'Could not load integrations.'); })
       .finally(() => { if (live) setLoading(false); });
     return () => { live = false; };
   }, []);
+  useEffect(() => {
+    if (selectedId) document.getElementById('ota-provider-setup')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [selectedId]);
   const selected = data?.providers.find(p => p.id === selectedId);
   function openProvider(provider: OtaProvider) {
     setSelectedId(provider.id);
@@ -107,15 +122,14 @@ export default function OTAIntegrations() {
   }
   if (loading) return <Loading />;
   if (!data) return <ErrorState message={error || 'OTA connectivity catalog is not available.'} />;
-  const visible = data.providers.filter(p => filter === 'all' || (filter === 'ota' ? p.type === 'Direct OTA' : p.type !== 'Direct OTA'));
   const verified = data.providers.filter(p => p.configuration.connectionStatus === 'VERIFIED').length;
   const reviewCount = data.providers.filter(p => p.configuration.approvalStatus === 'REQUESTED').length;
   return (
     <div className="ota-module">
       <div className="ota-module-heading">
         <div><span className="ota-eyebrow">Engage Stay · Channel Manager</span>
-          <h3>OTA connectivity and feasibility</h3>
-          <p>Review official provider requirements, manage partner approval and securely configure API access in this module.</p>
+          <h3>OTA connectivity and verification</h3>
+          <p>Review every OTA in the existing integration list. Use Connect to open provider-specific internal settings and connection checks.</p>
         </div>
         <button className="ota-refresh" type="button" onClick={() => { setError(''); void refresh().catch(() => setError('Unable to refresh OTA information.')); }}>
           <RefreshCw size={15} /> Refresh
@@ -129,23 +143,48 @@ export default function OTAIntegrations() {
       <p className="ota-information"><LockKeyhole size={16} /> {data.guidance} A verified Channex API account does not mean any hotel or OTA channel is mapped.</p>
       {!data.storageReady && <p className="ota-warning"><ShieldAlert size={16} /> Configuration saving is disabled. Configure Supabase and apply Database/migrations/010_owner_ota_integrations.sql.</p>}
       {!data.credentialVaultReady && <p className="ota-warning"><KeyRound size={16} /> Credential storage requires the server-only OTA_CREDENTIAL_ENCRYPTION_KEY (64 hexadecimal characters). Non-secret setup details can still be saved.</p>}
-      <div className="ota-filter-row" role="group" aria-label="Filter integrations">
-        {([['all', 'All integrations'], ['ota', 'Direct OTAs'], ['aggregator', 'Channel-manager partners']] as const).map(([value, label]) =>
-          <button type="button" key={value} className={filter === value ? 'active' : ''} onClick={() => setFilter(value)}>{label}</button>)}
-      </div>
-      <div className="ota-grid">
-        {visible.map(p => (
-          <button type="button" key={p.id} className={'ota-provider-card' + (selectedId === p.id ? ' selected' : '')}
-            aria-pressed={selectedId === p.id} onClick={() => openProvider(p)}>
-            <span className="ota-provider-top"><strong>{p.name}</strong><ArrowUpRight size={16} /></span>
-            <span className="ota-provider-type">{p.type} · {p.priority}</span>
-            <span className="ota-provider-status"><Badge variant={statusVariant(p)}>{statusLabel(p)}</Badge></span>
-            <small>{p.feasibility}</small>
-          </button>
-        ))}
-      </div>
-      {selected && <Card className="ota-detail-card" title={selected.name + ' · Integration setup'}
-        subtitle="Official documentation, technical feasibility and provider-level connection details">
+      <Card title="Connected integrations" subtitle="EngageStay workspace and all OTA providers — connection status is based on actual verification records">
+        <div className="ota-integration-table-scroll">
+          <table className="ota-integration-table">
+            <thead><tr>
+              <th scope="col">Integration</th>
+              <th scope="col">Provider</th>
+              <th scope="col">Scope</th>
+              <th scope="col">Status</th>
+              <th scope="col">Last sync / verification</th>
+              <th scope="col">Action</th>
+            </tr></thead>
+            <tbody>
+              {integrationRows.map(row => {
+                const provider = row.kind === 'ota' ? data.providers.find(p => p.id === row.providerId) : undefined;
+                const connected = row.status === 'Connected' || row.status === 'API verified';
+                const badStatus = row.status === 'Verification failed' || row.status === 'Status unavailable' || row.status === 'Action required' || row.status === 'Unavailable';
+                return <tr key={row.id} className={provider && selectedId === provider.id ? 'ota-table-row-selected' : ''}>
+                  <td><strong>{row.integration}</strong></td>
+                  <td>{row.provider}</td>
+                  <td>{row.scope}</td>
+                  <td><Badge variant={connected ? 'success' : badStatus ? 'warning' : 'neutral'}>{row.status}</Badge></td>
+                  <td className="ota-sync-value">{row.lastSync && row.lastSync !== '—' ? new Date(row.lastSync).toLocaleString() : '—'}</td>
+                  <td>
+                    {provider ? <button type="button" className="ota-connect-button" aria-label={'Connect ' + provider.name}
+                      onClick={() => openProvider(provider)}>
+                      {provider.configuration.connectionStatus === 'VERIFIED' ? 'Manage' : 'Connect'} <ChevronRight size={15} />
+                    </button> : <span className="ota-table-na">—</span>}
+                  </td>
+                </tr>;
+              })}
+              {integrationRows.length === 0 && <tr><td colSpan={6}>No integrations are available for the selected application.</td></tr>}
+            </tbody>
+          </table>
+        </div>
+        <p className="ota-table-hint">Connect opens the provider's internal setup form below. A provider is marked API verified only after a successful authenticated check.</p>
+      </Card>
+      {selected && <div id="ota-provider-setup" className="ota-setup-focus" tabIndex={-1}><Card className="ota-detail-card" title={selected.name + ' · Internal connection details'}
+        subtitle="Official developer requirements, required credentials and connection verification">
+        <div className="ota-detail-toolbar"><span>Provider setup · {selected.type}</span>
+          <button type="button" onClick={() => { setSelectedId(null); setForm(null); setError(''); setNotice(''); }}
+            aria-label="Close provider setup"><X size={16}/> Close</button>
+        </div>
         <div className="ota-detail-grid">
           <div className="ota-technical">
             <div className="ota-section-title"><ClipboardCheck size={17} /> Developer documentation & feasibility</div>
@@ -205,7 +244,7 @@ export default function OTAIntegrations() {
         </div>
         {error && <p className="ota-action-error" role="alert">{error}</p>}
         {notice && <p className="ota-action-notice" role="status">{notice}</p>}
-      </Card>}
+      </Card></div>}
       <p className="ota-footnote">Documentation references reviewed 18 November 2026. API access and OTA partnerships must be verified with each provider before production activation.</p>
     </div>
   );
