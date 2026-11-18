@@ -73,28 +73,28 @@
 .ota-detail-toolbar button{display:inline-flex;align-items:center;gap:7px;border:1px solid #9da9b744;border-radius:8px;background:transparent;color:inherit;padding:7px 10px;font:600 12px 'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;cursor:pointer}
 .ota-detail-toolbar button:hover{border-color:#778D7A}
 
-/* Provider connection as a centered modal over the WORKSPACE ONLY.
-   Sidebar width is controlled by App and stays visible without being covered. */
-.shell .ota-connection-overlay{
+/* Provider connection overlay is portaled to body and bounded by the live
+   sidebar/header rectangles. It never covers persistent navigation. */
+.ota-connection-overlay{
   position:fixed!important;
-  top:0;right:0;bottom:0;left:var(--owner-sidebar-width,244px);
-  z-index:800;
+  top:0;right:0;bottom:0;left:0;
+  z-index:1500;
+  box-sizing:border-box;
   display:flex;
   align-items:center;
   justify-content:center;
-  padding:clamp(14px,2.7vw,36px);
+  padding:clamp(10px,1.8vw,20px);
   background:rgba(9,19,34,.58);
   -webkit-backdrop-filter:blur(3px);
   backdrop-filter:blur(3px);
 }
-.shell.collapsed .ota-connection-overlay{left:72px}
 .ota-connection-dialog{
   display:flex;
   flex-direction:column;
   width:min(1020px,100%);
-  max-height:calc(100vh - 40px);
-  max-height:calc(100dvh - 40px);
+  max-height:100%;
   min-height:0;
+  box-sizing:border-box;
   background:var(--owner-dash-surface,#fff);
   color:var(--owner-dash-text,#0D1B2A);
   border:1px solid var(--owner-dash-border,#dce3e9);
@@ -149,13 +149,11 @@
 :root[data-owner-theme='dark'] .ota-connection-dialog .ota-config-form :is(input,select,textarea){background:#14243a;color:#f4f1de;border-color:#344663}
 :root[data-owner-theme='light'] .ota-connection-dialog .ota-config-form :is(input,select,textarea){background:#fff;color:#0D1B2A;border-color:#cbd5df}
 @media(max-width:1050px){
-  .shell:not(.collapsed) .ota-connection-overlay{left:220px}
   .ota-connection-dialog .ota-detail-grid{grid-template-columns:1fr;gap:22px}
 }
 @media(max-width:760px){
-  .shell .ota-connection-overlay,.shell.collapsed .ota-connection-overlay{left:72px}
   .ota-connection-overlay{padding:10px!important}
-  .ota-connection-dialog{max-height:calc(100dvh - 20px);border-radius:12px}
+  .ota-connection-dialog{max-height:100%;border-radius:12px}
   .ota-modal-head{padding:16px}
   .ota-modal-body{padding:14px 16px}
   .ota-modal-footer{padding:12px 16px}

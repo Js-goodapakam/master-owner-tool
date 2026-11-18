@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type FormEvent } from 'react';
+import { createPortal } from 'react-dom';
 import { ArrowUpRight, CheckCircle2, ChevronRight, ClipboardCheck, KeyRound, LockKeyhole, RefreshCw, ShieldAlert, X } from 'lucide-react';
 import { api } from './api';
 import { Badge, Button, Card, ErrorState, Loading } from './components';
@@ -55,6 +56,7 @@ export default function OTAIntegrations() {
   const [form, setForm] = useState<FormState | null>(null);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
+  const [dialogBounds, setDialogBounds] = useState({ top: 88, left: 244 });
   const dialogRef = useRef<HTMLDivElement>(null);
   const lastTriggerRef = useRef<HTMLButtonElement | null>(null);
   const isBusyRef = useRef(false);
@@ -84,7 +86,29 @@ export default function OTAIntegrations() {
       .finally(() => { if (live) setLoading(false); });
     return () => { live = false; };
   }, []);
-  // Keep the popup centered over the content region and leave the Owner sidebar intact.
+  // Read the actual Owner header/sidebar geometry, so both remain fully visible.
+  // Render the popup in document.body to avoid main-content clipping and stacking contexts.
+  useLayoutEffect(() => {
+    if (!selectedId) return;
+    const header = document.querySelector<HTMLElement>('.shell > main > header.owner-header');
+    const sidebar = document.querySelector<HTMLElement>('.shell > aside');
+    const updateBounds = () => {
+      const top = Math.max(0, Math.ceil(header?.getBoundingClientRect().bottom ?? 0));
+      const left = Math.max(0, Math.ceil(sidebar?.getBoundingClientRect().right ?? 0));
+      setDialogBounds(previous => previous.top === top && previous.left === left ? previous : { top, left });
+    };
+    updateBounds();
+    const observer = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(updateBounds) : null;
+    if (header) observer?.observe(header);
+    if (sidebar) observer?.observe(sidebar);
+    window.addEventListener('resize', updateBounds);
+    window.addEventListener('scroll', updateBounds, true);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener('resize', updateBounds);
+      window.removeEventListener('scroll', updateBounds, true);
+    };
+  }, [selectedId]);
   // Escape, Tab focus-trapping, and focus restoration make this a real modal dialog.
   useEffect(() => {
     if (!selectedId) return;
@@ -203,7 +227,8 @@ export default function OTAIntegrations() {
         </div>
         <p className="ota-table-hint">Connect opens the provider's internal setup popup. A provider is marked API verified only after a successful authenticated check.</p>
       </Card>
-      {selected && <div className="ota-connection-overlay" role="presentation"
+      {selected && createPortal(<div className="ota-connection-overlay" role="presentation"
+        style={{ top: dialogBounds.top, left: dialogBounds.left }}
         onMouseDown={event => { if (event.currentTarget === event.target) closeProvider(); }}>
         <div className="ota-connection-dialog" role="dialog" aria-modal="true"
           aria-labelledby="ota-connection-dialog-title" aria-describedby="ota-connection-dialog-description"
@@ -290,7 +315,7 @@ export default function OTAIntegrations() {
             <button type="button" onClick={closeProvider} disabled={saving || testing}>Close</button>
           </div>
         </div>
-      </div>}
+      </div>, document.body)}
     </div>
   );
 }
