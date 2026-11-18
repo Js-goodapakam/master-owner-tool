@@ -16,7 +16,7 @@
   width:100%;min-height:44px;
   padding:10px 12px;border:1px solid rgba(135,169,219,.36);
   border-radius:10px;background:#0e1c32;color:#f4f6ff;
-  font:600 13px 'SF Pro Display','Helvetica Neue',Arial,sans-serif;
+  font:600 13px var(--owner-font);
   cursor:pointer;text-align:left;
 }
 .owner-modules-main .owner-module-body .fo-date-picker-trigger svg{color:#8ebdff;flex-shrink:0}

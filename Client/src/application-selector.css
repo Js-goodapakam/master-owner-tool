@@ -6,7 +6,7 @@
   position:relative;display:flex;align-items:center;justify-content:center;
   width:100%;min-width:0;min-height:100vh;min-height:100dvh;
   margin:0;padding:clamp(22px,4.5vh,52px) 24px;overflow-x:clip;
-  color:var(--picker-white);font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;
+  color:var(--picker-white);font-family:var(--owner-font);
   background:radial-gradient(ellipse 49% 72% at 100% 0%,rgba(91,48,183,.30),transparent 73%),
              radial-gradient(ellipse 43% 64% at 0% 4%,rgba(0,157,157,.15),transparent 73%),
              linear-gradient(135deg,#07131d 0%,#0a0d1e 48%,#111027 100%);

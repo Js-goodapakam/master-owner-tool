@@ -1,11 +1,11 @@
 /*
  * Engagehubs Owner Tool — shared typography and two-tone mode.
  * Theme is confined to the Owner Tool client, persisted under engage-owner-theme.
- * Segoe UI is the Owner Console system typeface on Windows, with platform-safe
- * fallbacks for other operating systems.
+ * San Francisco is preferred when installed; native system fallbacks
+ * preserve usability on Windows and non-Apple devices.
  */
 :root {
-  --font-family: 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, Arial, sans-serif;
+  --font-family: var(--owner-font);
 }
 html, body, button, input, textarea, select, option,
 #root, #root *:not(svg):not(path):not(circle):not(rect):not(line):not(polyline):not(polygon):not(ellipse) {
