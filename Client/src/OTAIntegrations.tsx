@@ -122,20 +122,13 @@ export default function OTAIntegrations() {
   }
   if (loading) return <Loading />;
   if (!data) return <ErrorState message={error || 'OTA connectivity catalog is not available.'} />;
-  const verified = data.providers.filter(p => p.configuration.connectionStatus === 'VERIFIED').length;
-  const reviewCount = data.providers.filter(p => p.configuration.approvalStatus === 'REQUESTED').length;
   return (
     <div className="ota-module">
-      <div className="ota-module-heading">
-        <div><span className="ota-eyebrow">Engage Stay · Channel Manager</span>
-          <h3>OTA connectivity and verification</h3>
-          <p>Review every OTA in the existing integration list. Use Connect to open provider-specific internal settings and connection checks.</p>
-        </div>
-        <button className="ota-refresh" type="button" onClick={() => { setError(''); void refresh().catch(() => setError('Unable to refresh OTA information.')); }}>
+      <Card title="Connected integrations" subtitle="OTA providers only — connection status is based on actual API verification records"
+        action={<button className="ota-refresh" type="button"
+          onClick={() => { setError(''); void refresh().catch(() => setError('Unable to refresh OTA information.')); }}>
           <RefreshCw size={15} /> Refresh
-        </button>
-      </div>
-      <Card title="Connected integrations" subtitle="OTA providers only — connection status is based on actual API verification records">
+        </button>}>
         <div className="ota-integration-table-scroll">
           <table className="ota-integration-table">
             <thead><tr>
@@ -171,20 +164,14 @@ export default function OTAIntegrations() {
         </div>
         <p className="ota-table-hint">Connect opens the provider's internal setup form below. A provider is marked API verified only after a successful authenticated check.</p>
       </Card>
-      <div className="ota-summary">
-        <div><strong>{data.providers.length}</strong><span>Providers reviewed</span></div>
-        <div><strong>{verified}</strong><span>Verified API connections</span></div>
-        <div><strong>{reviewCount}</strong><span>Partner applications pending</span></div>
-      </div>
-      <p className="ota-information"><LockKeyhole size={16} /> {data.guidance} A verified Channex API account does not mean any hotel or OTA channel is mapped.</p>
-      {!data.storageReady && <p className="ota-warning"><ShieldAlert size={16} /> Configuration saving is disabled. Configure Supabase and apply Database/migrations/010_owner_ota_integrations.sql.</p>}
-      {!data.credentialVaultReady && <p className="ota-warning"><KeyRound size={16} /> Credential storage requires the server-only OTA_CREDENTIAL_ENCRYPTION_KEY (64 hexadecimal characters). Non-secret setup details can still be saved.</p>}
       {selected && <div id="ota-provider-setup" className="ota-setup-focus" tabIndex={-1}><Card className="ota-detail-card" title={selected.name + ' · Internal connection details'}
         subtitle="Official developer requirements, required credentials and connection verification">
         <div className="ota-detail-toolbar"><span>Provider setup · {selected.type}</span>
           <button type="button" onClick={() => { setSelectedId(null); setForm(null); setError(''); setNotice(''); }}
             aria-label="Close provider setup"><X size={16}/> Close</button>
         </div>
+        {!data.storageReady && <p className="ota-warning"><ShieldAlert size={16} /> Configuration saving is disabled. Configure Supabase and apply Database/migrations/010_owner_ota_integrations.sql.</p>}
+        {!data.credentialVaultReady && <p className="ota-warning"><KeyRound size={16} /> Credential storage requires the server-only OTA_CREDENTIAL_ENCRYPTION_KEY (64 hexadecimal characters). Non-secret setup details can still be saved.</p>}
         <div className="ota-detail-grid">
           <div className="ota-technical">
             <div className="ota-section-title"><ClipboardCheck size={17} /> Developer documentation & feasibility</div>
@@ -245,7 +232,6 @@ export default function OTAIntegrations() {
         {error && <p className="ota-action-error" role="alert">{error}</p>}
         {notice && <p className="ota-action-notice" role="status">{notice}</p>}
       </Card></div>}
-      <p className="ota-footnote">Documentation references reviewed 18 November 2026. API access and OTA partnerships must be verified with each provider before production activation.</p>
     </div>
   );
 }
