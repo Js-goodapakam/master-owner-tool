@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { ArrowUpRight, CheckCircle2, ChevronRight, ClipboardCheck, KeyRound, LockKeyhole, RefreshCw, ShieldAlert, X } from 'lucide-react';
 import { api } from './api';
 import { Badge, Button, Card, ErrorState, Loading } from './components';
@@ -55,6 +55,8 @@ export default function OTAIntegrations() {
   const [form, setForm] = useState<FormState | null>(null);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const lastTriggerRef = useRef<HTMLButtonElement | null>(null);
 
   async function refresh() {
     const [catalog, rows] = await Promise.all([
@@ -80,13 +82,48 @@ export default function OTAIntegrations() {
       .finally(() => { if (live) setLoading(false); });
     return () => { live = false; };
   }, []);
+  // Keep the popup centered over the content region and leave the Owner sidebar intact.
+  // Escape, Tab focus-trapping, and focus restoration make this a real modal dialog.
   useEffect(() => {
-    if (selectedId) document.getElementById('ota-provider-setup')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }, [selectedId]);
+    if (!selectedId) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const closeButton = dialogRef.current?.querySelector<HTMLButtonElement>('[data-ota-dialog-close]');
+    closeButton?.focus();
+    const onKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        if (!saving && !testing) closeProvider();
+      }
+      if (event.key !== 'Tab') return;
+      const elements = Array.from(dialogRef.current?.querySelectorAll<HTMLElement>(
+        'button:not(:disabled), a[href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])'
+      ) || []).filter(el => el.getClientRects().length > 0);
+      if (!elements.length) { event.preventDefault(); dialogRef.current?.focus(); return; }
+      const first = elements[0];
+      const last = elements[elements.length - 1];
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('keydown', onKeyDown);
+      document.body.style.overflow = previousOverflow;
+      lastTriggerRef.current?.focus();
+    };
+  }, [selectedId, saving, testing]);
   const selected = data?.providers.find(p => p.id === selectedId);
-  function openProvider(provider: OtaProvider) {
+  function openProvider(provider: OtaProvider, trigger: HTMLButtonElement) {
+    lastTriggerRef.current = trigger;
     setSelectedId(provider.id);
     setForm(blankForm(provider));
+    setError('');
+    setNotice('');
+  }
+  function closeProvider() {
+    if (saving || testing) return;
+    setSelectedId(null);
+    setForm(null);
     setError('');
     setNotice('');
   }
@@ -152,7 +189,7 @@ export default function OTAIntegrations() {
                   <td className="ota-sync-value">{row.lastSync && row.lastSync !== '—' ? new Date(row.lastSync).toLocaleString() : '—'}</td>
                   <td>
                     {provider ? <button type="button" className="ota-connect-button" aria-label={'Connect ' + provider.name}
-                      onClick={() => openProvider(provider)}>
+                      onClick={event => openProvider(provider, event.currentTarget)}>
                       {provider.configuration.connectionStatus === 'VERIFIED' ? 'Manage' : 'Connect'} <ChevronRight size={15} />
                     </button> : <span className="ota-table-na">—</span>}
                   </td>
@@ -162,14 +199,28 @@ export default function OTAIntegrations() {
             </tbody>
           </table>
         </div>
-        <p className="ota-table-hint">Connect opens the provider's internal setup form below. A provider is marked API verified only after a successful authenticated check.</p>
+        <p className="ota-table-hint">Connect opens the provider's internal setup popup. A provider is marked API verified only after a successful authenticated check.</p>
       </Card>
-      {selected && <div id="ota-provider-setup" className="ota-setup-focus" tabIndex={-1}><Card className="ota-detail-card" title={selected.name + ' · Internal connection details'}
-        subtitle="Official developer requirements, required credentials and connection verification">
-        <div className="ota-detail-toolbar"><span>Provider setup · {selected.type}</span>
-          <button type="button" onClick={() => { setSelectedId(null); setForm(null); setError(''); setNotice(''); }}
-            aria-label="Close provider setup"><X size={16}/> Close</button>
-        </div>
+      {selected && <div className="ota-connection-overlay" role="presentation"
+        onMouseDown={event => { if (event.currentTarget === event.target) closeProvider(); }}>
+        <div className="ota-connection-dialog" role="dialog" aria-modal="true"
+          aria-labelledby="ota-connection-dialog-title" aria-describedby="ota-connection-dialog-description"
+          tabIndex={-1} ref={dialogRef}>
+          <div className="ota-modal-head">
+            <div>
+              <span className="ota-modal-eyebrow">Engage Stay · Provider Connection</span>
+              <h2 id="ota-connection-dialog-title">{selected.name}</h2>
+              <p id="ota-connection-dialog-description">Enter internal details, review API requirements, and verify access where supported.</p>
+            </div>
+            <button type="button" className="ota-modal-close" data-ota-dialog-close
+              onClick={closeProvider} disabled={saving || testing} aria-label={'Close ' + selected.name + ' connection popup'}>
+              <X size={20} aria-hidden="true" />
+            </button>
+          </div>
+          <div className="ota-modal-body">
+            <div className="ota-detail-toolbar"><span>Provider setup · {selected.type}</span>
+              <span className="ota-modal-status"><Badge variant={statusVariant(selected)}>{statusLabel(selected)}</Badge></span>
+            </div>
         {!data.storageReady && <p className="ota-warning"><ShieldAlert size={16} /> Configuration saving is disabled. Configure Supabase and apply Database/migrations/010_owner_ota_integrations.sql.</p>}
         {!data.credentialVaultReady && <p className="ota-warning"><KeyRound size={16} /> Credential storage requires the server-only OTA_CREDENTIAL_ENCRYPTION_KEY (64 hexadecimal characters). Non-secret setup details can still be saved.</p>}
         <div className="ota-detail-grid">
@@ -231,7 +282,13 @@ export default function OTAIntegrations() {
         </div>
         {error && <p className="ota-action-error" role="alert">{error}</p>}
         {notice && <p className="ota-action-notice" role="status">{notice}</p>}
-      </Card></div>}
+          </div>
+          <div className="ota-modal-footer">
+            <span>Credentials are saved securely and are not shown again.</span>
+            <button type="button" onClick={closeProvider} disabled={saving || testing}>Close</button>
+          </div>
+        </div>
+      </div>}
     </div>
   );
 }
