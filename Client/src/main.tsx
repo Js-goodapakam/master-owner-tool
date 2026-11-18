@@ -8,6 +8,7 @@ import {
   Activity,
   ArrowLeft,
   ArrowUpRight,
+  Bell,
   Building2,
   Hotel,
   CreditCard,
@@ -888,6 +889,28 @@ function OwnerThemeToggle({ theme, onToggle }: { theme: 'light' | 'dark'; onTogg
   </button>;
 }
 
+type OwnerNotification = { id: string; action: string; resourceType: string; createdAt: string; result?: string };
+function OwnerNotifications({ productName }: { productName: string }) {
+  const [open, setOpen] = useState(false);
+  const [items, setItems] = useState<OwnerNotification[]>([]);
+  const [seen, setSeen] = useState(() => new Set<string>());
+  const unread = items.filter(item => !seen.has(item.id)).length;
+  useEffect(() => {
+    let active = true;
+    const load = () => api<OwnerNotification[]>('/audit-logs').then(rows => { if (active) setItems(rows.slice(0, 12)); }).catch(() => { if (active) setItems([]); });
+    void load();
+    const timer = window.setInterval(() => void load(), 30000);
+    return () => { active = false; window.clearInterval(timer); };
+  }, []);
+  const markSeen = () => setSeen(new Set(items.map(item => item.id)));
+  const label = (value: string) => value.replace(/[_.-]/g, ' ').replace(/\b\w/g, letter => letter.toUpperCase());
+  const when = (value: string) => { const date = new Date(value); return Number.isFinite(date.getTime()) ? date.toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : 'Recently'; };
+  return <div className="owner-notifications">
+    <button type="button" className="owner-notification-button" onClick={() => { setOpen(value => !value); if (!open) markSeen(); }} aria-expanded={open} aria-haspopup="dialog" aria-label={unread ? `${unread} unread notifications` : 'Notifications'} title="Notifications"><Bell size={18} aria-hidden="true" />{unread > 0 && <span className="owner-notification-count" aria-hidden="true">{unread > 9 ? '9+' : unread}</span>}</button>
+    {open && <section className="owner-notification-popover" role="dialog" aria-label="Notifications"><header><div><strong>Notifications</strong><span>{productName} updates</span></div><button type="button" onClick={markSeen}>Mark all read</button></header><div className="owner-notification-list">{items.length ? items.map(item => <article key={item.id} className="owner-notification-item"><span className={'owner-notification-dot ' + (item.result === 'FAILED' ? 'is-failed' : '')} aria-hidden="true" /><div><strong>{label(item.action)}</strong><span>{label(item.resourceType)} · {when(item.createdAt)}</span></div></article>) : <p className="owner-notification-empty">No product notifications are available yet.</p>}</div></section>}
+  </div>;
+}
+
 function OwnerAccountActions({ identity, onSignOut }: { identity: OwnerIdentity | null; onSignOut: () => void }) {
   const displayName = identity?.name || identity?.email || 'Owner account';
   const initials = displayName.trim().split(/\s+/).slice(0, 2).map(part => part.charAt(0).toUpperCase()).join('') || 'O';
@@ -1149,6 +1172,19 @@ function App({ product, backToApplications, identity, onSignOut, theme, onToggle
 
   const [collapsed, setCollapsed] =
     useState(false);
+  const [sidebarWidth, setSidebarWidth] = useState(() => {
+    const stored = Number(window.localStorage.getItem('engage-owner-sidebar-width'));
+    return Number.isFinite(stored) && stored >= 220 && stored <= 360 ? stored : 244;
+  });
+  useEffect(() => { window.localStorage.setItem('engage-owner-sidebar-width', String(sidebarWidth)); }, [sidebarWidth]);
+  const resizeSidebar = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (collapsed || event.pointerType === 'touch') return;
+    event.preventDefault();
+    const originX = event.clientX, originWidth = sidebarWidth;
+    const move = (next: PointerEvent) => setSidebarWidth(Math.max(220, Math.min(360, originWidth + next.clientX - originX)));
+    const end = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', end); };
+    window.addEventListener('pointermove', move); window.addEventListener('pointerup', end, { once: true });
+  };
 
   const [customer, setCustomer] =
     useState('');
@@ -1343,6 +1379,7 @@ let content =
         'shell ' +
         (collapsed ? 'collapsed' : '')
       }
+      style={{ '--owner-sidebar-width': `${sidebarWidth}px` } as React.CSSProperties}
     >
 
       {/* =================================================
@@ -1439,6 +1476,7 @@ let content =
         </nav>
 
       </aside>
+      {!collapsed && <div className="owner-sidebar-resizer" role="separator" aria-orientation="vertical" aria-label="Resize navigation sidebar" title="Drag to resize navigation" onPointerDown={resizeSidebar} />}
 
       {/* =================================================
           MAIN CONTENT
@@ -1491,6 +1529,7 @@ let content =
 
           <div className="owner-topbar-controls owner-header-trailing">
             <OwnerThemeToggle theme={theme} onToggle={onToggleTheme} />
+            <OwnerNotifications productName={product.name} />
             <OwnerHeaderProfile identity={identity} onSignOut={onSignOut} />
           </div>
 
