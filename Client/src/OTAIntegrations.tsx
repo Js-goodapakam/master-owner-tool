@@ -63,7 +63,7 @@ export default function OTAIntegrations() {
   useEffect(() => {
     let live = true;
     api<OtaResponse>('/integrations/ota')
-      .then(result => { if (live) setData(result); })
+      .then(result => { if (live) { setData(result); const first = result.providers.find(p => p.id === 'go-mmt'); if (first) setForm(blankForm(first)); } })
       .catch(e => { if (live) setError(e instanceof Error ? e.message : 'Could not load OTA catalog.'); })
       .finally(() => { if (live) setLoading(false); });
     return () => { live = false; };
