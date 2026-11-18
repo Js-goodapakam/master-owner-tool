@@ -135,14 +135,6 @@ export default function OTAIntegrations() {
           <RefreshCw size={15} /> Refresh
         </button>
       </div>
-      <div className="ota-summary">
-        <div><strong>{data.providers.length}</strong><span>Providers reviewed</span></div>
-        <div><strong>{verified}</strong><span>Verified API connections</span></div>
-        <div><strong>{reviewCount}</strong><span>Partner applications pending</span></div>
-      </div>
-      <p className="ota-information"><LockKeyhole size={16} /> {data.guidance} A verified Channex API account does not mean any hotel or OTA channel is mapped.</p>
-      {!data.storageReady && <p className="ota-warning"><ShieldAlert size={16} /> Configuration saving is disabled. Configure Supabase and apply Database/migrations/010_owner_ota_integrations.sql.</p>}
-      {!data.credentialVaultReady && <p className="ota-warning"><KeyRound size={16} /> Credential storage requires the server-only OTA_CREDENTIAL_ENCRYPTION_KEY (64 hexadecimal characters). Non-secret setup details can still be saved.</p>}
       <Card title="Connected integrations" subtitle="EngageStay workspace and all OTA providers — connection status is based on actual verification records">
         <div className="ota-integration-table-scroll">
           <table className="ota-integration-table">
@@ -179,6 +171,14 @@ export default function OTAIntegrations() {
         </div>
         <p className="ota-table-hint">Connect opens the provider's internal setup form below. A provider is marked API verified only after a successful authenticated check.</p>
       </Card>
+      <div className="ota-summary">
+        <div><strong>{data.providers.length}</strong><span>Providers reviewed</span></div>
+        <div><strong>{verified}</strong><span>Verified API connections</span></div>
+        <div><strong>{reviewCount}</strong><span>Partner applications pending</span></div>
+      </div>
+      <p className="ota-information"><LockKeyhole size={16} /> {data.guidance} A verified Channex API account does not mean any hotel or OTA channel is mapped.</p>
+      {!data.storageReady && <p className="ota-warning"><ShieldAlert size={16} /> Configuration saving is disabled. Configure Supabase and apply Database/migrations/010_owner_ota_integrations.sql.</p>}
+      {!data.credentialVaultReady && <p className="ota-warning"><KeyRound size={16} /> Credential storage requires the server-only OTA_CREDENTIAL_ENCRYPTION_KEY (64 hexadecimal characters). Non-secret setup details can still be saved.</p>}
       {selected && <div id="ota-provider-setup" className="ota-setup-focus" tabIndex={-1}><Card className="ota-detail-card" title={selected.name + ' · Internal connection details'}
         subtitle="Official developer requirements, required credentials and connection verification">
         <div className="ota-detail-toolbar"><span>Provider setup · {selected.type}</span>
