@@ -57,6 +57,8 @@ export default function OTAIntegrations() {
   const [testing, setTesting] = useState(false);
   const dialogRef = useRef<HTMLDivElement>(null);
   const lastTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const isBusyRef = useRef(false);
+  isBusyRef.current = saving || testing;
 
   async function refresh() {
     const [catalog, rows] = await Promise.all([
@@ -93,7 +95,7 @@ export default function OTAIntegrations() {
     const onKeyDown = (event: globalThis.KeyboardEvent) => {
       if (event.key === 'Escape') {
         event.preventDefault();
-        if (!saving && !testing) closeProvider();
+        if (!isBusyRef.current) closeProvider();
       }
       if (event.key !== 'Tab') return;
       const elements = Array.from(dialogRef.current?.querySelectorAll<HTMLElement>(
@@ -111,7 +113,7 @@ export default function OTAIntegrations() {
       document.body.style.overflow = previousOverflow;
       lastTriggerRef.current?.focus();
     };
-  }, [selectedId, saving, testing]);
+  }, [selectedId]);
   const selected = data?.providers.find(p => p.id === selectedId);
   function openProvider(provider: OtaProvider, trigger: HTMLButtonElement) {
     lastTriggerRef.current = trigger;
@@ -121,7 +123,7 @@ export default function OTAIntegrations() {
     setNotice('');
   }
   function closeProvider() {
-    if (saving || testing) return;
+    if (isBusyRef.current) return;
     setSelectedId(null);
     setForm(null);
     setError('');
