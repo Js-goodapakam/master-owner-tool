@@ -1,10 +1,11 @@
 /*
- * Engagehubs Owner Tool — consistent Apple system font stack and two-tone mode.
+ * Engagehubs Owner Tool — shared typography and two-tone mode.
  * Theme is confined to the Owner Tool client, persisted under engage-owner-theme.
- * SF Pro is a system font where available; Helvetica/Arial are honest fallbacks.
+ * Segoe UI is the Owner Console system typeface on Windows, with platform-safe
+ * fallbacks for other operating systems.
  */
 :root {
-  --font-family: 'SF Pro Display', 'SF Pro Icons', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  --font-family: 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, Arial, sans-serif;
 }
 html, body, button, input, textarea, select, option,
 #root, #root *:not(svg):not(path):not(circle):not(rect):not(line):not(polyline):not(polygon):not(ellipse) {

@@ -4,7 +4,7 @@
  * Imported last to supersede legacy mode-dependent layout declarations.
  */
 :root{
-  --owner-font:'SF Pro Display','SF Pro Icons','Helvetica Neue',Helvetica,Arial,sans-serif;
+  --owner-font:'Segoe UI',system-ui,-apple-system,BlinkMacSystemFont,Arial,sans-serif;
   --owner-page-title:24px;
   --owner-section-title:18px;
   --owner-card-title:15px;
