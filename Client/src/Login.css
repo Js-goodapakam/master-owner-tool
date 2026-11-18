@@ -41,7 +41,7 @@ body {
   isolation: isolate;
   box-sizing: border-box;
   color: var(--fl-text);
-  font-family: Inter, "Segoe UI", Arial, sans-serif;
+  font-family: var(--owner-font);
 
   background:
     radial-gradient(
@@ -418,7 +418,7 @@ body {
   );
   box-shadow: 0 9px 23px rgba(7, 201, 193, .19);
   cursor: pointer;
-  font: 600 14px Inter, "Segoe UI", Arial, sans-serif;
+  font: 600 14px var(--owner-font);
   transition:
     transform .16s,
     filter .16s,
