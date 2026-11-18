@@ -1,6 +1,6 @@
 # Engagehubs P0/P1 implementation status
 
-Last verified: 2026-11-17
+Last verified: 2026-11-18
 
 | ID | Priority | Status | Evidence / next action |
 | --- | --- | --- | --- |
@@ -12,6 +12,8 @@ Last verified: 2026-11-17
 | P0-M1 | P0 | Unverified | Core PMS routes require repository/API audit and controlled tenant tests before a completion claim. |
 | P1-360 | P1 | Partially implemented | Customer 360 and private document management exist; user administration and broader lifecycle UI require verification. |
 | P1-UX | P1 | Partially implemented | Product selector and light/dark work are deployed; visual regression checks across required viewports remain outstanding. |
+| P0-AUTH | P0 | Implemented and unit-tested; external journey pending | Supabase identity bridge validates access tokens server-side, links the immutable Auth UUID to the PMS user/property, preserves legacy credentials, and denies unmapped or suspended workspaces (`f354970`, `ea4dc1f`). A controlled approved identity is still required for the real signup-to-login journey. |
+| P0-ISO | P0 | Partially implemented and unit-tested | PMS property membership is checked server-side for selection and workspace access; unassigned and suspended properties are denied. Reservation state validation rejects overlapping active room allocations, while production concurrency verification remains outstanding. |
 
 ## Current deployment evidence
 
