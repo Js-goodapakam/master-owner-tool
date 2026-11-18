@@ -5,7 +5,7 @@
  * This is an original implementation, not copied ElevenLabs branding or assets.
  */
 :root {
-  --owner-type: 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, Arial, sans-serif;
+  --owner-type: var(--owner-font);
 }
 :root[data-owner-theme='light']{
   --owner-paper:#ffffff;
