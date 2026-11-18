@@ -1033,6 +1033,21 @@ app.post('/api/customers/:id/engagestay', authorize('customer.update'), async (q
     : `owner-${randomUUID()}`;
   let jobId: string | null = null;
   let correlationId: string = randomUUID();
+  // The Owner Console never accepts a customer's password.  For a verified
+  // email signup, resolve the stable Supabase Auth UUID saved in the signup
+  // intake record and pass that identity to Engage Stay for a server-side link.
+  let authUserId: string | undefined;
+  if (action === 'approve' && supabaseConfigured()) {
+    const sessionResponse = await supabaseAdmin(`rest/v1/onboarding_sessions?select=signup_request_id&customer_id=eq.${encodeURIComponent(customer.id)}&order=updated_at.desc&limit=1`);
+    if (!sessionResponse.ok) return r.status(502).json({ error: 'ONBOARDING_IDENTITY_UNAVAILABLE' });
+    const signupRequestId = (await sessionResponse.json() as Array<{ signup_request_id?: string }>)[0]?.signup_request_id;
+    if (signupRequestId) {
+      const signupResponse = await supabaseAdmin(`rest/v1/signup_requests?select=source,external_user_id&id=eq.${encodeURIComponent(signupRequestId)}&limit=1`);
+      if (!signupResponse.ok) return r.status(502).json({ error: 'ONBOARDING_IDENTITY_UNAVAILABLE' });
+      const signup = (await signupResponse.json() as Array<{ source?: string; external_user_id?: string }>)[0];
+      if (signup?.source === 'email' && /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(signup.external_user_id || '')) authUserId = signup.external_user_id;
+    }
+  }
   if (supabaseConfigured()) {
     const productResponse = await supabaseAdmin('rest/v1/products?select=id&product_code=eq.engage_stay&limit=1');
     if (!productResponse.ok) return r.status(502).json({ error: 'PRODUCT_REGISTRY_UNAVAILABLE' });
@@ -1061,7 +1076,10 @@ app.post('/api/customers/:id/engagestay', authorize('customer.update'), async (q
       signal: AbortSignal.timeout(10000),
       body: JSON.stringify({
         action, name: customer.companyName, city: customer.city, email: customer.email,
-        adminName: q.body.adminName, password: q.body.password,
+        adminName: q.body.adminName, authUserId,
+        // Legacy accounts may still use their existing credential path. New
+        // Supabase email signups never transmit or store a duplicate password.
+        password: authUserId ? undefined : q.body.password,
         plan: q.body.plan, modules: q.body.modules,
       }),
     });
