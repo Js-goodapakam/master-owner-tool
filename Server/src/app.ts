@@ -1602,7 +1602,7 @@ app.put('/api/integrations/ota/:providerId', authorize('configuration.manage'), 
 
 app.post('/api/integrations/ota/:providerId/verify', authorize('configuration.manage'), async (q, r) => {
   const product = await otaProductContext(q, r); if (!product) return;
-  if (!otaProviderIds.includes(q.params.providerId)) return r.status(404).json({ message: 'Unknown provider.' });
+  if (!otaProviderIds.includes(String(q.params.providerId))) return r.status(404).json({ message: 'Unknown provider.' });
   if (q.params.providerId !== 'channex') {
     return r.status(409).json({ message: 'Live verification is not available for this OTA without an approved provider-specific adapter.' });
   }
