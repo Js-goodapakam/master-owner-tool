@@ -1173,19 +1173,6 @@ function App({ product, backToApplications, identity, onSignOut, theme, onToggle
 
   const [collapsed, setCollapsed] =
     useState(false);
-  const [sidebarWidth, setSidebarWidth] = useState(() => {
-    const stored = Number(window.localStorage.getItem('engage-owner-sidebar-width'));
-    return Number.isFinite(stored) && stored >= 220 && stored <= 360 ? stored : 244;
-  });
-  useEffect(() => { window.localStorage.setItem('engage-owner-sidebar-width', String(sidebarWidth)); }, [sidebarWidth]);
-  const resizeSidebar = (event: React.PointerEvent<HTMLDivElement>) => {
-    if (collapsed || event.pointerType === 'touch') return;
-    event.preventDefault();
-    const originX = event.clientX, originWidth = sidebarWidth;
-    const move = (next: PointerEvent) => setSidebarWidth(Math.max(220, Math.min(360, originWidth + next.clientX - originX)));
-    const end = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', end); };
-    window.addEventListener('pointermove', move); window.addEventListener('pointerup', end, { once: true });
-  };
 
   const [customer, setCustomer] =
     useState('');
@@ -1382,7 +1369,6 @@ let content =
         'shell ' +
         (collapsed ? 'collapsed' : '')
       }
-      style={{ '--owner-sidebar-width': `${sidebarWidth}px` } as React.CSSProperties}
     >
 
       {/* =================================================
@@ -1479,7 +1465,6 @@ let content =
         </nav>
 
       </aside>
-      {!collapsed && <div className="owner-sidebar-resizer" role="separator" aria-orientation="vertical" aria-label="Resize navigation sidebar" title="Drag to resize navigation" onPointerDown={resizeSidebar} />}
 
       {/* =================================================
           MAIN CONTENT

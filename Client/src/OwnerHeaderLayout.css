@@ -183,8 +183,7 @@
 .owner-notification-popover header button{border:0;background:transparent;color:#3974b9;font:inherit;font-size:11px;font-weight:650;cursor:pointer}.owner-notification-popover header button:hover{text-decoration:underline}
 .owner-notification-list{padding:6px}.owner-notification-item{display:flex;align-items:flex-start;gap:10px;padding:10px 9px;border-radius:9px}.owner-notification-item:hover{background:var(--owner-dash-inset,#f5f8fb)}.owner-notification-item strong{font-size:12px;line-height:1.35}
 .owner-notification-dot{width:8px;height:8px;flex:0 0 8px;margin-top:5px;border-radius:50%;background:#4f8ee5}.owner-notification-dot.is-failed{background:#d9415d}.owner-notification-empty{padding:18px 10px;margin:0;color:var(--owner-dash-muted,#65738a);font-size:12px;text-align:center}
-.owner-sidebar-resizer{position:relative;z-index:20;flex:0 0 8px;width:8px;margin-right:-8px;cursor:col-resize;touch-action:none}.owner-sidebar-resizer::after{position:absolute;content:"";top:0;bottom:0;left:3px;width:2px;border-radius:2px;background:transparent;transition:background .15s}.owner-sidebar-resizer:hover::after{background:#4b84ca}
-@media(max-width:760px){.owner-sidebar-resizer{display:none}.owner-notification-popover{position:fixed;top:68px;right:16px}}
+@media(max-width:760px){.owner-notification-popover{position:fixed;top:68px;right:16px}}
 .shell > main > header.owner-header .owner-theme-toggle{
   display:inline-flex;
   min-height:38px!important;
