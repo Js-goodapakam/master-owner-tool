@@ -439,6 +439,24 @@
   font-weight:600!important;
   color:var(--owner-dash-text)!important;
 }
+/* Dashboard records keep their content visible. A card grows with its name
+   and keeps its state/date in an independent right-side track. This contract
+   is shared by both themes. */
+:root .shell > main.owner-dashboard-main .ehd-customer-card{
+  grid-template-columns:minmax(0,1fr) auto!important;
+  grid-template-areas:"title action" "detail action" "meta action"!important;
+  align-items:start!important;
+  min-height:0!important;
+}
+:root .shell > main.owner-dashboard-main .ehd-customer-card strong{grid-area:title;white-space:normal!important;overflow:visible!important;text-overflow:clip!important}
+:root .shell > main.owner-dashboard-main .ehd-customer-card span{grid-area:detail;white-space:normal!important;overflow:visible!important;text-overflow:clip!important}
+:root .shell > main.owner-dashboard-main .ehd-customer-card small{grid-area:meta;white-space:normal!important;overflow:visible!important;text-overflow:clip!important}
+:root .shell > main.owner-dashboard-main .ehd-customer-card svg{grid-area:action;position:static!important;align-self:center;transform:none!important}
+:root .shell > main.owner-dashboard-main .ehd-action-row{align-items:flex-start!important;min-height:0!important;padding:13px 6px!important}
+:root .shell > main.owner-dashboard-main .ehd-action-body strong,
+:root .shell > main.owner-dashboard-main .ehd-action-body small{white-space:normal!important;overflow:visible!important;text-overflow:clip!important;overflow-wrap:anywhere}
+:root .shell > main.owner-dashboard-main .ehd-operation{align-items:start!important;padding:12px 0!important}
+:root .shell > main.owner-dashboard-main .ehd-operation>div small{overflow-wrap:anywhere}
 /* Same layout at same viewport for Light and Dark; breakpoint rules are
    shared and override older colour-theme-specific sizing. */
 @media(max-width:1350px){
