@@ -45,3 +45,44 @@ Last verified: 2026-11-19
 - `Server/src/subscriptionLifecycle.ts` provides injected-clock expiry selection; `Server/src/subscriptionLifecycle.test.ts` covers due, suspended, and no-expiry behavior.
 - `POST /api/internal/subscriptions/evaluate-expiry` is restricted to the existing Owner service token. It is intended for a protected scheduler and processes only due `TRIAL`/`ACTIVE` subscriptions, transitions them to `EXPIRED`, and suspends the related customer/product assignment. A second run skips already processed records.
 - `PATCH /api/subscriptions/:id` now supports explicit `RENEW` with a required new expiry date. This preserves the existing subscription/customer/tenant identities; it does not infer payment success.
+
+
+## Task 4 — isolated PostgreSQL 16 integration verification (test/owner-postgres-integration)
+
+This batch introduces a real PostgreSQL suite and an additive uniqueness
+migration for one current TRIAL/ACTIVE subscription per customer/product.
+The provisioning_jobs table and unique product/idempotency-key ledger already
+existed in migration 002; the tests exercise that schema, including concurrent
+inserts, row locking, retry, stable identities, and rollback with audit writes.
+
+Verification categories (not interchangeable):
+
+- **Unit tests:** Existing Vitest suite, including the injected-clock
+  expiredSubscriptions pure expiry evaluator.
+- **In-process Express tests:** Existing real Express routes with local or
+  synthetic HTTP stores; these are not PostgreSQL-backed.
+- **Real PostgreSQL integration tests:** Migrations 001–011 against disposable
+  GitHub Actions PostgreSQL 16. Covers signup/session uniqueness, seven
+  persisted onboarding stages, resume, tenant uniqueness, subscription
+  persistence and uniqueness, expiry selection, provisioning ledger concurrency,
+  transactions, and audit consistency. These are SQL-level database contract
+  checks, not the entire Express-to-PostgREST flow.
+- **Supabase-specific integration tests:** Not performed. Bare PostgreSQL has
+  no Supabase Auth, PostgREST, Storage, or realistic user-role RLS behavior.
+  The test bootstrap creates minimal auth.users and storage.buckets metadata
+  solely to satisfy migration dependencies.
+- **Production smoke tests:** Not performed.
+
+Remaining blockers: The connected onboarding and subscription handlers use
+Supabase REST and have not been exercised against genuine PostgREST. The
+reserve_tenant_account_code RPC referenced by the signup/tenant routes is
+absent from the checked-in migrations. Actual signup approval, external
+Engage Stay provisioning, OAuth, entitlement delivery, and payment verification
+cannot be certified. The multi-request provisioning path still has a
+cross-service partial-failure risk, and the expiry worker's HTTP customer/
+product suspension updates are not proven by SQL-level tests.
+
+Safety: The CI job uses only OWNER_TEST_DATABASE_URL and OWNER_TEST_DATABASE_ID,
+restricted to its own localhost PostgreSQL 16 service. No Production or
+Preview credentials are injected, and database operations require a
+successful live identity check.

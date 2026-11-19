@@ -6,12 +6,15 @@ on:
     paths:
       - '.github/workflows/isolated-cloud-tests.yml'
       - 'Server/**'
+      - 'Database/migrations/**'
+      - 'docs/implementation/P0-P1-STATUS.md'
       - 'package.json'
       - 'package-lock.json'
   pull_request:
     paths:
       - '.github/workflows/isolated-cloud-tests.yml'
       - 'Server/**'
+      - 'Database/migrations/**'
       - 'package.json'
       - 'package-lock.json'
 
@@ -20,7 +23,7 @@ permissions:
 
 jobs:
   owner-api-isolated:
-    name: Owner API tests + disposable PostgreSQL verification
+    name: Owner API + real disposable PostgreSQL 16
     runs-on: ubuntu-latest
     timeout-minutes: 20
     services:
@@ -39,8 +42,10 @@ jobs:
           --health-retries 10
     env:
       NODE_ENV: test
-      OWNER_TEST_DATABASE_URL: postgresql://engage_owner_test:disposable_runner_only@127.0.0.1:5432/engage_owner_test
-      # Never inject SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY or Vercel secrets.
+      CI: 'true'
+      OWNER_TEST_DATABASE_ID: engage-owner-test-github-actions
+      OWNER_TEST_DATABASE_URL: postgresql://engage_owner_test:disposable_runner_only@127.0.0.1:5432/engage_owner_test?sslmode=disable
+      # Deliberately no DATABASE_URL, Supabase or Vercel secrets.
     steps:
       - name: Check out project
         uses: actions/checkout@v4
@@ -54,41 +59,53 @@ jobs:
       - name: Install locked dependencies
         run: npm ci --ignore-scripts
 
-      - name: Verify test database identity and transaction rollback
+      - name: Run fail-closed database safety guard tests
+        run: node --test Server/scripts/assert-isolated-owner-db.test.mjs
+
+      - name: Verify actual connected PostgreSQL 16 identity before migrations
+        run: node Server/scripts/verify-isolated-owner-db.mjs
+
+      - name: Apply Owner SQL migrations to disposable PostgreSQL
+        run: node Server/scripts/setup-isolated-owner-db.mjs
+
+      - name: Run existing Owner API unit and in-process Express integration suites
+        run: npm run test -w @friday/api
+
+      - name: Run real PostgreSQL onboarding, lifecycle and provisioning tests
         shell: bash
         run: |
-          node <<'NODE'
-          const { Pool } = require('pg');
-          const url = process.env.OWNER_TEST_DATABASE_URL;
-          if (!url || /supabase|production|preview/i.test(url)) throw Error('Unsafe test database URL');
-          const pool = new Pool({connectionString:url,ssl:false});
-          (async()=>{
-            const client=await pool.connect();
-            try {
-              const {rows}=await client.query('SELECT current_database() AS db, current_user AS actor');
-              if(rows[0].db !== 'engage_owner_test' || rows[0].actor !== 'engage_owner_test') throw Error('Unexpected database identity');
-              await client.query('BEGIN');
-              await client.query('CREATE TABLE test_rollback_probe (id integer PRIMARY KEY)');
-              await client.query('INSERT INTO test_rollback_probe VALUES (1)');
-              await client.query('ROLLBACK');
-              const {rows:check}=await client.query("SELECT to_regclass('public.test_rollback_probe') AS probe");
-              if(check[0].probe !== null) throw Error('Rollback did not revert the test table');
-              console.log('Isolated PostgreSQL verified: identity and transaction rollback passed.');
-            } finally {client.release();await pool.end();}
-          })().catch(err=>{console.error(err);process.exitCode=1;});
-          NODE
+          set -o pipefail
+          npm run test:postgres -w @friday/api | tee owner-postgres-tests.log
 
-      - name: Build shared package and Owner API
+      - name: Build backend and verify TypeScript
         run: |
           npm run build -w @friday/shared
           npm run build -w @friday/api
 
-      - name: Run existing isolated Owner API route integration tests
-        run: npm run test -w @friday/api
-
-      - name: Document test boundary
+      - name: Summarize verification boundaries
         if: always()
+        shell: bash
         run: |
-          echo "Owner API test harness and disposable PostgreSQL connectivity checked." >> "$GITHUB_STEP_SUMMARY"
-          echo "Owner API tests currently use isolated in-memory data; this job does NOT claim full PostgreSQL subscription/onboarding integration acceptance." >> "$GITHUB_STEP_SUMMARY"
-          echo "No production/preview database credentials are injected." >> "$GITHUB_STEP_SUMMARY"
+          {
+            echo "## Owner Tool - isolated PostgreSQL 16"
+            echo "Real database: local ephemeral engage_owner_test; Supabase credentials not injected."
+            echo "Schema: Database/migrations/001-011 including additive active-subscription uniqueness."
+            if [[ -f owner-postgres-tests.log ]]; then
+              echo "### Real PostgreSQL suite"
+              grep -E 'Test Files|Tests  ' owner-postgres-tests.log || true
+            else
+              echo "PostgreSQL integration suite did not start; do not claim acceptance."
+            fi
+            echo "### Verification boundaries"
+            echo "Existing Owner Express API tests use in-memory/synthetic HTTP adapters."
+            echo "PostgreSQL tests execute real SQL against repository tables and the real injected-clock expiry evaluator."
+            echo "Supabase Auth, PostgREST, Storage, RLS as non-owner, external EngageStay provisioning and production smoke tests NOT exercised."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload PostgreSQL test log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: owner-postgres-integration-log
+          path: owner-postgres-tests.log
+          if-no-files-found: ignore
