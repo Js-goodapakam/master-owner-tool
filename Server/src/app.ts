@@ -404,7 +404,10 @@ app.get('/api/auth/password-status', authenticate, (q, r) => {
 // This one endpoint performs its own constant-time service-token authorization.
 // All other /api routes retain the standard authenticated Owner session guard.
 app.use('/api', (req, res, next) => {
-  if (req.path === '/integrations/engagestay/signup' && req.method === 'POST') {
+  if (req.method === 'POST' &&
+      (req.path === '/integrations/engagestay/signup' ||
+       req.path === '/internal/subscriptions/evaluate-expiry')) {
+    // Both endpoints perform their own constant-time service-token checks.
     return next();
   }
   return authenticate(req, res, next);
