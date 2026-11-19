@@ -98,7 +98,7 @@ jobs:
             fi
             echo "### Verification boundaries"
             echo "Existing Owner Express API tests use in-memory/synthetic HTTP adapters."
-            echo "PostgreSQL tests execute real SQL against repository tables and the real injected-clock expiry evaluator."
+            echo "Real PostgreSQL SQL-contract tests run separately from Owner Express tests backed by a test-only PostgreSQL REST compatibility adapter."
             echo "Supabase Auth, PostgREST, Storage, RLS as non-owner, external EngageStay provisioning and production smoke tests NOT exercised."
           } >> "$GITHUB_STEP_SUMMARY"
 
