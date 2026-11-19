@@ -5,6 +5,7 @@ import { createCipheriv, createDecipheriv, createHash, randomBytes, randomUUID, 
 import { authenticate, authorize } from './auth.js';
 import { otaProviders, otaProviderIds } from './otaCatalog.js';
 import { createLocalDemoSession, isLocalDemoEnabled, isLoopbackRequest } from './localAuth.js';
+import { expiredSubscriptions } from './subscriptionLifecycle.js';
 import {
   addAudit,
   audit,
@@ -1238,12 +1239,13 @@ app.post('/api/subscriptions', authorize('subscription.manage'), async (q, r) =>
 });
 
 const subscriptionChangeSchema = z.object({
-  action: z.enum(['CHANGE_PLAN', 'SET_EXPIRY', 'SUSPEND', 'REACTIVATE']),
+  action: z.enum(['CHANGE_PLAN', 'SET_EXPIRY', 'SUSPEND', 'REACTIVATE', 'RENEW']),
   planId: z.string().uuid().optional(),
   expiresAt: z.string().datetime().nullable().optional(),
 }).superRefine((value, context) => {
   if (value.action === 'CHANGE_PLAN' && !value.planId) context.addIssue({ code: z.ZodIssueCode.custom, message: 'Plan is required.' });
   if (value.action === 'SET_EXPIRY' && value.expiresAt === undefined) context.addIssue({ code: z.ZodIssueCode.custom, message: 'Expiry is required.' });
+  if (value.action === 'RENEW' && !value.expiresAt) context.addIssue({ code: z.ZodIssueCode.custom, message: 'A new expiry is required for renewal.' });
 });
 
 app.patch('/api/subscriptions/:id', authorize('subscription.manage'), async (q, r) => {
@@ -1268,6 +1270,9 @@ app.patch('/api/subscriptions/:id', authorize('subscription.manage'), async (q, 
     if (input.action === 'SET_EXPIRY') update.expires_at = input.expiresAt;
     if (input.action === 'SUSPEND') { update.status = 'SUSPENDED'; customerStatus = 'SUSPENDED'; }
     if (input.action === 'REACTIVATE') { update.status = 'ACTIVE'; customerStatus = 'ACTIVE'; }
+    // Renewal is an explicit commercial operation. It does not rely on a
+    // browser claim of payment success and leaves the tenant UUID untouched.
+    if (input.action === 'RENEW') { update.status = 'ACTIVE'; update.expires_at = input.expiresAt; customerStatus = 'ACTIVE'; }
     const changed = await supabaseAdmin(`rest/v1/subscriptions?id=eq.${encodeURIComponent(existing.id)}`, { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify(update) });
     if (!changed.ok) return r.status(502).json({ error: 'SUBSCRIPTION_UPDATE_FAILED' });
     if (customerStatus) await Promise.all([
@@ -1278,6 +1283,39 @@ app.patch('/api/subscriptions/:id', authorize('subscription.manage'), async (q, 
     await recordPlatformAudit(q, `subscription.${input.action.toLowerCase()}`, 'subscription', existing.id, existing, row);
     return r.json(row);
   } catch (error) { console.error('Subscription change failed:', error); return r.status(500).json({ error: 'SUBSCRIPTION_CHANGE_FAILED' }); }
+});
+
+// Server-to-server expiry worker. Its query and patches are idempotent: only
+// currently active/trial subscriptions due at evaluation time are selected;
+// after the first run they no longer match. A scheduler may call this route,
+// but it is never exposed to browser sessions.
+app.post('/api/internal/subscriptions/evaluate-expiry', async (q, r) => {
+  if (!hasOwnerServiceAuthorization(q)) return r.status(401).json({ error: 'SERVICE_AUTH_REQUIRED' });
+  if (!supabaseConfigured()) return r.status(503).json({ error: 'DATABASE_REQUIRED' });
+  const now = new Date();
+  try {
+    const response = await supabaseAdmin(`rest/v1/subscriptions?select=id,customer_id,product_id,status,expires_at&status=in.(TRIAL,ACTIVE)&expires_at=lte.${encodeURIComponent(now.toISOString())}`);
+    if (!response.ok) return r.status(502).json({ error: 'EXPIRY_LOOKUP_FAILED' });
+    const due = expiredSubscriptions((await response.json() as Array<any>).map(row => ({ id: row.id, status: row.status, expiresAt: row.expires_at || null })), now);
+    let expired = 0;
+    for (const item of due) {
+      const source = await supabaseAdmin(`rest/v1/subscriptions?select=id,customer_id,product_id,status& id=eq.${encodeURIComponent(item.id)}&status=in.(TRIAL,ACTIVE)&expires_at=lte.${encodeURIComponent(now.toISOString())}&limit=1`.replace('& ', '&'));
+      if (!source.ok) throw new Error('Could not lock an expiring subscription.');
+      const current = (await source.json() as Array<any>)[0];
+      if (!current) continue; // another worker already processed it
+      const changed = await supabaseAdmin(`rest/v1/subscriptions?id=eq.${encodeURIComponent(item.id)}&status=in.(TRIAL,ACTIVE)`, { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ status: 'EXPIRED' }) });
+      if (!changed.ok) throw new Error('Could not expire a subscription.');
+      await Promise.all([
+        supabaseAdmin(`rest/v1/customers?id=eq.${encodeURIComponent(current.customer_id)}`, { method: 'PATCH', body: JSON.stringify({ status: 'SUSPENDED', updated_at: now.toISOString() }) }),
+        supabaseAdmin(`rest/v1/customer_products?customer_id=eq.${encodeURIComponent(current.customer_id)}&product_id=eq.${encodeURIComponent(current.product_id)}`, { method: 'PATCH', body: JSON.stringify({ status: 'SUSPENDED' }) }),
+      ]);
+      expired += 1;
+    }
+    return r.json({ evaluatedAt: now.toISOString(), expired, idempotent: true });
+  } catch (error) {
+    console.error('Subscription expiry evaluation failed:', error);
+    return r.status(502).json({ error: 'EXPIRY_PROCESSING_FAILED' });
+  }
 });
 
 const entitlementOverrideSchema = z.object({

@@ -131,6 +131,18 @@ describe('isolated Owner control-plane API harness', () => {
     expect(invalid.status).toBe(400);
   });
 
+  it('renews an expired term without replacing the customer or subscription identity', async () => {
+    const id = String(synthetic.subscriptions[0]?.id);
+    Object.assign(synthetic.subscriptions[0], { status: 'EXPIRED', expires_at: '2026-11-18T00:00:00.000Z' });
+    const renewed = await request(`/api/subscriptions/${id}?productCode=engage_stay`, 'owner-token', {
+      method: 'PATCH', body: JSON.stringify({ action: 'RENEW', expiresAt: '2026-12-19T00:00:00.000Z' }),
+    });
+    expect(renewed.status).toBe(200);
+    const row = await renewed.json() as { id: string; status: string; expires_at: string };
+    expect(row).toMatchObject({ id, status: 'ACTIVE', expires_at: '2026-12-19T00:00:00.000Z' });
+    expect(synthetic.customers[0].id).toBe(customerId);
+  });
+
   it('rejects cross-product access using the actual employee product assignment', async () => {
     const denied = await request('/api/subscriptions?productCode=engage_fit', 'stay-operator-token');
     expect(denied.status).toBe(403); expect((await denied.json()).error).toBe('PRODUCT_ACCESS_DENIED');
