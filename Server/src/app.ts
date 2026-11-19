@@ -917,12 +917,16 @@ app.patch('/api/customers/:id', authorize('customer.update'), (q, r) => {
 });
 
 app.post('/api/onboarding', authorize('customer.create'), (q, r) => {
-  const step = z
+  const parsedStep = z
     .number()
     .int()
     .min(1)
     .max(11)
-    .parse(q.body.step);
+    .safeParse(q.body.step);
+  if (!parsedStep.success) {
+    return r.status(400).json({ error: 'VALIDATION', details: parsedStep.error.flatten() });
+  }
+  const step = parsedStep.data;
 
   if (supabaseConfigured()) return void (async () => {
     const signupRequestId = typeof q.body.signupRequestId === 'string' && /^[0-9a-f-]{36}$/i.test(q.body.signupRequestId) ? q.body.signupRequestId : null;
@@ -969,6 +973,13 @@ app.post('/api/onboarding', authorize('customer.create'), (q, r) => {
     return r.status(400).json({
       error: 'VALIDATION',
       details: p.error.flatten(),
+    });
+  }
+
+  if (customers.some((customer) => customer.email.trim().toLowerCase() === p.data.email.trim().toLowerCase())) {
+    return r.status(409).json({
+      error: 'DUPLICATE_CUSTOMER',
+      message: 'A customer with this email already exists.',
     });
   }
 

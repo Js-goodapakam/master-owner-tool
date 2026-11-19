@@ -1,12 +1,12 @@
 # Engagehubs P0/P1 implementation status
 
-Last verified: 2026-11-18
+Last verified: 2026-11-19
 
 | ID | Priority | Status | Evidence / next action |
 | --- | --- | --- | --- |
 | P0-S1 | P0 | Partially implemented and tested | Product context is fail-closed and enforced for customer, Customer 360, documents, entitlement, signup queue, onboarding lookup, Engage Stay lifecycle, provisioning history, plans, subscriptions, audit history, integrations and non-global employee-directory reads (`63a618b`, `2bd7ab9`, `a0897d0`, `96879d4`, `fbe8a23`). Remaining: configuration/infrastructure scope decisions and dedicated negative HTTP tests. |
 | P0-S2 | P0 | Implemented but unverified end-to-end | Engage Stay signup intake uses authenticated idempotent service-to-service requests. A controlled external identity is required for a real OAuth signup test. |
-| P0-O1 | P0 | Partially implemented | Seven-step onboarding persists sessions and creates customer/product/tenant records. Refresh/resume and activation paths require further automated integration coverage. |
+| P0-O1 | P0 | Partially implemented and route-tested | Seven-step onboarding persists sessions and creates customer/product/tenant records. The isolated loopback HTTP harness exercises the real Express authentication middleware and onboarding handler for initial save, steps 2–7 resume, missing-field validation, duplicate customer rejection, and invalid-step validation. It uses the local in-memory repository only; connected Supabase persistence, signup-request approval, tenant creation and activation still require a dedicated non-production control-plane adapter or database. |
 | P0-P1 | P0 | Partially implemented | Engage Stay managed workspace API supports provisioning and entitlement synchronization. Safe production test identity is still required for end-to-end provisioning. |
 | P0-C1 | P0 | Partially implemented | Subscription lifecycle and entitlement endpoints exist. Product-scoping and lifecycle regression tests remain to be completed. |
 | P0-M1 | P0 | Partially implemented and unit-tested | Isolated PMS tests cover property-state validation, room allocation conflicts, clean-room check-in, settled check-out and Dirty-housekeeping handoff (`4becbf1`). The concurrency runner now fails closed unless `ENGAGE_TEST_DATABASE_URL` and a dedicated `ENGAGE_TEST_DATABASE_ID` identify a separate non-production database (`75f3f4e`); no dedicated Supabase project exists yet, so PostgreSQL load execution remains blocked. |
@@ -26,3 +26,9 @@ Last verified: 2026-11-18
 - No production customer, reservation, billing or identity data is used as a test fixture.
 - No destructive migration is pending in this batch.
 - OAuth and service credentials are never committed or displayed.
+
+## Isolated Owner API harness (2026-11-19)
+
+- `Server/src/app.integration.test.ts` starts the actual Owner Express application on loopback and signs in through the intentionally local-only demo session path. It does not mock route handlers, does not set Supabase credentials, and cannot reach Production or Preview.
+- Current coverage: unauthenticated onboarding write denial; invalid product route denial; seven-step create/resume behavior; invalid/missing onboarding input; duplicate customer prevention.
+- This is **not** a PostgreSQL or Supabase integration test. Subscription activation, entitlement synchronization, signup approval, provisioning retry, and cross-product employee role assertions remain outstanding because those routes deliberately require the connected control plane. A dedicated test database or isolated Supabase REST adapter is still needed before claiming that coverage.
