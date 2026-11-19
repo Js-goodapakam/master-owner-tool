@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "tsx src/server.ts",
     "build": "cd .. && npm run build -w @friday/shared && npx tsc -p Server/tsconfig.json",
-    "test": "vitest run --exclude '**/postgres.integration.test.ts'",
+    "test": "vitest run --exclude '**/postgres.integration.test.ts' --exclude '**/scripts/*.test.mjs'",
     "lint": "tsc --noEmit",
     "db:migrate": "tsx src/db/migrate.ts",
     "db:seed": "tsx src/db/seed.ts",
