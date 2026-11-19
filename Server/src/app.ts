@@ -1068,15 +1068,15 @@ app.post('/api/customers/:id/engagestay', authorize('customer.update'), async (q
     if (!productResponse.ok) return r.status(502).json({ error: 'PRODUCT_REGISTRY_UNAVAILABLE' });
     const product = (await productResponse.json() as Array<{ id: string }>)[0];
     if (!product) return r.status(503).json({ error: 'ENGAGESTAY_NOT_REGISTERED' });
-    const existingResponse = await supabaseAdmin(`rest/v1/provisioning_jobs?select=id,status,result_payload,correlation_id&product_id=eq.${encodeURIComponent(product.id)}&idempotency_key=eq.${encodeURIComponent(idempotencyKey)}&limit=1`);
+    const existingResponse = await supabaseAdmin(`rest/v1/provisioning_jobs?select=id,status,result_payload,correlation_id,attempt_count&product_id=eq.${encodeURIComponent(product.id)}&idempotency_key=eq.${encodeURIComponent(idempotencyKey)}&limit=1`);
     if (!existingResponse.ok) return r.status(502).json({ error: 'PROVISIONING_STATE_UNAVAILABLE' });
-    const existing = (await existingResponse.json() as Array<{ id: string; status: string; result_payload: unknown; correlation_id: string }>)[0];
+    const existing = (await existingResponse.json() as Array<{ id: string; status: string; result_payload: unknown; correlation_id: string; attempt_count: number }>)[0];
     if (existing?.status === 'SUCCEEDED') return r.json({ ...(existing.result_payload as object || {}), idempotentReplay: true, correlationId: existing.correlation_id });
     if (existing?.status === 'RUNNING' || existing?.status === 'PENDING') return r.status(409).json({ error: 'OPERATION_IN_PROGRESS', correlationId: existing.correlation_id });
     if (existing) {
       jobId = existing.id;
       correlationId = existing.correlation_id;
-      await supabaseAdmin(`rest/v1/provisioning_jobs?id=eq.${encodeURIComponent(jobId)}`, { method: 'PATCH', body: JSON.stringify({ status: 'RUNNING', attempt_count: 1, updated_at: new Date().toISOString(), failure_code: null, failure_detail: null }) });
+      await supabaseAdmin(`rest/v1/provisioning_jobs?id=eq.${encodeURIComponent(jobId)}`, { method: 'PATCH', body: JSON.stringify({ status: 'RUNNING', attempt_count: Number(existing.attempt_count || 0) + 1, updated_at: new Date().toISOString(), failure_code: null, failure_detail: null }) });
     } else {
       const createJob = await supabaseAdmin('/rest/v1/provisioning_jobs', { method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ customer_id: customer.id, product_id: product.id, idempotency_key: idempotencyKey, operation: `engagestay.${action}`, status: 'RUNNING', request_payload: { action }, attempt_count: 1, correlation_id: correlationId, created_by: (q as any).actor?.id || null }) });
       if (!createJob.ok) return r.status(502).json({ error: 'PROVISIONING_JOB_CREATE_FAILED' });
