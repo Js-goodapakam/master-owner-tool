@@ -1,7 +1,7 @@
 // Test-only PostgreSQL-backed subset of the Supabase REST boundary.
 // This is NOT PostgREST, Supabase Auth, Storage, or RLS. It proves real
 // Express route persistence using parameterized SQL against the CI database.
-export function createPgRestCompatibility(pool, actors, outside) {
+export function createPgRestCompatibility(pool, actors, outside, managedWorkspace = () => new Response(JSON.stringify({status:'synthetic_external_ack'}),{status:200,headers:{'content-type':'application/json'}})) {
   const allowed=new Set([
     'owner_profiles','owner_role_permissions','owner_product_access','products',
     'product_modules','product_features','customers','customer_products',
@@ -13,7 +13,7 @@ export function createPgRestCompatibility(pool, actors, outside) {
   return async function route(input,init={}) {
     const url=new URL(String(input));
     if(url.hostname==='127.0.0.1')return outside(input,init);
-    if(url.hostname==='managed-workspace.invalid')return response({status:'synthetic_external_ack'});
+    if(url.hostname==='managed-workspace.invalid')return managedWorkspace(url,init);
     if(url.hostname!=='owner-pg-compat.invalid')throw Error('Unknown external network destination: '+url.hostname);
     if(url.pathname==='/auth/v1/user') {
       const token=String(init?.headers?.authorization||'').replace(/^Bearer\s+/i,'');
