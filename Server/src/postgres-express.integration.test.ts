@@ -12,6 +12,7 @@ const realFetch=globalThis.fetch;
 const actors=new Map();
 const sql=async(query,args=[]) => (await pool.query(query,args)).rows;
 let server,base,ownerId,operatorId,viewerId,stayId,fitId,basicId,premiumId,customerId,otherCustomerId;
+let externalShouldFail=false,externalCalls=0;
 const req=async(path,token='owner-token',method='GET',data=undefined,headers={})=>
   realFetch(base+path,{method,headers:{authorization:token?'Bearer '+token:'','content-type':'application/json',...headers},body:data===undefined?undefined:JSON.stringify(data)});
 beforeAll(async()=>{
@@ -36,7 +37,12 @@ beforeAll(async()=>{
  process.env.SUPABASE_SECRET_KEY='synthetic-compat-only';
  process.env.ENGAGE_STAY_API_ORIGIN='http://managed-workspace.invalid';
  process.env.ENGAGE_OWNER_SERVICE_TOKEN='synthetic-test-service-token-is-32-characters-long';
- vi.stubGlobal('fetch',createPgRestCompatibility(pool,actors,realFetch));
+ vi.stubGlobal('fetch',createPgRestCompatibility(pool,actors,realFetch,()=>{
+  externalCalls++;
+  return new Response(JSON.stringify(externalShouldFail?{error:'SYNTHETIC_UPSTREAM_FAILURE'}:{status:'synthetic_external_ack'}),{
+   status:externalShouldFail?503:200,headers:{'content-type':'application/json'}
+  });
+ }));
  const {app}=await import('./app.js');
  server=await new Promise(resolve=>{const opened=app.listen(0,'127.0.0.1',()=>resolve(opened));});
  base='http://127.0.0.1:'+server.address().port;
@@ -136,11 +142,33 @@ describe('Express + PostgreSQL-backed HTTP boundary (NOT real PostgREST)',()=>{
   const payload={action:'configure',plan:'basic',modules:['operations']};
   const call=()=>req(path,'owner-token','POST',payload,{'idempotency-key':key});
   const first=await call();expect(first.status).toBe(200);
+  const countAfterFirst=externalCalls;
   const replay=await call();expect(replay.status).toBe(200);
+  expect(externalCalls).toBe(countAfterFirst);
   expect((await replay.json()).idempotentReplay).toBe(true);
   const job=(await sql('SELECT * FROM provisioning_jobs WHERE product_id=$1 AND idempotency_key=$2',[stayId,key]))[0];
   expect(job.status).toBe('SUCCEEDED');
   expect(job.attempt_count).toBe(1);
   expect((await sql("SELECT count(*)::int AS n FROM audit_logs WHERE action='engagestay.configure' AND resource_id=$1",[customerId]))[0].n).toBeGreaterThan(0);
  });
+ it('persists upstream failure, retries safely, and increments durable attempt count',async()=>{
+  const key='ci-http-retry-'+randomUUID();
+  const path='/api/customers/'+customerId+'/engagestay?productCode=engage_stay';
+  const invoke=()=>req(path,'owner-token','POST',{action:'configure',plan:'basic'},{'idempotency-key':key});
+  externalShouldFail=true;
+  const error=await invoke();
+  expect(error.status).toBe(503);
+  const failed=(await sql('SELECT * FROM provisioning_jobs WHERE product_id=$1 AND idempotency_key=$2',[stayId,key]))[0];
+  expect(failed.status).toBe('FAILED');
+  expect(failed.attempt_count).toBe(1);
+  externalShouldFail=false;
+  const recovered=await invoke();
+  expect(recovered.status).toBe(200);
+  const saved=(await sql('SELECT * FROM provisioning_jobs WHERE id=$1',[failed.id]))[0];
+  expect(saved.status).toBe('SUCCEEDED');
+  expect(saved.attempt_count).toBe(2);
+  expect(saved.id).toBe(failed.id);
+  expect((await sql('SELECT count(*)::int AS n FROM provisioning_jobs WHERE product_id=$1 AND idempotency_key=$2',[stayId,key]))[0].n).toBe(1);
+ });
+
 });
