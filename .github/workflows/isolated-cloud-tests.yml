@@ -1,0 +1,94 @@
+name: Owner Tool — Isolated Cloud Verification
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/isolated-cloud-tests.yml'
+      - 'Server/**'
+      - 'package.json'
+      - 'package-lock.json'
+  pull_request:
+    paths:
+      - '.github/workflows/isolated-cloud-tests.yml'
+      - 'Server/**'
+      - 'package.json'
+      - 'package-lock.json'
+
+permissions:
+  contents: read
+
+jobs:
+  owner-api-isolated:
+    name: Owner API tests + disposable PostgreSQL verification
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: engage_owner_test
+          POSTGRES_USER: engage_owner_test
+          POSTGRES_PASSWORD: disposable_runner_only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U engage_owner_test -d engage_owner_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      NODE_ENV: test
+      OWNER_TEST_DATABASE_URL: postgresql://engage_owner_test:disposable_runner_only@127.0.0.1:5432/engage_owner_test
+      # Never inject SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY or Vercel secrets.
+    steps:
+      - name: Check out project
+        uses: actions/checkout@v4
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Verify test database identity and transaction rollback
+        shell: bash
+        run: |
+          node <<'NODE'
+          const { Pool } = require('pg');
+          const url = process.env.OWNER_TEST_DATABASE_URL;
+          if (!url || /supabase|production|preview/i.test(url)) throw Error('Unsafe test database URL');
+          const pool = new Pool({connectionString:url,ssl:false});
+          (async()=>{
+            const client=await pool.connect();
+            try {
+              const {rows}=await client.query('SELECT current_database() AS db, current_user AS actor');
+              if(rows[0].db !== 'engage_owner_test' || rows[0].actor !== 'engage_owner_test') throw Error('Unexpected database identity');
+              await client.query('BEGIN');
+              await client.query('CREATE TABLE test_rollback_probe (id integer PRIMARY KEY)');
+              await client.query('INSERT INTO test_rollback_probe VALUES (1)');
+              await client.query('ROLLBACK');
+              const {rows:check}=await client.query("SELECT to_regclass('public.test_rollback_probe') AS probe");
+              if(check[0].probe !== null) throw Error('Rollback did not revert the test table');
+              console.log('Isolated PostgreSQL verified: identity and transaction rollback passed.');
+            } finally {client.release();await pool.end();}
+          })().catch(err=>{console.error(err);process.exitCode=1;});
+          NODE
+
+      - name: Build shared package and Owner API
+        run: |
+          npm run build -w @friday/shared
+          npm run build -w @friday/api
+
+      - name: Run existing isolated Owner API route integration tests
+        run: npm run test -w @friday/api
+
+      - name: Document test boundary
+        if: always()
+        run: |
+          echo "Owner API test harness and disposable PostgreSQL connectivity checked." >> "$GITHUB_STEP_SUMMARY"
+          echo "Owner API tests currently use isolated in-memory data; this job does NOT claim full PostgreSQL subscription/onboarding integration acceptance." >> "$GITHUB_STEP_SUMMARY"
+          echo "No production/preview database credentials are injected." >> "$GITHUB_STEP_SUMMARY"
