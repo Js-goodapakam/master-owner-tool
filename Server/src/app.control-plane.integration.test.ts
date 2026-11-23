@@ -25,6 +25,10 @@ const synthetic = {
   subscriptions: [] as Array<Record<string, unknown>>,
   entitlements: [] as Array<Record<string, unknown>>,
   audits: [] as Array<Record<string, unknown>>,
+  signups: [] as Array<Record<string, unknown>>,
+  onboarding: [] as Array<Record<string, unknown>>,
+  jobs: [] as Array<Record<string, unknown>>,
+  managedWorkspaceCalls: 0,
 };
 const products = [
   { id: stayProduct, product_code: 'engage_stay', name: 'Engage Stay', description: '', version: 'test', status: 'ACTIVE', category: 'Hospitality', commercial_status: 'AVAILABLE', adapter_status: 'HEALTHY' },
@@ -42,7 +46,9 @@ vi.stubGlobal('fetch', async (input: RequestInfo | URL, init?: RequestInit) => {
   if (url.hostname === '127.0.0.1') return originalFetch(input, init);
   if (url.hostname === 'managed-workspace.invalid') return entitlementSyncFails
     ? new Response(JSON.stringify({ error: 'UNAVAILABLE' }), { status: 503, headers: { 'content-type': 'application/json' } })
-    : ok({ synchronized: true });
+    : url.pathname.includes('/managed-workspaces/')
+      ? (synthetic.managedWorkspaceCalls++, ok({ propertyId: 9001, tenantId: 'tenant-synthetic', adminLinked: true, status: 'active' }))
+      : ok({ synchronized: true });
   if (url.hostname !== 'owner-control-plane.invalid') return new Response('', { status: 502 });
   const path = url.pathname;
   if (path === '/auth/v1/user') {
@@ -53,6 +59,7 @@ vi.stubGlobal('fetch', async (input: RequestInfo | URL, init?: RequestInit) => {
   }
   const query = url.searchParams;
   const table = path.replace('/rest/v1/', '');
+  if (table === 'rpc/reserve_tenant_account_code') return ok('ES-TR-000101-26');
   if (table === 'owner_profiles') {
     const id = query.get('user_id') || '';
     return ok(id.includes('stay-operator') ? [{ user_id: 'stay-operator-id', email: 'stay.operator@example.test', full_name: 'Stay Operator', role_key: 'operations', is_active: true, is_primary_owner: false, must_change_password: false }] : [{ user_id: 'owner-id', email: 'owner@example.test', full_name: 'Owner', role_key: 'owner', is_active: true, is_primary_owner: true, must_change_password: false }]);
@@ -70,6 +77,30 @@ vi.stubGlobal('fetch', async (input: RequestInfo | URL, init?: RequestInit) => {
   if (table === 'customers') {
     if (init?.method === 'PATCH') return ok([Object.assign(synthetic.customers[0], body(init))]);
     const id = query.get('id'); return ok(id ? synthetic.customers.filter(item => item.id === id.replace('eq.', '')) : synthetic.customers);
+  }
+  if (table === 'signup_requests') {
+    const id = query.get('id')?.replace('eq.', '');
+    if (init?.method === 'POST') {
+      const incoming = body(init);
+      const existing = synthetic.signups.find(item => item.idempotency_key === incoming.idempotency_key);
+      if (existing) return ok([]);
+      const row = { id: `signup-${synthetic.signups.length + 1}`, status: 'NEW', ...incoming };
+      synthetic.signups.push(row); return ok([row], 201);
+    }
+    if (init?.method === 'PATCH') { const row = synthetic.signups.find(item => item.id === id); if (row) Object.assign(row, body(init)); return ok(row ? [row] : []); }
+    let rows = synthetic.signups; if (id) rows = rows.filter(item => item.id === id); return ok(rows);
+  }
+  if (table === 'onboarding_sessions') {
+    const signupId = query.get('signup_request_id')?.replace('eq.', ''); const id = query.get('id')?.replace('eq.', '');
+    if (init?.method === 'POST') { const row = { id: `session-${synthetic.onboarding.length + 1}`, status: 'IN_PROGRESS', ...body(init) }; synthetic.onboarding.push(row); return ok([row], 201); }
+    if (init?.method === 'PATCH') { const row = synthetic.onboarding.find(item => item.id === id || item.signup_request_id === signupId); if (row) Object.assign(row, body(init)); return ok(row ? [row] : []); }
+    return ok(signupId ? synthetic.onboarding.filter(item => item.signup_request_id === signupId) : synthetic.onboarding);
+  }
+  if (table === 'provisioning_jobs') {
+    const key = query.get('idempotency_key')?.replace('eq.', ''); const id = query.get('id')?.replace('eq.', '');
+    if (init?.method === 'POST') { const row = { id: `job-${synthetic.jobs.length + 1}`, ...body(init) }; synthetic.jobs.push(row); return ok([row], 201); }
+    if (init?.method === 'PATCH') { const row = synthetic.jobs.find(item => item.id === id); if (row) Object.assign(row, body(init)); return ok(row ? [row] : []); }
+    return ok(key ? synthetic.jobs.filter(item => item.idempotency_key === key) : synthetic.jobs);
   }
   if (table === 'customer_products') return ok(query.get('product_id')?.includes(stayProduct) || init?.method === 'PATCH' ? [{ customer_id: customerId, product_id: stayProduct, status: 'ACTIVE' }] : []);
   if (table === 'plans') {
@@ -160,5 +191,30 @@ describe('isolated Owner control-plane API harness', () => {
     expect(failed.status).toBe(502);
     expect((await failed.json()).error).toBe('ENTITLEMENT_SAVED_SYNC_FAILED');
     entitlementSyncFails = false;
+  });
+
+  it('accepts idempotent verified signup intake and persists seven onboarding saves', async () => {
+    const payload = { source: 'email', externalUserId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', email: 'new@example.test', organizationName: 'Synthetic New Hotel', requestedLifecycle: 'TRIAL' };
+    const first = await originalFetch(base + '/api/integrations/engagestay/signup', { method: 'POST', headers: { authorization: 'Bearer synthetic-service-token-for-tests-only', 'idempotency-key': 'signup-synthetic-001', 'content-type': 'application/json' }, body: JSON.stringify(payload) });
+    expect(first.status).toBe(202);
+    const duplicate = await originalFetch(base + '/api/integrations/engagestay/signup', { method: 'POST', headers: { authorization: 'Bearer synthetic-service-token-for-tests-only', 'idempotency-key': 'signup-synthetic-001', 'content-type': 'application/json' }, body: JSON.stringify(payload) });
+    expect(duplicate.status).toBe(202); expect(synthetic.signups).toHaveLength(1);
+    const signupId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+    for (let step = 1; step <= 7; step++) {
+      const saved = await request('/api/onboarding?productCode=engage_stay', 'owner-token', { method: 'POST', body: JSON.stringify({ signupRequestId: signupId, step, data: { step, environment: 'Trial' } }) });
+      expect(saved.status).toBe(200);
+    }
+    expect(synthetic.onboarding).toHaveLength(1); expect(synthetic.onboarding[0].current_step).toBe(7);
+  });
+
+  it('provisions an identity-linked workspace once and returns the durable idempotent result', async () => {
+    synthetic.managedWorkspaceCalls = 0;
+    synthetic.onboarding.push({ id: 'session-provision', signup_request_id: 'signup-provision', customer_id: customerId, status: 'IN_PROGRESS' });
+    synthetic.signups.push({ id: 'signup-provision', source: 'email', external_user_id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb' });
+    const first = await request(`/api/customers/${customerId}/engagestay?productCode=engage_stay`, 'owner-token', { method: 'POST', headers: { 'idempotency-key': 'provision-synthetic-001' }, body: JSON.stringify({ action: 'approve', adminName: 'Synthetic Admin', plan: 'Basic', modules: ['reservations'] }) });
+    expect(first.status).toBe(200); expect((await first.json()).status).toBe('active');
+    const replay = await request(`/api/customers/${customerId}/engagestay?productCode=engage_stay`, 'owner-token', { method: 'POST', headers: { 'idempotency-key': 'provision-synthetic-001' }, body: JSON.stringify({ action: 'approve' }) });
+    expect(replay.status).toBe(200); expect((await replay.json()).idempotentReplay).toBe(true);
+    expect(synthetic.managedWorkspaceCalls).toBe(1);
   });
 });

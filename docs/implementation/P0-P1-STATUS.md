@@ -14,6 +14,7 @@ Last verified: 2026-11-23
 | P1-UX | P1 | Partially implemented | Product selector and light/dark work are deployed; visual regression checks across required viewports remain outstanding. |
 | P0-AUTH | P0 | Implemented and unit-tested; external journey pending | Supabase identity bridge validates access tokens server-side, links the immutable Auth UUID to the PMS user/property, preserves legacy credentials, and denies unmapped or suspended workspaces (`f354970`, `ea4dc1f`). A controlled approved identity is still required for the real signup-to-login journey. |
 | P0-ISO | P0 | Partially implemented and unit-tested | PMS property membership is checked server-side for selection and workspace access; unassigned and suspended properties are denied. Reservation state validation rejects overlapping active room allocations, while production concurrency verification remains outstanding. |
+| P0-O2 | P0 | Implemented and synthetic control-plane tested | Real Owner Express routes now have isolated coverage for idempotent Engage Stay signup intake, seven persisted onboarding steps, server-issued account IDs, identity-linked workspace approval, durable provisioning-job replay, subscription lifecycle and entitlement synchronization. It is not hosted Supabase/Auth/OAuth acceptance. |
 
 ## Current deployment evidence
 
