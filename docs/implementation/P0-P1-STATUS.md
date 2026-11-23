@@ -1,6 +1,6 @@
 # Engagehubs P0/P1 implementation status
 
-Last verified: 2026-11-19
+Last verified: 2026-11-23
 
 | ID | Priority | Status | Evidence / next action |
 | --- | --- | --- | --- |
@@ -9,7 +9,7 @@ Last verified: 2026-11-19
 | P0-O1 | P0 | Partially implemented and route-tested | Seven-step onboarding persists sessions and creates customer/product/tenant records. The isolated loopback HTTP harness exercises the real Express authentication middleware and onboarding handler for initial save, steps 2–7 resume, missing-field validation, duplicate customer rejection, and invalid-step validation. It uses the local in-memory repository only; connected Supabase persistence, signup-request approval, tenant creation and activation still require a dedicated non-production control-plane adapter or database. |
 | P0-P1 | P0 | Partially implemented | Engage Stay managed workspace API supports provisioning and entitlement synchronization. Safe production test identity is still required for end-to-end provisioning. |
 | P0-C1 | P0 | Partially implemented and integration-tested | Subscription lifecycle and entitlement endpoints exist. The isolated control-plane harness exercises trial activation, duplicate activation rejection, plan change, suspension, reactivation, explicit renewal, invalid transition validation, and entitlement sync success/failure against real Express routes. The server-only expiry evaluator selects due Trial/Active subscriptions with an injected-clock core and uses conditional state updates so repeated worker runs do not re-expire a record. It intentionally does not auto-renew without a verified payment or explicit Owner renewal. Connected-database execution and durable retry/event-ledger verification remain outstanding. |
-| P0-M1 | P0 | Partially implemented and unit-tested | Isolated PMS tests cover property-state validation, room allocation conflicts, clean-room check-in, settled check-out and Dirty-housekeeping handoff (`4becbf1`). The concurrency runner now fails closed unless `ENGAGE_TEST_DATABASE_URL` and a dedicated `ENGAGE_TEST_DATABASE_ID` identify a separate non-production database (`75f3f4e`); no dedicated Supabase project exists yet, so PostgreSQL load execution remains blocked. |
+| P0-M1 | P0 | Partially implemented and PostgreSQL-tested | Isolated GitHub Actions PostgreSQL 16 now applies synthetic Engage Stay schema/fixtures and executes property-key isolation plus row-lock/compare-and-swap concurrency tests (`a7fe587`, `db1626a`). The fail-closed guard remains in place. Hosted Supabase RLS and full reservation-allocation acceptance still require a separate Supabase staging project. |
 | P1-360 | P1 | Partially implemented | Customer 360 and private document management exist; user administration and broader lifecycle UI require verification. |
 | P1-UX | P1 | Partially implemented | Product selector and light/dark work are deployed; visual regression checks across required viewports remain outstanding. |
 | P0-AUTH | P0 | Implemented and unit-tested; external journey pending | Supabase identity bridge validates access tokens server-side, links the immutable Auth UUID to the PMS user/property, preserves legacy credentials, and denies unmapped or suspended workspaces (`f354970`, `ea4dc1f`). A controlled approved identity is still required for the real signup-to-login journey. |
@@ -45,3 +45,9 @@ Last verified: 2026-11-19
 - `Server/src/subscriptionLifecycle.ts` provides injected-clock expiry selection; `Server/src/subscriptionLifecycle.test.ts` covers due, suspended, and no-expiry behavior.
 - `POST /api/internal/subscriptions/evaluate-expiry` is restricted to the existing Owner service token. It is intended for a protected scheduler and processes only due `TRIAL`/`ACTIVE` subscriptions, transitions them to `EXPIRED`, and suspends the related customer/product assignment. A second run skips already processed records.
 - `PATCH /api/subscriptions/:id` now supports explicit `RENEW` with a required new expiry date. This preserves the existing subscription/customer/tenant identities; it does not infer payment success.
+
+## Isolated PostgreSQL CI (2026-11-23)
+
+- Owner Tool: a disposable PostgreSQL 16 service now runs the complete ordered migration set. The migration runner supplies only CI-local `auth.users` and `storage.buckets` compatibility relations, then applies all ten project migrations. GitHub Actions run `45194208649` passed its build, lint, 17 API tests and migration step at commit `c03addf`.
+- Engage Stay: a disposable PostgreSQL 16 service applies a CI-only base schema plus the four existing Engage Stay SQL migrations, synthetic property/user/workspace fixtures, and actual PostgreSQL property-isolation and row-lock/CAS tests. GitHub Actions run `45189850695` passed at commit `db1626a`; the local suite reports 59 passed and 3 database tests skipped when no isolated URL is configured.
+- These checks never receive Production or shared Preview connection variables. `docs/implementation/SUPABASE-STAGING-REQUIREMENTS.md` records the remaining hosted Supabase acceptance prerequisites.
