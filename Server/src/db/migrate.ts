@@ -8,7 +8,18 @@ if (!process.env.DATABASE_URL) throw new Error('DATABASE_URL is required for mig
 // used in hosted environments, where Supabase owns the auth schema.
 const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL, ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : undefined });
 try {
-  await pool.query('create schema if not exists auth; create table if not exists auth.users (id uuid primary key);');
+  await pool.query(`
+    create schema if not exists auth;
+    create table if not exists auth.users (id uuid primary key);
+    create schema if not exists storage;
+    create table if not exists storage.buckets (
+      id text primary key,
+      name text not null,
+      public boolean not null default false,
+      file_size_limit bigint,
+      allowed_mime_types text[]
+    );
+  `);
   const directory = new URL('../../../Database/migrations/', import.meta.url);
   const files = (await readdir(directory)).filter(file => /^\d+_.*\.sql$/.test(file)).sort();
   for (const file of files) await pool.query(await readFile(new URL(`../../../Database/migrations/${file}`, import.meta.url), 'utf8'));
