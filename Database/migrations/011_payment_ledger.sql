@@ -19,4 +19,7 @@ create table if not exists payment_transactions (
 );
 create index if not exists idx_payment_transactions_customer_product on payment_transactions(customer_id, product_id, created_at desc);
 alter table payment_transactions enable row level security;
-revoke all on payment_transactions from anon, authenticated;
+do $$ begin
+  if exists (select 1 from pg_roles where rolname = 'anon') then revoke all on payment_transactions from anon; end if;
+  if exists (select 1 from pg_roles where rolname = 'authenticated') then revoke all on payment_transactions from authenticated; end if;
+end $$;
