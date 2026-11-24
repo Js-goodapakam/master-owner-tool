@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { Server } from 'node:http';
+import { createHmac } from 'node:crypto';
 
 /**
  * This adapter replaces only Supabase's HTTP boundary.  The application,
@@ -13,6 +14,7 @@ process.env.SUPABASE_ANON_KEY = 'synthetic-anon-key';
 process.env.SUPABASE_SECRET_KEY = 'synthetic-server-key';
 process.env.ENGAGE_STAY_API_ORIGIN = 'http://managed-workspace.invalid';
 process.env.ENGAGE_OWNER_SERVICE_TOKEN = 'synthetic-service-token-for-tests-only';
+process.env.RAZORPAY_WEBHOOK_SECRET = 'synthetic-razorpay-webhook-secret';
 delete process.env.DATABASE_URL;
 
 const stayProduct = '11111111-1111-4111-8111-111111111111';
@@ -28,6 +30,7 @@ const synthetic = {
   signups: [] as Array<Record<string, unknown>>,
   onboarding: [] as Array<Record<string, unknown>>,
   jobs: [] as Array<Record<string, unknown>>,
+  payments: [] as Array<Record<string, unknown>>,
   managedWorkspaceCalls: 0,
 };
 const products = [
@@ -120,6 +123,11 @@ vi.stubGlobal('fetch', async (input: RequestInfo | URL, init?: RequestInit) => {
     if (id) rows = rows.filter(item => item.id === id);
     if (query.get('status')?.includes('TRIAL')) rows = rows.filter(item => item.status === 'TRIAL' || item.status === 'ACTIVE');
     return ok(rows);
+  }
+  if (table === 'payment_transactions') {
+    const order = query.get('provider_order_id')?.replace('eq.', ''); const id = query.get('id')?.replace('eq.', '');
+    if (init?.method === 'PATCH') { const row = synthetic.payments.find(item => item.id === id); if (row) Object.assign(row, body(init)); return ok(row ? [row] : []); }
+    return ok(order ? synthetic.payments.filter(item => item.provider_order_id === order) : synthetic.payments);
   }
   if (table === 'entitlement_overrides') {
     if (init?.method === 'POST') { const row = { id: `ent-${synthetic.entitlements.length + 1}`, ...body(init) }; synthetic.entitlements.push(row); return ok([row], 201); }
@@ -216,5 +224,16 @@ describe('isolated Owner control-plane API harness', () => {
     const replay = await request(`/api/customers/${customerId}/engagestay?productCode=engage_stay`, 'owner-token', { method: 'POST', headers: { 'idempotency-key': 'provision-synthetic-001' }, body: JSON.stringify({ action: 'approve' }) });
     expect(replay.status).toBe(200); expect((await replay.json()).idempotentReplay).toBe(true);
     expect(synthetic.managedWorkspaceCalls).toBe(1);
+  });
+
+  it('accepts one signed captured payment and makes an exact replay idempotent', async () => {
+    synthetic.payments.push({ id: 'payment-1', provider: 'RAZORPAY', provider_order_id: 'order_test', amount_minor: 129900, currency: 'INR', status: 'CREATED' });
+    const payload = JSON.stringify({ event: 'payment.captured', payload: { payment: { entity: { id: 'pay_test', order_id: 'order_test', amount: 129900, currency: 'INR' } } } });
+    const signature = createHmac('sha256', process.env.RAZORPAY_WEBHOOK_SECRET!).update(payload).digest('hex');
+    const first = await originalFetch(base + '/webhooks/razorpay', { method: 'POST', headers: { 'content-type': 'application/json', 'x-razorpay-signature': signature }, body: payload });
+    expect(first.status).toBe(200); expect((await first.json()).processed).toBe(true);
+    const replay = await originalFetch(base + '/webhooks/razorpay', { method: 'POST', headers: { 'content-type': 'application/json', 'x-razorpay-signature': signature }, body: payload });
+    expect(replay.status).toBe(200); expect((await replay.json()).duplicate).toBe(true);
+    expect(synthetic.payments[0]).toMatchObject({ status: 'CAPTURED', provider_payment_id: 'pay_test' });
   });
 });

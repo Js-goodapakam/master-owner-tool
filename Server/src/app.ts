@@ -6,6 +6,7 @@ import { authenticate, authorize } from './auth.js';
 import { otaProviders, otaProviderIds } from './otaCatalog.js';
 import { createLocalDemoSession, isLocalDemoEnabled, isLoopbackRequest } from './localAuth.js';
 import { expiredSubscriptions } from './subscriptionLifecycle.js';
+import { verifyRazorpayWebhookSignature } from './razorpay.js';
 import {
   addAudit,
   audit,
@@ -36,7 +37,7 @@ app.use(
   }),
 );
 
-app.use(express.json({ limit: '12mb' }));
+app.use(express.json({ limit: '12mb', verify: (request, _response, buffer) => { (request as any).rawBody = Buffer.from(buffer); } }));
 
 // Supabase privileged operations are server-only. Never expose these keys to the browser.
 const roleKeys: Record<string, string> = {
@@ -304,6 +305,41 @@ app.get('/api/public/integration-status', async (_q, r) => {
   } catch {
     return r.json({ configured: true, reachable: false, origin: new URL(origin).origin, message: 'EngageStay service could not be reached.' });
   }
+});
+
+// Razorpay sends a signed, raw JSON payload. It is deliberately outside the
+// employee-session middleware, but fails closed unless the server-only webhook
+// secret is present and the exact raw bytes authenticate.
+app.post('/webhooks/razorpay', async (q, r) => {
+  const secret = process.env.RAZORPAY_WEBHOOK_SECRET;
+  const signature = q.get('x-razorpay-signature');
+  const rawBody = (q as any).rawBody as Buffer | undefined;
+  if (!secret || !rawBody || !verifyRazorpayWebhookSignature(rawBody, signature, secret)) return r.status(401).json({ error: 'INVALID_WEBHOOK_SIGNATURE' });
+  if (!supabaseConfigured()) return r.status(503).json({ error: 'DATABASE_REQUIRED' });
+  const event = String(q.body?.event || '');
+  const payment = q.body?.payload?.payment?.entity;
+  const orderId = typeof payment?.order_id === 'string' ? payment.order_id : '';
+  const paymentId = typeof payment?.id === 'string' ? payment.id : '';
+  if (!['payment.captured', 'payment.failed'].includes(event) || !orderId || !paymentId) return r.status(400).json({ error: 'UNSUPPORTED_PAYMENT_EVENT' });
+  const expectedStatus = event === 'payment.captured' ? 'CAPTURED' : 'FAILED';
+  const transaction = await supabaseAdmin(`rest/v1/payment_transactions?select=id,status,amount_minor,currency,subscription_id&provider=eq.RAZORPAY&provider_order_id=eq.${encodeURIComponent(orderId)}&limit=1`);
+  if (!transaction.ok) return r.status(502).json({ error: 'PAYMENT_LOOKUP_FAILED' });
+  const existing = (await transaction.json() as Array<any>)[0];
+  if (!existing) return r.status(404).json({ error: 'PAYMENT_ORDER_NOT_FOUND' });
+  if (existing.status === expectedStatus && existing.provider_payment_id === paymentId) return r.json({ processed: false, duplicate: true });
+  if (existing.status === 'CAPTURED') return r.status(409).json({ error: 'PAYMENT_STATE_CONFLICT' });
+  if (Number(payment.amount) !== Number(existing.amount_minor) || String(payment.currency) !== existing.currency) return r.status(400).json({ error: 'PAYMENT_AMOUNT_MISMATCH' });
+  const changed = await supabaseAdmin(`rest/v1/payment_transactions?id=eq.${encodeURIComponent(existing.id)}&status=in.(CREATED,AUTHORIZED,FAILED)`, {
+    method: 'PATCH', headers: { Prefer: 'return=representation' },
+    body: JSON.stringify({ status: expectedStatus, provider_payment_id: paymentId, event_at: new Date().toISOString(), updated_at: new Date().toISOString() }),
+  });
+  if (!changed.ok) return r.status(502).json({ error: 'PAYMENT_UPDATE_FAILED' });
+  const rows = await changed.json() as Array<any>;
+  if (!rows.length) return r.json({ processed: false, duplicate: true });
+  await recordPlatformAudit(q, `payment.${expectedStatus.toLowerCase()}`, 'payment_transaction', existing.id, { status: existing.status }, { status: expectedStatus, orderId, paymentId });
+  // A captured payment is recorded here; commercial activation remains an
+  // explicit server-side transition and never trusts a browser callback.
+  return r.json({ processed: true, status: expectedStatus });
 });
 
 app.post('/api/auth/login', async (q, r) => {
