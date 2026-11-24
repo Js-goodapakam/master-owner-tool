@@ -15,6 +15,7 @@ Last verified: 2026-11-24
 | P0-AUTH | P0 | Implemented and unit-tested; external journey pending | Supabase identity bridge validates access tokens server-side, links the immutable Auth UUID to the PMS user/property, preserves legacy credentials, and denies unmapped or suspended workspaces (`f354970`, `ea4dc1f`). A controlled approved identity is still required for the real signup-to-login journey. |
 | P0-ISO | P0 | Partially implemented and unit-tested | PMS property membership is checked server-side for selection and workspace access; unassigned and suspended properties are denied. Reservation state validation rejects overlapping active room allocations, while production concurrency verification remains outstanding. |
 | P0-O2 | P0 | Implemented and synthetic control-plane tested | Real Owner Express routes now have isolated coverage for idempotent Engage Stay signup intake, seven persisted onboarding steps, server-issued account IDs, identity-linked workspace approval, durable provisioning-job replay, subscription lifecycle and entitlement synchronization. It is not hosted Supabase/Auth/OAuth acceptance. |
+| P0-BILLING | P0 | Partially implemented and isolated-tested | Razorpay signature verification, signed raw webhook validation, replay-safe captured/failed payment state handling, audit writes, and a private payment ledger migration are implemented (`a1bcf1e`, `e6e31f6`). Real Razorpay order creation, payment-to-activation, reconciliation, and staging acceptance remain blocked until test-mode credentials and authoritative published plan prices are configured. |
 
 ## Current deployment evidence
 
@@ -58,3 +59,9 @@ Last verified: 2026-11-24
 - Commit `7b2f98e` extends `src/postgres-acceptance.test.js` with real disposable-PostgreSQL tests using the actual workspace persistence path. It covers reservation creation, room reassignment, payment/zero-balance checkout, housekeeping transition, cancellation inventory restoration, validation failure rollback, concurrent conflicting allocation, and cross-property record absence.
 - GitHub Actions run `45327951560` passed: 8/8 PostgreSQL acceptance tests and the separate 61/61 standard regression tests (the 8 PostgreSQL-only tests are deliberately skipped during the non-database regression command).
 - This is not hosted Supabase Auth, RLS, OAuth, storage, payment-gateway, or production acceptance. Production readiness remains **NOT READY** pending the dedicated staging and remaining P0 acceptance work.
+
+## Razorpay payment boundary (2026-11-24)
+
+- Commit `a1bcf1e` adds a server-only Razorpay HMAC boundary and signed raw webhook endpoint. It rejects altered payloads, amount/currency mismatches, invalid signatures, and duplicate captured events. The browser cannot activate a paid subscription from a success callback.
+- Migration `011_payment_ledger.sql` is additive, records provider order/payment references with uniqueness constraints, and keeps the ledger private from `anon` and `authenticated` roles. Commit `e6e31f6` makes the migration compatible with the disposable CI roles.
+- GitHub Actions run `45332423079` passed build, lint, 22 API tests, and the isolated PostgreSQL migration sequence. No Razorpay credentials, order, payment, webhook, or production database was used.
