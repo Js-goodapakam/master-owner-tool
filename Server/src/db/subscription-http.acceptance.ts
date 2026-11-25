@@ -171,6 +171,15 @@ try {
   assert.deepEqual(recovered.sort(), ['DELIVERED','idle']);
   await secondWorker.stop();
   assert.deepEqual((await owner.query('select attempts,state from subscription_sync_outbox')).rows, [{attempts:3,state:'DELIVERED'}]);
+  const compare = (requestedTenant: string, bearer: string) => originalFetch(stayOrigin + '/api/internal/managed-workspaces/' + customer, {
+    method:'POST', headers:{Authorization:'Bearer '+bearer,'Content-Type':'application/json'},
+    body:JSON.stringify({action:'subscription_revision',productCode:'engage_stay',tenantId:requestedTenant}),
+  });
+  assert.equal((await compare(tenant, randomUUID())).status, 401);
+  assert.equal((await compare(randomUUID(), secret)).status, 409);
+  const deliveredRevision = (await owner.query('select revision::text from subscription_sync_outbox')).rows[0].revision;
+  assert.deepEqual(await (await compare(tenant, secret)).json(), {revision:deliveredRevision});
+  assert.equal((await originalFetch(ownerOrigin + '/api/billing/subscription-delivery/' + deliveredRevision + '/recover?productCode=engage_stay', {method:'POST'})).status, 401);
   assert.equal((await access()).status, 200);
   assert.equal((await stay.query('select owner_tenant_id from engagestay_managed_workspace where property_id=9001')).rows[0].owner_tenant_id, tenant);
   await owner.query("update subscriptions set status='SUSPENDED' where id=$1", [id]);
