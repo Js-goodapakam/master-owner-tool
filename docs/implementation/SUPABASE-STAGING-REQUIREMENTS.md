@@ -77,6 +77,15 @@ availability and anonymous reads of selected server-owned tables. Record
 actual results separately for authorized and cross-tenant RLS, OAuth, Storage,
 Razorpay Test Mode and the full synthetic customer journey.
 
+Run `node scripts/hosted-staging-services.mjs` after preparing confirmed
+synthetic accounts, a known private document, staging OAuth clients and an
+operator-completed Razorpay Test Mode payment. This checks password login,
+refresh, logout, confirmed email, authenticated private table denial, private
+object denial, OAuth redirect configuration and invalid callback state, and
+read-only Razorpay order/payment consistency. Positive OAuth callback, document
+upload/download, paid activation and reservation-to-checkout still require
+the hosted customer journey.
+
 - Hosted Supabase RLS policies for Owner data and private documents.
 - Supabase Auth identity bridge, including token refresh and suspension.
 - Storage upload, signed preview/download, replacement and deletion rules.
