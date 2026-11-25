@@ -1525,11 +1525,17 @@ app.get('/api/billing/subscription-reconciliation', authorize('billing.manage'),
 app.post('/api/billing/subscription-delivery/:revision/recover', authorize('billing.manage'), async (q, r) => {
   const revision = String(q.params.revision);
   if (!/^[1-9][0-9]{0,17}$/.test(revision)) return r.status(400).json({ error: 'INVALID_REVISION' });
+  const scope = z.object({customerId:z.string().uuid(),tenantId:z.string().uuid()}).safeParse(q.body);
+  if (!scope.success) return r.status(400).json({error:'INVALID_RECOVERY_SCOPE'});
   if (!supabaseConfigured()) return r.status(503).json({ error: 'DATABASE_REQUIRED' });
   try {
     const product = await requireProductContext(q, r);
     if (!product) return;
     if (product.code !== 'engage_stay') return r.status(400).json({ error: 'INVALID_DELIVERY_PRODUCT' });
+    if (!await requireCustomerProduct(q,r,scope.data.customerId,product)) return;
+    const scoped = await supabaseAdmin(`/rest/v1/subscription_sync_outbox?select=state&revision=eq.${revision}&customer_id=eq.${scope.data.customerId}&tenant_id=eq.${scope.data.tenantId}&product_id=eq.${product.id}&limit=1`);
+    if (!scoped.ok) return r.status(502).json({error:'DELIVERY_LOOKUP_FAILED'});
+    if (!(await scoped.json()).length) return r.status(404).json({error:'DELIVERY_NOT_FOUND'});
     const result = await supabaseAdmin('/rest/v1/rpc/recover_stay_subscription_delivery', {
       method:'POST', body:JSON.stringify({ p_revision:revision, p_product:product.id, p_actor:q.actor?.id }),
     });

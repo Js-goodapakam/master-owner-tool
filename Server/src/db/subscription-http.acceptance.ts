@@ -27,6 +27,9 @@ const secret = randomBytes(32).toString('hex');
 const customer = randomUUID();
 const operator = randomUUID();
 const operatorToken = randomUUID();
+const viewer = randomUUID(), viewerToken = randomUUID();
+const finance = randomUUID(), financeToken = randomUUID();
+let verifiedReads = 0;
 const tenant = randomUUID();
 const session = randomBytes(32).toString('hex');
 const servers: Server[] = [];
@@ -63,30 +66,38 @@ try {
     const url = new URL(String(input));
     if (url.origin === 'https://api.razorpay.com') {
       assert.equal(url.pathname, '/v1/payments/pay_http');
+      verifiedReads++;
       return Response.json({ id:'pay_http', order_id:'order_http', amount:10000, currency:'INR', status:'captured' });
     }
     if (url.hostname !== 'owner-db-fixture.invalid') return originalFetch(input, init);
     if (url.pathname === '/auth/v1/user') {
-      return new Headers(init?.headers).get('authorization') === 'Bearer '+operatorToken
-        ? Response.json({id:operator,email:'billing@example.test'}) : new Response(null,{status:401});
+      const identity = new Map<string,string>([[operatorToken,operator],[viewerToken,viewer],[financeToken,finance]])
+        .get(new Headers(init?.headers).get('authorization')?.slice(7) || '');
+      return identity ? Response.json({id:identity,email:'billing@example.test'}) : new Response(null,{status:401});
     }
-    if (url.pathname.endsWith('/owner_profiles')) return Response.json((await owner.query('select * from owner_profiles where user_id=$1',[operator])).rows);
-    if (url.pathname.endsWith('/owner_role_permissions')) return Response.json([{permission_key:'billing.manage'}]);
+    if (url.pathname.endsWith('/owner_profiles')) return Response.json((await owner.query('select * from owner_profiles where user_id=$1',[url.searchParams.get('user_id')?.slice(3)])).rows);
+    if (url.pathname.endsWith('/owner_role_permissions')) return Response.json(url.searchParams.get('role_key') === 'eq.viewer' ? [] : [{permission_key:'billing.manage'}]);
+    if (url.pathname.endsWith('/owner_product_access')) return Response.json([]);
     if (url.pathname.endsWith('/products')) return Response.json((await owner.query('select * from products')).rows);
     if (url.pathname.endsWith('/product_modules') || url.pathname.endsWith('/product_features')) return Response.json([]);
     if (url.pathname.endsWith('/customer_products')) return Response.json((await owner.query('select * from customer_products where customer_id=$1 and product_id=$2',
       [url.searchParams.get('customer_id')?.slice(3),url.searchParams.get('product_id')?.slice(3)])).rows);
     if (url.pathname.endsWith('/subscription_sync_outbox') && !init?.method) return Response.json((await owner.query(
-      'select revision::text,tenant_id,state from subscription_sync_outbox where customer_id=$1 and product_id=$2 order by revision desc limit 1',
-      [url.searchParams.get('customer_id')?.slice(3),url.searchParams.get('product_id')?.slice(3)])).rows);
+      'select revision::text,tenant_id,state from subscription_sync_outbox where customer_id=$1 and product_id=$2 and ($3::uuid is null or tenant_id=$3) and ($4::bigint is null or revision=$4) order by revision desc limit 1',
+      [url.searchParams.get('customer_id')?.slice(3),url.searchParams.get('product_id')?.slice(3),url.searchParams.get('tenant_id')?.slice(3),url.searchParams.get('revision')?.slice(3)])).rows);
+    if (url.pathname.endsWith('/rpc/recover_stay_subscription_delivery')) {
+      const a=JSON.parse(String(init?.body));
+      return Response.json((await owner.query('select recover_stay_subscription_delivery($1,$2,$3) as ok',[a.p_revision,a.p_product,a.p_actor])).rows[0].ok);
+    }
     if (url.pathname.endsWith('/rpc/requeue_stale_subscription')) {
       const a=JSON.parse(String(init?.body));
       return Response.json((await owner.query('select requeue_stale_subscription($1,$2,$3,$4,$5,$6) as ok',
         [a.p_revision,a.p_customer,a.p_product,a.p_tenant,a.p_remote,a.p_actor])).rows[0].ok);
     }
     if (url.pathname.endsWith('/payment_transactions')) {
-      return Response.json((await owner.query('select * from payment_transactions where provider_order_id=$1',
-        [url.searchParams.get('provider_order_id')?.slice(3)])).rows);
+      return Response.json((await owner.query(`select * from payment_transactions where
+        (provider_order_id=$1 or (id=$2 and customer_id=$3 and product_id=$4))`,
+        ['provider_order_id','id','customer_id','product_id'].map(key=>url.searchParams.get(key)?.slice(3)))).rows);
     }
     if (url.pathname.endsWith('/rpc/activate_verified_checkout')) {
       const args = JSON.parse(String(init?.body));
@@ -151,21 +162,41 @@ try {
   await owner.query("insert into customers(id,customer_code,company_name,email) values($1,'HTTP-CI','Synthetic HTTP','http@example.test')", [customer]);
   await owner.query('insert into auth.users(id) values($1)',[operator]);
   await owner.query("insert into owner_profiles(user_id,email,full_name,role_key,must_change_password) values($1,'billing@example.test','Synthetic Billing','owner',false)",[operator]);
+  for (const [id,role] of [[viewer,'viewer'],[finance,'finance']]) {
+    await owner.query('insert into auth.users(id) values($1)',[id]);
+    await owner.query('insert into owner_profiles(user_id,email,full_name,role_key,must_change_password) values($1,$2,$3,$3,false)',[id,role+'@example.test',role]);
+  }
   await owner.query("insert into tenants(id,customer_id,name,slug) values($1,$2,'Synthetic','http-ci')", [tenant, customer]);
   await owner.query('insert into customer_products(customer_id,product_id,tenant_id) values($1,$2,$3)', [customer, plan.product_id, tenant]);
   await stay.query("insert into property(id,name,code) values(9001,'Synthetic HTTP','http-ci')");
   await stay.query(`insert into "user"(id,"propertyId",name,email,role) values(9001,9001,'Synthetic','http@example.test','ADMIN')`);
   await stay.query("insert into engagestay_managed_workspace(property_id,customer_id,status,plan) values(9001,$1,'suspended','basic')", [customer]);
   await stay.query("insert into friday_sessions(token_hash,user_id,expires_at) values($1,9001,now()+interval '1 hour')", [createHash('sha256').update(session).digest('hex')]);
-  await owner.query(`insert into payment_transactions(customer_id,product_id,plan_id,provider,provider_order_id,amount_minor,currency,status,idempotency_key,metadata)
-    values($1,$2,$3,'RAZORPAY','order_http',10000,'INR','CREATED','http-ci','{"priceId":"fixture","billingPeriod":"MONTHLY"}')`, [customer,plan.product_id,plan.id]);
+  const payment = (await owner.query(`insert into payment_transactions(customer_id,product_id,plan_id,provider,provider_order_id,provider_payment_id,amount_minor,currency,status,idempotency_key,metadata)
+    values($1,$2,$3,'RAZORPAY','order_http','pay_http',10000,'INR','CAPTURED','http-ci','{"priceId":"fixture","billingPeriod":"MONTHLY"}') returning id`, [customer,plan.product_id,plan.id])).rows[0].id;
+  const recoverPayment = (token?:string, id=customer, product='engage_stay') => originalFetch(ownerOrigin + '/api/billing/customers/'+id+'/payments/'+payment+'/reconcile?productCode='+product,
+    {method:'POST',headers:token ? {Authorization:'Bearer '+token} : {}});
+  const checkDenials = async (call:typeof recoverPayment) => {
+    for (const [token, status] of [[undefined,401],[randomUUID(),401],[viewerToken,403],[financeToken,403]] as const) {
+      assert.equal((await call(token)).status,status);
+    }
+    assert.equal((await call(operatorToken,randomUUID())).status,404);
+  };
+  await checkDenials(recoverPayment);
+  assert.equal((await recoverPayment(operatorToken,customer,'engage_fit')).status,404);
+  const recoveredPayment = await recoverPayment(operatorToken);
+  assert.equal(recoveredPayment.status,200);
+  const { subscriptionId:id, outcome } = await recoveredPayment.json();
+  assert.equal(outcome,'activated');
+  assert.equal(verifiedReads,1);
+  assert.deepEqual(await (await recoverPayment(operatorToken)).json(),{outcome:'already_activated'});
   const payload = JSON.stringify({ event:'payment.captured', payload:{ payment:{ entity:{ id:'pay_http', order_id:'order_http' } } } });
   const signature = createHmac('sha256', process.env.RAZORPAY_WEBHOOK_SECRET).update(payload).digest('hex');
   const capture = () => originalFetch(ownerOrigin + '/webhooks/razorpay', { method:'POST', body:payload,
     headers:{ 'content-type':'application/json', 'x-razorpay-signature':signature } });
   const captured = await capture();
   assert.equal(captured.status, 200);
-  const { subscriptionId: id } = await captured.json();
+  assert.equal((await captured.json()).subscriptionId,id);
   assert.equal((await (await capture()).json()).subscriptionId, id);
   assert.equal((await owner.query('select count(*)::int as count from subscription_sync_outbox')).rows[0].count, 1);
   const deliver = () => originalFetch(ownerOrigin + '/internal/subscriptions/deliver', { method:'POST',headers:{Authorization:'Bearer '+secret} });
@@ -214,6 +245,17 @@ try {
   assert.equal((await access()).status, 200);
   assert.equal((await stay.query('select owner_tenant_id from engagestay_managed_workspace where property_id=9001')).rows[0].owner_tenant_id, tenant);
   await owner.query("update subscriptions set status='SUSPENDED' where id=$1", [id]);
+  const dead = (await owner.query("update subscription_sync_outbox set state='DEAD',attempts=8 where subscription_id=$1 and subscription_status='SUSPENDED' returning revision::text",[id])).rows[0].revision;
+  const recoverDead = (token?:string, requestedCustomer=customer, product='engage_stay', requestedTenant=tenant) =>
+    originalFetch(ownerOrigin + '/api/billing/subscription-delivery/'+dead+'/recover?productCode='+product,
+      {method:'POST',headers:{'Content-Type':'application/json',...(token ? {Authorization:'Bearer '+token} : {})},
+        body:JSON.stringify({customerId:requestedCustomer,tenantId:requestedTenant})});
+  await checkDenials(recoverDead);
+  assert.equal((await recoverDead(operatorToken,customer,'engage_fit')).status,400);
+  assert.equal((await recoverDead(operatorToken,customer,'engage_stay',randomUUID())).status,404);
+  assert.deepEqual(await (await recoverDead(operatorToken)).json(),{outcome:'PENDING'});
+  assert.equal((await recoverDead(operatorToken)).status,409);
+  assert.equal((await owner.query("select count(*)::int as count from audit_logs where action='subscription.delivery_requeued' and resource_id=$1 and operator_id=$2",[dead,operator])).rows[0].count,1);
   assert.deepEqual(await (await deliver()).json(), { outcome:'DELIVERED' });
   assert.equal((await access()).status, 403);
   await owner.query("update subscriptions set status='ACTIVE' where id=$1", [id]);
