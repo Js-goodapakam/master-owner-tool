@@ -30,6 +30,7 @@ const operatorToken = randomUUID();
 const viewer = randomUUID(), viewerToken = randomUUID();
 const finance = randomUUID(), financeToken = randomUUID();
 let verifiedReads = 0;
+let mismatchedCapture = false;
 const tenant = randomUUID();
 const session = randomBytes(32).toString('hex');
 const servers: Server[] = [];
@@ -67,9 +68,15 @@ try {
     if (url.origin === 'https://api.razorpay.com') {
       assert.equal(url.pathname, '/v1/payments/pay_http');
       verifiedReads++;
-      return Response.json({ id:'pay_http', order_id:'order_http', amount:10000, currency:'INR', status:'captured' });
+      return Response.json({ id:'pay_http', order_id:'order_http', amount:mismatchedCapture ? 9999 : 10000, currency:'INR', status:'captured' });
     }
     if (url.hostname !== 'owner-db-fixture.invalid') return originalFetch(input, init);
+    if (url.pathname.endsWith('/audit_logs') && init?.method === 'POST') {
+      const a = JSON.parse(String(init.body));
+      await owner.query('insert into audit_logs(operator_id,action,resource_type,resource_id,correlation_id,result,after_value) values($1,$2,$3,$4,$5,$6,$7)',
+        [a.operator_id,a.action,a.resource_type,a.resource_id,a.correlation_id,a.result,a.after_value]);
+      return new Response(null,{status:201});
+    }
     if (url.pathname === '/auth/v1/user') {
       const identity = new Map<string,string>([[operatorToken,operator],[viewerToken,viewer],[financeToken,finance]])
         .get(new Headers(init?.headers).get('authorization')?.slice(7) || '');
@@ -184,11 +191,16 @@ try {
   };
   await checkDenials(recoverPayment);
   assert.equal((await recoverPayment(operatorToken,customer,'engage_fit')).status,404);
+  mismatchedCapture = true;
+  assert.equal((await recoverPayment(operatorToken)).status,409);
+  assert.equal((await owner.query('select count(*)::int as count from subscriptions')).rows[0].count,0);
+  assert.equal((await owner.query("select count(*)::int as count from audit_logs where action='payment.reconciliation_review' and resource_id=$1",[payment])).rows[0].count,1);
+  mismatchedCapture = false;
   const recoveredPayment = await recoverPayment(operatorToken);
   assert.equal(recoveredPayment.status,200);
   const { subscriptionId:id, outcome } = await recoveredPayment.json();
   assert.equal(outcome,'activated');
-  assert.equal(verifiedReads,1);
+  assert.equal(verifiedReads,2);
   assert.deepEqual(await (await recoverPayment(operatorToken)).json(),{outcome:'already_activated'});
   const payload = JSON.stringify({ event:'payment.captured', payload:{ payment:{ entity:{ id:'pay_http', order_id:'order_http' } } } });
   const signature = createHmac('sha256', process.env.RAZORPAY_WEBHOOK_SECRET).update(payload).digest('hex');
