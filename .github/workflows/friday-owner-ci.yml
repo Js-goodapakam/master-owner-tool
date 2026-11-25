@@ -82,6 +82,12 @@ jobs:
       - uses: supabase/setup-cli@v1
         with:
           version: 2.54.11
+      - uses: actions/checkout@v4
+        with:
+          repository: Js-goodapakam/friday-desk-server
+          ref: 99fffbc132c3c3120364d48644aca0779ada9cbf
+          path: engage-stay
+      - run: npm ci && npm run build -w @friday/shared && npm ci --ignore-scripts --prefix engage-stay
       - name: Initialize isolated stack and probe real services
         run: |
           set -euo pipefail
@@ -95,4 +101,4 @@ jobs:
             grep -Ei 'error|not found|unhealthy' /tmp/local-supabase-start.log | cut -c1-180 || true
             exit 1
           fi
-          node "$GITHUB_WORKSPACE/scripts/local-supabase-acceptance.mjs" "$GITHUB_WORKSPACE"
+          node --import "$GITHUB_WORKSPACE/node_modules/tsx/dist/loader.mjs" "$GITHUB_WORKSPACE/scripts/local-supabase-acceptance.mjs" "$GITHUB_WORKSPACE" "$GITHUB_WORKSPACE/engage-stay"
