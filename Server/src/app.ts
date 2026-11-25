@@ -1433,6 +1433,40 @@ app.patch('/api/subscriptions/:id', authorize('subscription.manage'), async (q, 
 // currently active/trial subscriptions due at evaluation time are selected;
 // after the first run they no longer match. A scheduler may call this route,
 // but it is never exposed to browser sessions.
+app.post('/api/billing/customers/:id/reconcile-subscription', authorize('billing.manage'), async (q, r) => {
+  const customer = z.string().uuid().safeParse(q.params.id);
+  if (!customer.success) return r.status(400).json({ error: 'INVALID_CUSTOMER' });
+  const origin = process.env.ENGAGE_STAY_API_ORIGIN;
+  const token = process.env.ENGAGE_OWNER_SERVICE_TOKEN;
+  if (!supabaseConfigured() || !origin || !token) return r.status(503).json({ error: 'RECONCILIATION_NOT_CONFIGURED' });
+  try {
+    const product = await requireProductContext(q, r);
+    if (!product) return;
+    if (product.code !== 'engage_stay') return r.status(400).json({ error: 'INVALID_DELIVERY_PRODUCT' });
+    if (!await requireCustomerProduct(q, r, customer.data, product)) return;
+    const found = await supabaseAdmin(`/rest/v1/subscription_sync_outbox?select=revision::text,tenant_id,state&customer_id=eq.${customer.data}&product_id=eq.${product.id}&order=revision.desc&limit=1`);
+    if (!found.ok) return r.status(502).json({ error: 'RECONCILIATION_LOOKUP_FAILED' });
+    const [latest] = await found.json();
+    if (!latest?.tenant_id) return r.status(409).json({ outcome: 'manual_review' });
+    const target = new URL('/api/internal/managed-workspaces/' + customer.data, origin);
+    if (target.protocol !== 'https:' && process.env.NODE_ENV !== 'test') return r.status(503).json({ error: 'RECONCILIATION_NOT_CONFIGURED' });
+    const remote = await fetch(target, { method:'POST', redirect:'error', signal:AbortSignal.timeout(10000),
+      headers:{ Authorization:'Bearer '+token,'Content-Type':'application/json' },
+      body:JSON.stringify({ action:'subscription_revision',productCode:product.code,tenantId:latest.tenant_id }) });
+    if (!remote.ok) return r.status(remote.status === 409 || remote.status === 404 ? 409 : 502).json({ outcome:'manual_review' });
+    const { revision } = await remote.json();
+    if (typeof revision !== 'string' || !/^\d{1,19}$/.test(revision)) return r.status(409).json({ outcome:'manual_review' });
+    if (BigInt(revision) > BigInt(latest.revision)) return r.status(409).json({ outcome:'manual_review' });
+    if (revision === latest.revision) return r.json({ outcome:'current' });
+    if (latest.state !== 'DELIVERED') return r.json({ outcome:latest.state });
+    const repair = await supabaseAdmin('/rest/v1/rpc/requeue_stale_subscription', { method:'POST',
+      body:JSON.stringify({ p_revision:latest.revision,p_customer:customer.data,p_product:product.id,
+        p_tenant:latest.tenant_id,p_remote:revision,p_actor:q.actor?.id }) });
+    if (!repair.ok) return r.status(502).json({ error:'RECONCILIATION_REPAIR_FAILED' });
+    return r.json({ outcome:await repair.json() === true ? 'requeued' : 'changed_concurrently' });
+  } catch { return r.status(502).json({ error:'RECONCILIATION_UNAVAILABLE' }); }
+});
+
 app.get('/api/billing/subscription-reconciliation', authorize('billing.manage'), async (q, r) => {
   if (!supabaseConfigured()) return r.status(503).json({ error: 'DATABASE_REQUIRED' });
   try {

@@ -66,5 +66,15 @@ begin
   if not exists (select 1 from subscription_sync_outbox where revision=dead_revision and state='PENDING' and attempts=8 and retry_limit=16)
     or not exists (select 1 from audit_logs where action='subscription.delivery_requeued' and resource_id=dead_revision::text)
     then raise exception 'Recovery or audit was not persisted'; end if;
+  update subscription_sync_outbox set state='DELIVERED' where revision=dead_revision;
+  if requeue_stale_subscription(dead_revision,c,p,gen_random_uuid(),dead_revision-1,null) then
+    raise exception 'Wrong tenant repaired';
+  end if;
+  if not requeue_stale_subscription(dead_revision,c,p,t,dead_revision-1,null) then
+    raise exception 'Stale delivery was not repaired';
+  end if;
+  if requeue_stale_subscription(dead_revision,c,p,t,dead_revision-1,null) then
+    raise exception 'Stale repair duplicated';
+  end if;
 end $$;
 rollback;
