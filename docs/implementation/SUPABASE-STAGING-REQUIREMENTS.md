@@ -7,6 +7,38 @@ project; Production and shared Preview must never be substituted.
 
 ## Required setup
 
+For P0-06, use one dedicated Supabase project per backend. Engage Stay's
+operational property schema and Owner's platform schema have different
+bootstrap requirements. Run `node scripts/check-hosted-staging.mjs` with
+`STAGING_OWNER_SUPABASE_URL`, `STAGING_STAY_SUPABASE_URL`, each matching
+`_DATABASE_URL` and `_BACKEND_ORIGIN`, and `RAZORPAY_KEY_ID` in a private
+process environment. The check validates target identifiers without connecting.
+Confirm the exact project references and deployment ownership in the dashboards.
+
+Pin Owner to `6b845502709d6f247909c49805b00268c64a08fc` or a reviewed descendant
+and Stay to `99fffbc132c3c3120364d48644aca0779ada9cbf` or a reviewed descendant.
+Use dedicated Vercel projects or environments with verified isolated variables.
+The disposable CI database bootstrap is solely for local/CI fixtures. On hosted
+staging, use the real Supabase Auth and Storage schemas and apply Owner
+`Database/migrations/001` through `018` in order. First confirm the canonical
+Stay property and user schema baseline, then apply the Stay application SQL in
+dependency order. Do not copy hosted production rows to bootstrap either app.
+
+Set Owner's `ENGAGE_STAY_API_ORIGIN` and Stay's
+`OWNER_CONTROL_PLANE_ORIGIN` to the corresponding staging backends. Set the same
+fresh `ENGAGE_OWNER_SERVICE_TOKEN` on both backends. Restrict Owner
+`CORS_ORIGIN` and Stay `CLIENT_ORIGIN` to the staging frontends. Configure
+`PUBLIC_API_ORIGIN` for the host that serves Stay's public OAuth callback.
+Keep email verification enabled and route staging mail to approved synthetic
+inboxes. Register Google and Microsoft callbacks under the staging public origin.
+
+Provide approved Test Mode Basic/Premium/Enterprise price rows for the periods
+under test, in integer INR minor units with tax-inclusive treatment. Set
+`RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET` and a separate
+`RAZORPAY_WEBHOOK_SECRET` on the Owner staging backend. Register
+`/webhooks/razorpay` on its staging origin. Verify the delivery and expiry
+handlers with staging credentials before enabling any staging scheduler.
+
 1. Create a dedicated Supabase project named for non-production staging, with
    a distinct project reference, database, Storage, Auth users and service
    credentials.
