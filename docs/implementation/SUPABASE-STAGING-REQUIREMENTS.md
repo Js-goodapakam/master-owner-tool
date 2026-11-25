@@ -63,6 +63,20 @@ handlers with staging credentials before enabling any staging scheduler.
 
 ## Remaining staging acceptance tests
 
+Copy `scripts/staging.env.example` outside the repository and inject values
+through the approved staging secret store. Run `scripts/staging-build.ps1`
+with the pinned Stay checkout to prepare the Owner build and validate the Stay
+entry point. Deploy the reviewed branches only after verifying that each
+Vercel project is dedicated to staging and its variables match the preflight
+inputs. The script prepares the build locally.
+
+Run `node scripts/hosted-staging-smoke.mjs` with
+`ENGAGE_STAGING_ACCEPTANCE=1` after the isolated backends and migrations are
+ready. This checks both health endpoints, anonymous API denial, Supabase Auth
+availability and anonymous reads of selected server-owned tables. Record
+actual results separately for authorized and cross-tenant RLS, OAuth, Storage,
+Razorpay Test Mode and the full synthetic customer journey.
+
 - Hosted Supabase RLS policies for Owner data and private documents.
 - Supabase Auth identity bridge, including token refresh and suspension.
 - Storage upload, signed preview/download, replacement and deletion rules.
