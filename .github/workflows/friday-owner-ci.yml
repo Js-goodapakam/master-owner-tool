@@ -88,6 +88,7 @@ jobs:
           local_stack="$(mktemp -d)"
           cd "$local_stack"
           supabase init
+          sed -i '/^\[auth.email\]/,/^\[/ s/^enable_confirmations = false/enable_confirmations = true/' supabase/config.toml
           trap 'supabase stop --no-backup >/dev/null 2>&1 || true' EXIT
           if ! supabase start -x studio,imgproxy,edge-runtime,logflare,vector,realtime,supavisor >/tmp/local-supabase-start.log 2>&1; then
             echo 'Local Supabase failed to start'
