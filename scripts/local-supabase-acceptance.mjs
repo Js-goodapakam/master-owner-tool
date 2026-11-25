@@ -155,7 +155,7 @@ test('real local Supabase identity reaches Owner onboarding and the assigned Sta
   const shared = randomUUID()+randomUUID();
   Object.assign(process.env,{NODE_ENV:'test',DATABASE_URL:db.href,SUPABASE_URL:local.API_URL,
     SUPABASE_ANON_KEY:local.ANON_KEY,SUPABASE_PUBLISHABLE_KEY:local.ANON_KEY,SUPABASE_SECRET_KEY:local.SERVICE_ROLE_KEY,
-    ENGAGE_OWNER_SERVICE_TOKEN:shared});
+    ENGAGE_OWNER_SERVICE_TOKEN:shared,ENGAGE_LOCAL_SUPABASE_ACCEPTANCE:'1'});
   delete process.env.FRIDAY_LOCAL_DEV;
   const require = createRequire(join(stayRoot,'server.js'));
   const stay = require('./server.js');
@@ -216,6 +216,8 @@ test('real local Supabase identity reaches Owner onboarding and the assigned Sta
       insert into engagestay_workspace_state(property_id) select property_id from w returning property_id`]).toString().trim();
     await request(stayOrigin,'/api/properties/'+unrelated,403,{headers:{Cookie:cookie}});
     await request(stayOrigin,'/api/properties/'+unrelated+'/workspace',403,{method:'PUT',headers:{Cookie:cookie,'x-friday-property-id':unrelated},body:{state:{}}});
+    await request(ownerOrigin,provisionPath,200,{token:operatorToken,headers:{'Idempotency-Key':'local-ci-suspend'},body:{action:'suspend'}});
+    await request(stayOrigin,'/api/auth/session',403,{headers:{Cookie:cookie}});
   } finally {
     await Promise.all(servers.map(server=>new Promise(resolve=>server.close(resolve))));
     await require('./src/db').closeDatabase();
