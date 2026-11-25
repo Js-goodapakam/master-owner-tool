@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { createHmac, randomUUID } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
+import { createRequire } from 'node:module';
 import test from 'node:test';
 
 // Read configuration from the freshly initialized CLI workdir, never an app env file.
@@ -29,6 +30,7 @@ for (const file of readdirSync(directory).filter(n=>/^\d+_.*\.sql$/.test(n)).sor
 const email = randomUUID()+'@example.com';
 const password = randomUUID();
 let session;
+let confirmedCustomer;
 test('public signup delivers a confirmation link to the isolated Mailpit inbox', async () => {
   const inboxEmail = randomUUID()+'@example.com';
   const inbox = new URL(local.MAILPIT_URL || local.INBUCKET_URL || 'http://127.0.0.1:54324');
@@ -53,7 +55,9 @@ test('public signup delivers a confirmation link to the isolated Mailpit inbox',
   assert.ok(token,'Confirmation token present');
   const verified = await call('/auth/v1/verify',{method:'POST',body:{type:'signup',token_hash:token}});
   assert.ok(verified.ok,'Mail confirmation accepted');
-  assert.ok((await call('/auth/v1/token?grant_type=password',{method:'POST',body:{email:inboxEmail,password}})).ok);
+  const signedIn = await call('/auth/v1/token?grant_type=password',{method:'POST',body:{email:inboxEmail,password}});
+  assert.ok(signedIn.ok);
+  confirmedCustomer = await signedIn.json();
   const invalid = await call('/auth/v1/verify',{method:'POST',body:{type:'signup',token_hash:randomUUID()}});
   assert.ok([400,401,403,422].includes(invalid.status),'Invalid confirmation denied');
 });
@@ -71,6 +75,16 @@ test('real GoTrue verifies signup token, logs in and rotates refresh token', asy
   session = await refresh.json();
   assert.equal(session.user.id,result.id);
   assert.ok([401,403].includes((await call('/auth/v1/user',{token:'invalid'})).status),'Invalid token is denied');
+});
+test('real GoTrue denies a confirmation token after its local issuance time expires', async () => {
+  const expiredEmail=randomUUID()+'@example.com';
+  const link=await call('/auth/v1/admin/generate_link',{method:'POST',service:true,body:{type:'signup',email:expiredEmail,password}});
+  assert.ok(link.ok);
+  const {id,hashed_token}=await link.json();
+  assert.match(id,/^[0-9a-f-]{36}$/);
+  sql(['-c',`update auth.users set confirmation_sent_at=now()-interval '7 days' where id='${id}'`]);
+  const expired=await call('/auth/v1/verify',{method:'POST',body:{type:'signup',token_hash:hashed_token}});
+  assert.ok([400,401,403,422].includes(expired.status));
 });
 test('real PostgREST denies unprivileged billing records and permits service access', async () => {
   assert.ok(session?.access_token);
@@ -112,6 +126,100 @@ test('real PostgREST RLS denies authenticated reads and mutations on operational
     assert.ok([204,401,403].includes(change.status));
   }
   assert.equal((await (await call(path,{service:true})).json())[0].name,'Synthetic B');
+});
+test('real local Supabase identity reaches Owner onboarding and the assigned Stay property', async () => {
+  assert.ok(confirmedCustomer?.access_token);
+  const stayRoot = process.argv[3];
+  assert.ok(stayRoot,'Pinned Stay checkout required');
+  // Minimal PMS schema for the disposable fixture; application SQL runs unchanged.
+  sql(['-c',`create table property(id integer generated always as identity primary key,name text not null,code text unique,
+    city text,country text,timezone text,"createdAt" timestamptz,"updatedAt" timestamptz);
+    create table "user"(id integer generated always as identity primary key,"propertyId" integer references property(id),
+    name text,email text unique,role text,"isActive" boolean,"createdAt" timestamptz,"updatedAt" timestamptz);`]);
+  for (const name of ['auth.sql','property-access.sql','managed-workspace.sql','sample-workspaces.sql']) {
+    sql(['-f',join(stayRoot,'sql',name)]);
+  }
+  const operatorEmail = randomUUID()+'@example.com';
+  const operatorCreated = await call('/auth/v1/admin/users',{method:'POST',service:true,body:{email:operatorEmail,password,email_confirm:true}});
+  assert.ok(operatorCreated.ok,'Create synthetic billing operator');
+  const operator = await operatorCreated.json();
+  assert.match(operator.id,/^[0-9a-f-]{36}$/);
+  sql(['-c',`insert into owner_profiles(user_id,email,full_name,role_key,must_change_password)
+    values ('${operator.id}','${operatorEmail}','CI Owner','owner',false);
+    insert into users(id,email,name) values ('${operator.id}','${operatorEmail}','CI Owner')`]);
+  const login = await call('/auth/v1/token?grant_type=password',{method:'POST',body:{email:operatorEmail,password}});
+  assert.ok(login.ok);
+  const {access_token:operatorToken} = await login.json();
+  const db = new URL(local.DB_URL);
+  db.searchParams.set('sslmode','disable');
+  const shared = randomUUID()+randomUUID();
+  Object.assign(process.env,{NODE_ENV:'test',DATABASE_URL:db.href,SUPABASE_URL:local.API_URL,
+    SUPABASE_ANON_KEY:local.ANON_KEY,SUPABASE_PUBLISHABLE_KEY:local.ANON_KEY,SUPABASE_SECRET_KEY:local.SERVICE_ROLE_KEY,
+    ENGAGE_OWNER_SERVICE_TOKEN:shared});
+  delete process.env.FRIDAY_LOCAL_DEV;
+  const require = createRequire(join(stayRoot,'server.js'));
+  const stay = require('./server.js');
+  const servers = [];
+  const listen = async app => {
+    const server = await new Promise(resolve=>{const instance=app.listen(0,'127.0.0.1',()=>resolve(instance));});
+    servers.push(server);
+    return 'http://127.0.0.1:'+server.address().port;
+  };
+  const request = async (origin,path,status,{token,body,headers,method}={}) => {
+    const response=await fetch(origin+path,{method:method || (body===undefined?'GET':'POST'),redirect:'error',signal:AbortSignal.timeout(15000),
+      headers:{'content-type':'application/json',...(token?{Authorization:'Bearer '+token}:{}),...headers},
+      body:body===undefined?undefined:JSON.stringify(body)});
+    assert.equal(response.status,status,path);
+    return response;
+  };
+  try {
+    const stayOrigin=await listen(stay);
+    process.env.ENGAGE_STAY_API_ORIGIN=stayOrigin;
+    const {app}=await import('../Server/src/app.ts');
+    const ownerOrigin=await listen(app);
+    const customerEmail=confirmedCustomer.user.email;
+    const uuid=confirmedCustomer.user.id;
+    const {id:signupRequestId}=await (await request(ownerOrigin,'/api/integrations/engagestay/signup',202,{
+      token:shared,headers:{'Idempotency-Key':uuid},body:{source:'email',externalUserId:uuid,email:customerEmail,requestedLifecycle:'TRIAL'},
+    })).json();
+    const scope='?productCode=engage_stay';
+    let sessionId;
+    for (let step=1; step<=7; step++) {
+      const saved=await (await request(ownerOrigin,'/api/onboarding'+scope,200,{token:operatorToken,
+        body:{signupRequestId,step,data:{environment:'Trial',marker:step}}})).json();
+      sessionId ??= saved.sessionId;
+      assert.equal(saved.sessionId,sessionId);
+      assert.equal(saved.step,step);
+    }
+    const resumed=await (await request(ownerOrigin,'/api/onboarding/signup/'+signupRequestId+scope,200,{token:operatorToken})).json();
+    assert.equal(resumed.current_step,7);
+    assert.equal(resumed.payload.marker,7);
+    const created=await (await request(ownerOrigin,'/api/customers'+scope,201,{token:operatorToken,body:{
+      signupRequestId,product:'engage_stay',companyName:'Local CI Hotel',legalName:'Local CI Hotel',email:customerEmail,
+      city:'Bengaluru',industry:'Hospitality',accountOwner:'CI Owner',tenantName:'Local CI Tenant',
+    }})).json();
+    const provisionPath='/api/customers/'+created.id+'/engagestay'+scope;
+    const operation={token:operatorToken,headers:{'Idempotency-Key':'local-ci-provision'},body:{action:'approve',adminName:'CI Admin',plan:'basic',modules:['operations']}};
+    const property=await (await request(ownerOrigin,provisionPath,200,operation)).json();
+    const duplicate=await (await request(ownerOrigin,provisionPath,200,operation)).json();
+    assert.equal(duplicate.idempotentReplay,true);
+    assert.equal(duplicate.property_id,property.property_id);
+    const identity=sql(['-Atc',`select auth_user_id from friday_auth_identity where property_id=${Number(property.property_id)}`]).toString().trim();
+    assert.equal(identity,uuid);
+    const pms=await request(stayOrigin,'/api/auth/supabase/session',200,{body:{},token:confirmedCustomer.access_token});
+    const cookie=pms.headers.get('set-cookie')?.split(';')[0];
+    assert.ok(cookie);
+    await request(stayOrigin,'/api/properties/'+property.property_id+'/workspace',200,{headers:{Cookie:cookie}});
+    const unrelated=sql(['-qAtc',`with p as (insert into property(name,code) values ('Unrelated','CI-UNRELATED') returning id),
+      w as (insert into engagestay_managed_workspace(property_id,customer_id,status,plan,modules)
+      select id,gen_random_uuid(),'active','basic',array['operations'] from p returning property_id)
+      insert into engagestay_workspace_state(property_id) select property_id from w returning property_id`]).toString().trim();
+    await request(stayOrigin,'/api/properties/'+unrelated,403,{headers:{Cookie:cookie}});
+    await request(stayOrigin,'/api/properties/'+unrelated+'/workspace',403,{method:'PUT',headers:{Cookie:cookie,'x-friday-property-id':unrelated},body:{state:{}}});
+  } finally {
+    await Promise.all(servers.map(server=>new Promise(resolve=>server.close(resolve))));
+    await require('./src/db').closeDatabase();
+  }
 });
 test('real private Storage permits service round-trip and denies anonymous/authenticated access', async () => {
   assert.ok(session?.access_token);
