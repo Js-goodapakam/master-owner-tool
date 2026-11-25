@@ -69,3 +69,29 @@ jobs:
           node --test engage-stay/src/postgres-acceptance.test.js
           npx --no-install tsx Server/src/db/subscription-http.acceptance.ts
           ENGAGE_TEST_DATABASE_URL= ENGAGE_TEST_DATABASE_ID= npm test --prefix engage-stay
+
+  local-supabase:
+    if: github.ref == 'refs/heads/codex/p0-05b-checkout'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 2.54.11
+      - name: Initialize isolated stack and probe real services
+        run: |
+          set -euo pipefail
+          local_stack="$(mktemp -d)"
+          cd "$local_stack"
+          supabase init
+          trap 'supabase stop --no-backup >/dev/null 2>&1 || true' EXIT
+          if ! supabase start -x studio,imgproxy,edge-runtime,logflare,vector,realtime,supavisor >/tmp/local-supabase-start.log 2>&1; then
+            echo 'Local Supabase failed to start'
+            grep -Ei 'error|not found|unhealthy' /tmp/local-supabase-start.log | cut -c1-180 || true
+            exit 1
+          fi
+          node "$GITHUB_WORKSPACE/scripts/local-supabase-acceptance.mjs" "$GITHUB_WORKSPACE"
