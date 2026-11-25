@@ -23,6 +23,7 @@ begin
   insert into payment_transactions(customer_id,product_id,plan_id,provider,provider_order_id,amount_minor,currency,status,idempotency_key,metadata)
     select c,p,plan,'RAZORPAY','order_ci_'||n,10000,'INR','CREATED','ci-key-'||n,
       '{"priceId":"fixture","billingPeriod":"MONTHLY"}' from generate_series(1,2) n;
+  update payment_transactions set status='CAPTURED',provider_payment_id='pay_ci_1' where provider_order_id='order_ci_1';
   s := activate_verified_checkout('order_ci_1','pay_ci_1',10000,'INR');
   select expires_at into strict expiry from subscriptions where id=s and status='ACTIVE';
   if activate_verified_checkout('order_ci_1','pay_ci_1',10000,'INR') <> s or

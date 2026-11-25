@@ -1467,6 +1467,47 @@ app.post('/api/billing/customers/:id/reconcile-subscription', authorize('billing
   } catch { return r.status(502).json({ error:'RECONCILIATION_UNAVAILABLE' }); }
 });
 
+app.post('/api/billing/customers/:id/payments/:paymentId/reconcile', authorize('billing.manage'), async (q, r) => {
+  const ids = z.object({ id:z.string().uuid(),paymentId:z.string().uuid() }).safeParse(q.params);
+  if (!ids.success) return r.status(400).json({ error:'INVALID_PAYMENT_SCOPE' });
+  if (!supabaseConfigured()) return r.status(503).json({ error:'DATABASE_REQUIRED' });
+  try {
+    const product = await requireProductContext(q, r);
+    if (!product || !await requireCustomerProduct(q, r, ids.data.id, product)) return;
+    const found = await supabaseAdmin(`/rest/v1/payment_transactions?select=id,status,subscription_id,provider_order_id,provider_payment_id,amount_minor,currency,metadata&id=eq.${ids.data.paymentId}&customer_id=eq.${ids.data.id}&product_id=eq.${product.id}&provider=eq.RAZORPAY&limit=1`);
+    if (!found.ok) return r.status(502).json({ error:'PAYMENT_LOOKUP_FAILED' });
+    const [payment] = await found.json();
+    if (!payment) return r.status(404).json({ error:'PAYMENT_NOT_FOUND' });
+    if (payment.subscription_id) return r.json({ outcome:'already_activated' });
+    const review = async (reason: string) => {
+      await recordPlatformAudit(q,'payment.reconciliation_review','payment_transaction',payment.id,undefined,{ reason });
+      return r.status(409).json({ outcome:'manual_review' });
+    };
+    if (payment.status !== 'CAPTURED' || !payment.metadata?.priceId ||
+        !/^pay_[a-zA-Z0-9_]+$/.test(payment.provider_payment_id || '') || !payment.provider_order_id) {
+      return await review('ineligible_ledger_record');
+    }
+    const key = process.env.RAZORPAY_KEY_ID;
+    const secret = process.env.RAZORPAY_KEY_SECRET;
+    if (!key?.startsWith('rzp_test_') || !secret) return r.status(503).json({ error:'RAZORPAY_TEST_MODE_NOT_CONFIGURED' });
+    const verified = await fetch('https://api.razorpay.com/v1/payments/' + encodeURIComponent(payment.provider_payment_id), {
+      headers:{ authorization:'Basic '+Buffer.from(key+':'+secret).toString('base64') },
+      redirect:'error',signal:AbortSignal.timeout(10000),
+    });
+    if (!verified.ok) return r.status(502).json({ error:'PAYMENT_VERIFICATION_UNAVAILABLE' });
+    const capture = await verified.json();
+    if (capture.id !== payment.provider_payment_id || capture.order_id !== payment.provider_order_id ||
+        capture.status !== 'captured' || capture.amount !== Number(payment.amount_minor) || capture.currency !== payment.currency) {
+      return await review('provider_capture_mismatch');
+    }
+    const activation = await supabaseAdmin('/rest/v1/rpc/activate_verified_checkout', {
+      method:'POST',body:JSON.stringify({p_order:capture.order_id,p_payment:capture.id,p_amount:capture.amount,p_currency:capture.currency}),
+    });
+    if (!activation.ok) return await review('activation_requires_review');
+    return r.json({ outcome:'activated',subscriptionId:await activation.json() });
+  } catch { return r.status(502).json({ error:'PAYMENT_RECONCILIATION_UNAVAILABLE' }); }
+});
+
 app.get('/api/billing/subscription-reconciliation', authorize('billing.manage'), async (q, r) => {
   if (!supabaseConfigured()) return r.status(503).json({ error: 'DATABASE_REQUIRED' });
   try {
