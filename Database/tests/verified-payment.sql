@@ -8,6 +8,7 @@ declare
   s uuid;
   renewed uuid;
   claim record;
+  dead_revision bigint;
   expiry timestamptz;
 begin
   if current_database() <> 'owner_test' or current_user <> 'owner_test' then
@@ -52,5 +53,18 @@ begin
   if (select count(*) from subscription_sync_outbox where subscription_id=s and attempts=1 and next_attempt_at>now()) <> 1 then
     raise exception 'Delivery lease was not persisted';
   end if;
+  update subscription_sync_outbox set state='DEAD', attempts=8, last_error='receiver_409'
+    where subscription_id=s and subscription_status='SUSPENDED' returning revision into dead_revision;
+  if (inspect_subscription_reconciliation(p)->>'deadDeliveries')::integer <> 1 then
+    raise exception 'Missing reconciliation diagnostic';
+  end if;
+  if recover_stay_subscription_delivery(dead_revision,gen_random_uuid(),null) then
+    raise exception 'Cross-product recovery succeeded';
+  end if;
+  if not recover_stay_subscription_delivery(dead_revision,p,null) then raise exception 'Recovery failed'; end if;
+  if recover_stay_subscription_delivery(dead_revision,p,null) then raise exception 'Recovery replay succeeded'; end if;
+  if not exists (select 1 from subscription_sync_outbox where revision=dead_revision and state='PENDING' and attempts=8 and retry_limit=16)
+    or not exists (select 1 from audit_logs where action='subscription.delivery_requeued' and resource_id=dead_revision::text)
+    then raise exception 'Recovery or audit was not persisted'; end if;
 end $$;
 rollback;

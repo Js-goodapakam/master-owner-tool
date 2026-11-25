@@ -68,7 +68,7 @@ app.post('/internal/subscriptions/deliver', async (q, r) => {
         error = 'receiver_' + response.status;
       }
     } catch { /* Retry transport failures after releasing the lease. */ }
-    const state = !error ? 'DELIVERED' : permanent || job.attempt >= 8 ? 'DEAD' : 'PENDING';
+    const state = !error ? 'DELIVERED' : permanent ? 'DEAD' : 'PENDING';
     const saved = await supabaseAdmin(`/rest/v1/subscription_sync_outbox?revision=eq.${job.revision}&attempts=eq.${job.attempt}&state=eq.PENDING`, {
       method: 'PATCH', headers: { Prefer: 'return=representation' },
       body: JSON.stringify({ state, last_error: error, delivered_at: error ? null : new Date().toISOString(),
@@ -1433,6 +1433,37 @@ app.patch('/api/subscriptions/:id', authorize('subscription.manage'), async (q, 
 // currently active/trial subscriptions due at evaluation time are selected;
 // after the first run they no longer match. A scheduler may call this route,
 // but it is never exposed to browser sessions.
+app.get('/api/billing/subscription-reconciliation', authorize('billing.manage'), async (q, r) => {
+  if (!supabaseConfigured()) return r.status(503).json({ error: 'DATABASE_REQUIRED' });
+  try {
+    const product = await requireProductContext(q, r);
+    if (!product) return;
+    const result = await supabaseAdmin('/rest/v1/rpc/inspect_subscription_reconciliation', {
+      method:'POST', body:JSON.stringify({ p_product:product.id }),
+    });
+    if (!result.ok) return r.status(502).json({ error: 'RECONCILIATION_LOOKUP_FAILED' });
+    r.setHeader('Cache-Control', 'no-store');
+    return r.json(await result.json());
+  } catch { return r.status(502).json({ error: 'RECONCILIATION_UNAVAILABLE' }); }
+});
+
+app.post('/api/billing/subscription-delivery/:revision/recover', authorize('billing.manage'), async (q, r) => {
+  const revision = String(q.params.revision);
+  if (!/^[1-9][0-9]{0,17}$/.test(revision)) return r.status(400).json({ error: 'INVALID_REVISION' });
+  if (!supabaseConfigured()) return r.status(503).json({ error: 'DATABASE_REQUIRED' });
+  try {
+    const product = await requireProductContext(q, r);
+    if (!product) return;
+    if (product.code !== 'engage_stay') return r.status(400).json({ error: 'INVALID_DELIVERY_PRODUCT' });
+    const result = await supabaseAdmin('/rest/v1/rpc/recover_stay_subscription_delivery', {
+      method:'POST', body:JSON.stringify({ p_revision:revision, p_product:product.id, p_actor:q.actor?.id }),
+    });
+    if (!result.ok) return r.status(502).json({ error: 'DELIVERY_RECOVERY_FAILED' });
+    if (await result.json() !== true) return r.status(409).json({ error: 'DELIVERY_NOT_RECOVERABLE' });
+    return r.json({ outcome: 'PENDING' });
+  } catch { return r.status(502).json({ error: 'DELIVERY_RECOVERY_UNAVAILABLE' }); }
+});
+
 app.post('/api/internal/subscriptions/evaluate-expiry', async (q, r) => {
   if (!hasOwnerServiceAuthorization(q)) return r.status(401).json({ error: 'SERVICE_AUTH_REQUIRED' });
   if (!supabaseConfigured()) return r.status(503).json({ error: 'DATABASE_REQUIRED' });
