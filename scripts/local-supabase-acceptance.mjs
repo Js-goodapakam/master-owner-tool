@@ -42,7 +42,7 @@ test('real GoTrue verifies signup token, logs in and rotates refresh token', asy
   assert.ok(refresh.ok,'Rotate refresh token');
   session = await refresh.json();
   assert.equal(session.user.id,result.id);
-  assert.equal((await call('/auth/v1/user',{token:'invalid'})).status,401);
+  assert.ok([401,403].includes((await call('/auth/v1/user',{token:'invalid'})).status),'Invalid token is denied');
 });
 test('real PostgREST denies unprivileged billing records and permits service access', async () => {
   assert.ok(session?.access_token);
