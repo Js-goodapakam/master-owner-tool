@@ -322,10 +322,34 @@ app.post('/webhooks/razorpay', async (q, r) => {
   const paymentId = typeof payment?.id === 'string' ? payment.id : '';
   if (!['payment.captured', 'payment.failed'].includes(event) || !orderId || !paymentId) return r.status(400).json({ error: 'UNSUPPORTED_PAYMENT_EVENT' });
   const expectedStatus = event === 'payment.captured' ? 'CAPTURED' : 'FAILED';
-  const transaction = await supabaseAdmin(`rest/v1/payment_transactions?select=id,status,amount_minor,currency,subscription_id&provider=eq.RAZORPAY&provider_order_id=eq.${encodeURIComponent(orderId)}&limit=1`);
+  const transaction = await supabaseAdmin(`rest/v1/payment_transactions?select=id,status,amount_minor,currency,subscription_id,provider_payment_id,metadata&provider=eq.RAZORPAY&provider_order_id=eq.${encodeURIComponent(orderId)}&limit=1`);
   if (!transaction.ok) return r.status(502).json({ error: 'PAYMENT_LOOKUP_FAILED' });
   const existing = (await transaction.json() as Array<any>)[0];
   if (!existing) return r.status(404).json({ error: 'PAYMENT_ORDER_NOT_FOUND' });
+  if (event === 'payment.captured' && existing.metadata?.priceId) {
+    const key = process.env.RAZORPAY_KEY_ID;
+    const secret = process.env.RAZORPAY_KEY_SECRET;
+    if (!key?.startsWith('rzp_test_') || !secret) return r.status(503).json({ error: 'RAZORPAY_TEST_MODE_NOT_CONFIGURED' });
+    try {
+      const verified = await fetch(`https://api.razorpay.com/v1/payments/${encodeURIComponent(paymentId)}`, {
+        headers: { authorization: 'Basic ' + Buffer.from(`${key}:${secret}`).toString('base64') },
+        redirect: 'error', signal: AbortSignal.timeout(10000),
+      });
+      if (!verified.ok) return r.status(502).json({ error: 'PAYMENT_VERIFICATION_UNAVAILABLE' });
+      const capture = await verified.json();
+      if (capture.id !== paymentId || capture.order_id !== orderId || capture.status !== 'captured' ||
+          capture.amount !== Number(existing.amount_minor) || capture.currency !== existing.currency) {
+        return r.status(409).json({ error: 'PAYMENT_CAPTURE_MISMATCH' });
+      }
+      const activation = await supabaseAdmin('/rest/v1/rpc/activate_verified_checkout', {
+        method: 'POST', body: JSON.stringify({ p_order: orderId, p_payment: paymentId, p_amount: capture.amount, p_currency: capture.currency }),
+      });
+      if (!activation.ok) return r.status(502).json({ error: 'PAYMENT_ACTIVATION_FAILED' });
+      return r.json({ subscriptionId: await activation.json(), status: 'CAPTURED' });
+    } catch {
+      return r.status(502).json({ error: 'PAYMENT_ACTIVATION_UNAVAILABLE' });
+    }
+  }
   if (existing.status === expectedStatus && existing.provider_payment_id === paymentId) return r.json({ processed: false, duplicate: true });
   if (existing.status === 'CAPTURED') return r.status(409).json({ error: 'PAYMENT_STATE_CONFLICT' });
   if (Number(payment.amount) !== Number(existing.amount_minor) || String(payment.currency) !== existing.currency) return r.status(400).json({ error: 'PAYMENT_AMOUNT_MISMATCH' });

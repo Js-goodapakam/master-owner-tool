@@ -49,7 +49,10 @@ vi.stubGlobal('fetch', async (input: RequestInfo | URL, init?: RequestInit) => {
   const url = new URL(String(input));
   // Calls to the real loopback API are never intercepted.
   if (url.hostname === '127.0.0.1') return originalFetch(input, init);
-  if (url.hostname === 'api.razorpay.com') return ok({ id: 'order_synthetic', amount: 129900, currency: 'INR', status: 'created' }, 200);
+  if (url.hostname === 'api.razorpay.com') {
+    if (url.pathname === '/v1/payments/pay_checkout') return ok({ id: 'pay_checkout', order_id: 'order_synthetic', amount: 129900, currency: 'INR', status: 'captured' });
+    return ok({ id: 'order_synthetic', amount: 129900, currency: 'INR', status: 'created' });
+  }
   if (url.hostname === 'managed-workspace.invalid') return entitlementSyncFails
     ? new Response(JSON.stringify({ error: 'UNAVAILABLE' }), { status: 503, headers: { 'content-type': 'application/json' } })
     : url.pathname.includes('/managed-workspaces/')
@@ -65,6 +68,11 @@ vi.stubGlobal('fetch', async (input: RequestInfo | URL, init?: RequestInit) => {
   }
   const query = url.searchParams;
   const table = path.replace('/rest/v1/', '');
+  if (table === 'rpc/activate_verified_checkout') {
+    const args = body(init);
+    return args.p_order === 'order_synthetic' && args.p_payment === 'pay_checkout' &&
+      args.p_amount === 129900 && args.p_currency === 'INR' ? ok('subscription-fixture') : ok({}, 400);
+  }
   if (table === 'rpc/reserve_tenant_account_code') return ok('ES-TR-000101-26');
   if (table === 'owner_profiles') {
     const id = query.get('user_id') || '';
@@ -246,5 +254,10 @@ describe('isolated Owner control-plane API harness', () => {
   it('creates a server-priced checkout order and rejects frontend-supplied prices', async () => {
     const response = await request('/api/billing/razorpay/orders?productCode=engage_stay', 'owner-token', { method: 'POST', headers: { 'idempotency-key': 'checkout-synthetic-001' }, body: JSON.stringify({ customerId, planId: basicPlan, billingPeriod: 'MONTHLY', amount: 1 }) });
     expect(response.status).toBe(201); expect(await response.json()).toMatchObject({ orderId: 'order_synthetic', amount: 129900, currency: 'INR' });
+    const payload = JSON.stringify({ event: 'payment.captured', payload: { payment: { entity: { id: 'pay_checkout', order_id: 'order_synthetic' } } } });
+    const signature = createHmac('sha256', process.env.RAZORPAY_WEBHOOK_SECRET!).update(payload).digest('hex');
+    const capture = await originalFetch(base + '/webhooks/razorpay', { method: 'POST', headers: { 'content-type': 'application/json', 'x-razorpay-signature': signature }, body: payload });
+    expect(capture.status).toBe(200);
+    expect(await capture.json()).toEqual({ subscriptionId: 'subscription-fixture', status: 'CAPTURED' });
   });
 });
