@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { createHash, randomBytes, randomUUID } from 'node:crypto';
+import { createHash, createHmac, randomBytes, randomUUID } from 'node:crypto';
 import { createRequire } from 'node:module';
 import { resolve } from 'node:path';
 import type { Server } from 'node:http';
@@ -38,6 +38,9 @@ try {
   process.env.SUPABASE_URL = 'https://owner-db-fixture.invalid';
   process.env.SUPABASE_ANON_KEY = randomUUID();
   process.env.SUPABASE_SECRET_KEY = randomUUID();
+  process.env.RAZORPAY_WEBHOOK_SECRET = randomUUID();
+  process.env.RAZORPAY_KEY_ID = 'rzp_test_fixture';
+  process.env.RAZORPAY_KEY_SECRET = randomUUID();
   process.env.DATABASE_URL = stayUrl;
   const stayApp = require('./server.js');
   closeStayDatabase = require('./src/db').closeDatabase;
@@ -51,7 +54,20 @@ try {
   // request to the actual Stay server always uses real loopback HTTP.
   globalThis.fetch = async (input, init) => {
     const url = new URL(String(input));
+    if (url.origin === 'https://api.razorpay.com') {
+      assert.equal(url.pathname, '/v1/payments/pay_http');
+      return Response.json({ id:'pay_http', order_id:'order_http', amount:10000, currency:'INR', status:'captured' });
+    }
     if (url.hostname !== 'owner-db-fixture.invalid') return originalFetch(input, init);
+    if (url.pathname.endsWith('/payment_transactions')) {
+      return Response.json((await owner.query('select * from payment_transactions where provider_order_id=$1',
+        [url.searchParams.get('provider_order_id')?.slice(3)])).rows);
+    }
+    if (url.pathname.endsWith('/rpc/activate_verified_checkout')) {
+      const args = JSON.parse(String(init?.body));
+      return Response.json((await owner.query('select activate_verified_checkout($1,$2,$3,$4) as id',
+        [args.p_order,args.p_payment,args.p_amount,args.p_currency])).rows[0].id);
+    }
     if (url.pathname.endsWith('/rpc/claim_stay_subscription_delivery')) {
       return Response.json((await owner.query('select * from claim_stay_subscription_delivery()')).rows);
     }
@@ -78,7 +94,15 @@ try {
   await stay.query("insert into friday_sessions(token_hash,user_id,expires_at) values($1,9001,now()+interval '1 hour')", [createHash('sha256').update(session).digest('hex')]);
   await owner.query(`insert into payment_transactions(customer_id,product_id,plan_id,provider,provider_order_id,amount_minor,currency,status,idempotency_key,metadata)
     values($1,$2,$3,'RAZORPAY','order_http',10000,'INR','CREATED','http-ci','{"priceId":"fixture","billingPeriod":"MONTHLY"}')`, [customer,plan.product_id,plan.id]);
-  const { rows: [{ id }] } = await owner.query("select activate_verified_checkout('order_http','pay_http',10000,'INR') as id");
+  const payload = JSON.stringify({ event:'payment.captured', payload:{ payment:{ entity:{ id:'pay_http', order_id:'order_http' } } } });
+  const signature = createHmac('sha256', process.env.RAZORPAY_WEBHOOK_SECRET).update(payload).digest('hex');
+  const capture = () => originalFetch(ownerOrigin + '/webhooks/razorpay', { method:'POST', body:payload,
+    headers:{ 'content-type':'application/json', 'x-razorpay-signature':signature } });
+  const captured = await capture();
+  assert.equal(captured.status, 200);
+  const { subscriptionId: id } = await captured.json();
+  assert.equal((await (await capture()).json()).subscriptionId, id);
+  assert.equal((await owner.query('select count(*)::int as count from subscription_sync_outbox')).rows[0].count, 1);
   const deliver = () => originalFetch(ownerOrigin + '/internal/subscriptions/deliver', { method:'POST',headers:{Authorization:'Bearer '+secret} });
   const access = () => originalFetch(stayOrigin + '/api/auth/session', { headers:{Cookie:'friday_session='+session} });
   assert.equal((await access()).status, 403);
