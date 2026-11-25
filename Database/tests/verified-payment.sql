@@ -37,5 +37,12 @@ begin
   if renewed <> s or
      (select expires_at from subscriptions where id=s) <> expiry + interval '1 month'
      then raise exception 'Renewal failed'; end if;
+  if (select count(*) from subscription_sync_outbox where subscription_id=s) <> 2 or
+     (select count(*) from subscription_sync_outbox where subscription_id=s and tenant_id=t and state='PENDING') <> 2
+     then raise exception 'Outbox did not retain exactly the activation and renewal'; end if;
+  update subscriptions set status='SUSPENDED' where id=s;
+  update subscriptions set status='SUSPENDED' where id=s;
+  if (select count(*) from subscription_sync_outbox where subscription_id=s and subscription_status='SUSPENDED') <> 1
+     then raise exception 'Suspension was not enqueued exactly once'; end if;
 end $$;
 rollback;
