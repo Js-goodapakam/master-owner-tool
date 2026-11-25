@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
 import { createHash, createHmac, randomBytes, randomUUID } from 'node:crypto';
 import { createRequire } from 'node:module';
+import { fork, type ChildProcess } from 'node:child_process';
+import { once } from 'node:events';
+import { createServer } from 'node:http';
+import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
 import type { Server } from 'node:http';
 import pg from 'pg';
@@ -24,6 +28,7 @@ const customer = randomUUID();
 const tenant = randomUUID();
 const session = randomBytes(32).toString('hex');
 const servers: Server[] = [];
+const workers = new Set<ChildProcess>();
 let closeStayDatabase: (() => Promise<void>) | undefined;
 const listen = async (app: { listen: Function }) => {
   const server = await new Promise<Server>(resolve => {
@@ -83,6 +88,44 @@ try {
     }
     throw new Error('Unexpected fixture Data API request');
   };
+  let crashBeforeAck: (() => void) | undefined;
+  const dataFixture = await listen(createServer(async (req, res) => {
+    try {
+      const chunks: Buffer[] = [];
+      for await (const chunk of req) chunks.push(Buffer.from(chunk));
+      if (req.method === 'PATCH' && crashBeforeAck) {
+        crashBeforeAck();
+        crashBeforeAck = undefined;
+        return; // The child is killed with its acknowledgment still outstanding.
+      }
+      const response = await globalThis.fetch('https://owner-db-fixture.invalid' + req.url, {
+        method: req.method, body: chunks.length ? Buffer.concat(chunks).toString() : undefined,
+      });
+      res.writeHead(response.status, { 'content-type':'application/json' }).end(await response.text());
+    } catch { res.writeHead(500).end(); }
+  }));
+  const startWorker = async (target: string) => {
+    const child = fork(fileURLToPath(new URL('./subscription-worker.fixture.ts', import.meta.url)), [], {
+      execArgv: ['--import','tsx'],
+      env: { ...process.env, SUPABASE_URL:dataFixture, ENGAGE_STAY_API_ORIGIN:target },
+    });
+    workers.add(child);
+    const port = await Promise.race([
+      once(child,'message').then(([port]) => port),
+      once(child,'exit').then(([code]) => { throw new Error('Worker exited during startup: ' + code); }),
+    ]);
+    return {
+      deliver: () => originalFetch('http://127.0.0.1:' + port + '/internal/subscriptions/deliver', {
+        method:'POST',headers:{Authorization:'Bearer '+secret},signal:AbortSignal.timeout(15000),
+      }),
+      stop: async () => {
+        const exited = once(child,'exit');
+        child.kill();
+        await exited;
+        workers.delete(child);
+      },
+    };
+  };
   const { rows: [plan] } = await owner.query(`select p.id,p.product_id from plans p join products r on r.id=p.product_id
     where r.product_code='engage_stay' and p.name='Basic'`);
   await owner.query("insert into customers(id,customer_code,company_name,email) values($1,'HTTP-CI','Synthetic HTTP','http@example.test')", [customer]);
@@ -107,17 +150,27 @@ try {
   const access = () => originalFetch(stayOrigin + '/api/auth/session', { headers:{Cookie:'friday_session='+session} });
   assert.equal((await access()).status, 403);
   assert.equal((await originalFetch(ownerOrigin + '/internal/subscriptions/deliver', { method:'POST' })).status, 401);
-  process.env.ENGAGE_STAY_API_ORIGIN = 'http://127.0.0.1:1';
-  assert.deepEqual(await (await deliver()).json(), { outcome:'PENDING' });
+  const offline = await startWorker('http://127.0.0.1:1');
+  assert.deepEqual(await (await offline.deliver()).json(), { outcome:'PENDING' });
   const failed = (await owner.query('select attempts,last_error,next_attempt_at>now() as backed_off from subscription_sync_outbox')).rows[0];
   assert.deepEqual(failed, { attempts:1,last_error:'transport',backed_off:true });
   assert.deepEqual(await (await deliver()).json(), { outcome:'idle' });
-  const oldListener = servers.pop()!;
-  await new Promise<void>(resolve => oldListener.close(() => resolve()));
-  ownerOrigin = await listen(app);
-  process.env.ENGAGE_STAY_API_ORIGIN = stayOrigin;
+  await offline.stop();
+  const firstWorker = await startWorker(stayOrigin);
+  const secondWorker = await startWorker(stayOrigin);
   await owner.query("update subscription_sync_outbox set next_attempt_at=now()-interval '1 second'");
-  assert.deepEqual(await (await deliver()).json(), { outcome:'DELIVERED' });
+  const ackIntercepted = new Promise<void>(resolve => { crashBeforeAck = resolve; });
+  const interrupted = firstWorker.deliver().then(() => false, () => true);
+  await Promise.race([ackIntercepted, interrupted.then(() => { throw new Error('Worker did not reach acknowledgment'); })]);
+  assert.equal((await access()).status, 200);
+  assert.deepEqual(await (await secondWorker.deliver()).json(), { outcome:'idle' });
+  await firstWorker.stop();
+  assert.equal(await interrupted, true);
+  await owner.query("update subscription_sync_outbox set next_attempt_at=now()-interval '1 second'");
+  const recovered = await Promise.all([secondWorker.deliver(), deliver()].map(async result => (await (await result).json()).outcome));
+  assert.deepEqual(recovered.sort(), ['DELIVERED','idle']);
+  await secondWorker.stop();
+  assert.deepEqual((await owner.query('select attempts,state from subscription_sync_outbox')).rows, [{attempts:3,state:'DELIVERED'}]);
   assert.equal((await access()).status, 200);
   assert.equal((await stay.query('select owner_tenant_id from engagestay_managed_workspace where property_id=9001')).rows[0].owner_tenant_id, tenant);
   await owner.query("update subscriptions set status='SUSPENDED' where id=$1", [id]);
@@ -131,6 +184,7 @@ try {
   assert.equal((await access()).status, 403);
   console.log('Cross-service HTTP acceptance passed (activation, suspension, reactivation, expiry).');
 } finally {
+  for (const child of workers) child.kill();
   globalThis.fetch = originalFetch;
   await Promise.all(servers.map(server => new Promise<void>(resolve => server.close(() => resolve()))));
   await Promise.all([owner.end(), stay.end(), closeStayDatabase?.()]);
