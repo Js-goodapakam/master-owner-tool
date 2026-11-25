@@ -6,7 +6,7 @@ import { authenticate, authorize } from './auth.js';
 import { otaProviders, otaProviderIds } from './otaCatalog.js';
 import { createLocalDemoSession, isLocalDemoEnabled, isLoopbackRequest } from './localAuth.js';
 import { expiredSubscriptions } from './subscriptionLifecycle.js';
-import { verifyRazorpayWebhookSignature } from './razorpay.js';
+import { createRazorpayOrder, verifyRazorpayWebhookSignature } from './razorpay.js';
 import {
   addAudit,
   audit,
@@ -340,6 +340,50 @@ app.post('/webhooks/razorpay', async (q, r) => {
   // A captured payment is recorded here; commercial activation remains an
   // explicit server-side transition and never trusts a browser callback.
   return r.json({ processed: true, status: expectedStatus });
+});
+
+const checkoutSchema = z.object({ customerId: z.string().uuid(), planId: z.string().uuid(), billingPeriod: z.enum(['MONTHLY', 'QUARTERLY', 'HALF_YEARLY', 'ANNUAL']) });
+app.post('/api/billing/razorpay/orders', authenticate, authorize('billing.manage'), async (q, r) => {
+  if (q.actor?.mustChangePassword) return r.status(403).json({ error: 'PASSWORD_CHANGE_REQUIRED' });
+  const parsed = checkoutSchema.safeParse(q.body);
+  const idempotencyKey = q.get('idempotency-key');
+  if (!parsed.success || !idempotencyKey || !/^[A-Za-z0-9_-]{12,128}$/.test(idempotencyKey)) return r.status(400).json({ error: 'VALIDATION' });
+  if (!supabaseConfigured()) return r.status(503).json({ error: 'DATABASE_REQUIRED' });
+  const keyId = process.env.RAZORPAY_KEY_ID, keySecret = process.env.RAZORPAY_KEY_SECRET;
+  if (!keyId?.startsWith('rzp_test_') || !keySecret) return r.status(503).json({ error: 'RAZORPAY_TEST_MODE_NOT_CONFIGURED' });
+  const input = parsed.data;
+  try {
+    const product = await requireProductContext(q, r);
+    if (!product || !await requireCustomerProduct(q, r, input.customerId, product)) return;
+    const [planResponse, priorResponse] = await Promise.all([
+      supabaseAdmin(`rest/v1/plans?select=id,product_id,status&id=eq.${encodeURIComponent(input.planId)}&limit=1`),
+      supabaseAdmin(`rest/v1/payment_transactions?select=id,provider_order_id,amount_minor,currency,status,plan_id,metadata&customer_id=eq.${input.customerId}&product_id=eq.${product.id}&idempotency_key=eq.${encodeURIComponent(idempotencyKey)}&limit=1`),
+    ]);
+    if (!planResponse.ok || !priorResponse.ok) return r.status(502).json({ error: 'CHECKOUT_LOOKUP_FAILED' });
+    const prior = (await priorResponse.json() as Array<any>)[0];
+    if (prior) {
+      if (prior.plan_id !== input.planId || prior.metadata?.billingPeriod !== input.billingPeriod) return r.status(409).json({ error: 'CHECKOUT_KEY_CONFLICT' });
+      if (!prior.provider_order_id) return r.status(409).json({ error: 'CHECKOUT_RECONCILIATION_REQUIRED' });
+      return r.json({ id: prior.id, orderId: prior.provider_order_id, amount: prior.amount_minor, currency: prior.currency, idempotentReplay: true });
+    }
+    const plan = (await planResponse.json() as Array<any>)[0];
+    if (!plan || plan.status !== 'ACTIVE' || plan.product_id !== product.id) return r.status(400).json({ error: 'PLAN_NOT_AVAILABLE' });
+    const now = encodeURIComponent(new Date().toISOString());
+    const priceResponse = await supabaseAdmin(`rest/v1/plan_prices?select=id,amount_minor,currency,tax_inclusive&plan_id=eq.${encodeURIComponent(plan.id)}&billing_period=eq.${input.billingPeriod}&status=eq.PUBLISHED&effective_from=lte.${now}&or=(effective_to.is.null,effective_to.gt.${now})&order=effective_from.desc&limit=1`);
+    if (!priceResponse.ok) return r.status(502).json({ error: 'PRICE_LOOKUP_FAILED' });
+    const price = (await priceResponse.json() as Array<any>)[0]; if (!price) return r.status(409).json({ error: 'PLAN_PRICE_NOT_CONFIGURED' });
+    const amount = Number(price.amount_minor);
+    if (!Number.isSafeInteger(amount) || amount <= 0 || price.currency !== 'INR' || price.tax_inclusive !== true) return r.status(409).json({ error: 'PLAN_PRICE_INVALID' });
+    const id = randomUUID();
+    const saved = await supabaseAdmin('/rest/v1/payment_transactions', { method: 'POST', body: JSON.stringify({ id, customer_id: input.customerId, product_id: product.id, plan_id: plan.id, provider: 'RAZORPAY', amount_minor: amount, currency: price.currency, status: 'CREATED', idempotency_key: idempotencyKey, metadata: { billingPeriod: input.billingPeriod, priceId: price.id, taxInclusive: true } }) });
+    if (saved.status === 409) return r.status(409).json({ error: 'CHECKOUT_KEY_CONFLICT' });
+    if (!saved.ok) return r.status(502).json({ error: 'PAYMENT_LEDGER_CREATE_FAILED' });
+    const order = await createRazorpayOrder({ keyId, keySecret, amount, currency: price.currency, receipt: `eh-${id}`, notes: { customerId: input.customerId, planId: input.planId, billingPeriod: input.billingPeriod } });
+    const linked = await supabaseAdmin(`rest/v1/payment_transactions?id=eq.${id}&provider_order_id=is.null`, { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ provider_order_id: order.id }) });
+    if (!linked.ok || !(await linked.json() as unknown[]).length) return r.status(502).json({ error: 'CHECKOUT_RECONCILIATION_REQUIRED' });
+    await recordPlatformAudit(q, 'payment.order_created', 'payment_transaction', id, undefined, { customerId: input.customerId, planId: input.planId, amount, currency: price.currency });
+    return r.status(201).json({ id, orderId: order.id, amount, currency: price.currency });
+  } catch { return r.status(502).json({ error: 'RAZORPAY_ORDER_CREATE_FAILED' }); }
 });
 
 app.post('/api/auth/login', async (q, r) => {

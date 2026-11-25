@@ -15,6 +15,8 @@ process.env.SUPABASE_SECRET_KEY = 'synthetic-server-key';
 process.env.ENGAGE_STAY_API_ORIGIN = 'http://managed-workspace.invalid';
 process.env.ENGAGE_OWNER_SERVICE_TOKEN = 'synthetic-service-token-for-tests-only';
 process.env.RAZORPAY_WEBHOOK_SECRET = 'synthetic-razorpay-webhook-secret';
+process.env.RAZORPAY_KEY_ID = 'rzp_test_synthetic';
+process.env.RAZORPAY_KEY_SECRET = 'synthetic-key-secret';
 delete process.env.DATABASE_URL;
 
 const stayProduct = '11111111-1111-4111-8111-111111111111';
@@ -47,6 +49,7 @@ vi.stubGlobal('fetch', async (input: RequestInfo | URL, init?: RequestInit) => {
   const url = new URL(String(input));
   // Calls to the real loopback API are never intercepted.
   if (url.hostname === '127.0.0.1') return originalFetch(input, init);
+  if (url.hostname === 'api.razorpay.com') return ok({ id: 'order_synthetic', amount: 129900, currency: 'INR', status: 'created' }, 200);
   if (url.hostname === 'managed-workspace.invalid') return entitlementSyncFails
     ? new Response(JSON.stringify({ error: 'UNAVAILABLE' }), { status: 503, headers: { 'content-type': 'application/json' } })
     : url.pathname.includes('/managed-workspaces/')
@@ -67,7 +70,7 @@ vi.stubGlobal('fetch', async (input: RequestInfo | URL, init?: RequestInit) => {
     const id = query.get('user_id') || '';
     return ok(id.includes('stay-operator') ? [{ user_id: 'stay-operator-id', email: 'stay.operator@example.test', full_name: 'Stay Operator', role_key: 'operations', is_active: true, is_primary_owner: false, must_change_password: false }] : [{ user_id: 'owner-id', email: 'owner@example.test', full_name: 'Owner', role_key: 'owner', is_active: true, is_primary_owner: true, must_change_password: false }]);
   }
-  if (table === 'owner_role_permissions') return ok([{ permission_key: 'customer.view' }, { permission_key: 'customer.create' }, { permission_key: 'customer.update' }, { permission_key: 'product.view' }, { permission_key: 'subscription.view' }, { permission_key: 'subscription.manage' }, { permission_key: 'entitlement.view' }, { permission_key: 'entitlement.manage' }]);
+if (table === 'owner_role_permissions') return ok([{ permission_key: 'customer.view' }, { permission_key: 'customer.create' }, { permission_key: 'customer.update' }, { permission_key: 'product.view' }, { permission_key: 'subscription.view' }, { permission_key: 'subscription.manage' }, { permission_key: 'billing.manage' }, { permission_key: 'entitlement.view' }, { permission_key: 'entitlement.manage' }]);
   if (table === 'owner_product_access') return ok([{ products: { product_code: 'engage_stay' } }]);
   if (table === 'products') {
     if (query.get('product_code')?.includes('engage_fit')) return ok(products.filter(item => item.id === fitProduct));
@@ -109,6 +112,7 @@ vi.stubGlobal('fetch', async (input: RequestInfo | URL, init?: RequestInit) => {
   if (table === 'plans') {
     const id = query.get('id'); return ok(id ? plans.filter(item => item.id === id.replace('eq.', '')) : plans);
   }
+  if (table === 'plan_prices') return ok([{ id: 'price-1', amount_minor: 129900, currency: 'INR', tax_inclusive: true }]);
   if (table === 'subscriptions') {
     const id = query.get('id')?.replace('eq.', '');
     if (init?.method === 'POST') {
@@ -126,8 +130,10 @@ vi.stubGlobal('fetch', async (input: RequestInfo | URL, init?: RequestInit) => {
   }
   if (table === 'payment_transactions') {
     const order = query.get('provider_order_id')?.replace('eq.', ''); const id = query.get('id')?.replace('eq.', '');
+    if (init?.method === 'POST') { synthetic.payments.push(body(init)); return ok([], 201); }
     if (init?.method === 'PATCH') { const row = synthetic.payments.find(item => item.id === id); if (row) Object.assign(row, body(init)); return ok(row ? [row] : []); }
-    return ok(order ? synthetic.payments.filter(item => item.provider_order_id === order) : synthetic.payments);
+    const key = query.get('idempotency_key')?.replace('eq.', '');
+    return ok(synthetic.payments.filter(item => (!order || item.provider_order_id === order) && (!key || item.idempotency_key === key)));
   }
   if (table === 'entitlement_overrides') {
     if (init?.method === 'POST') { const row = { id: `ent-${synthetic.entitlements.length + 1}`, ...body(init) }; synthetic.entitlements.push(row); return ok([row], 201); }
@@ -235,5 +241,10 @@ describe('isolated Owner control-plane API harness', () => {
     const replay = await originalFetch(base + '/webhooks/razorpay', { method: 'POST', headers: { 'content-type': 'application/json', 'x-razorpay-signature': signature }, body: payload });
     expect(replay.status).toBe(200); expect((await replay.json()).duplicate).toBe(true);
     expect(synthetic.payments[0]).toMatchObject({ status: 'CAPTURED', provider_payment_id: 'pay_test' });
+  });
+
+  it('creates a server-priced checkout order and rejects frontend-supplied prices', async () => {
+    const response = await request('/api/billing/razorpay/orders?productCode=engage_stay', 'owner-token', { method: 'POST', headers: { 'idempotency-key': 'checkout-synthetic-001' }, body: JSON.stringify({ customerId, planId: basicPlan, billingPeriod: 'MONTHLY', amount: 1 }) });
+    expect(response.status).toBe(201); expect(await response.json()).toMatchObject({ orderId: 'order_synthetic', amount: 129900, currency: 'INR' });
   });
 });
