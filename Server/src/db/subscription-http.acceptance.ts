@@ -25,6 +25,8 @@ const stay = new pg.Pool({ connectionString: stayUrl });
 const originalFetch = globalThis.fetch;
 const secret = randomBytes(32).toString('hex');
 const customer = randomUUID();
+const operator = randomUUID();
+const operatorToken = randomUUID();
 const tenant = randomUUID();
 const session = randomBytes(32).toString('hex');
 const servers: Server[] = [];
@@ -64,6 +66,24 @@ try {
       return Response.json({ id:'pay_http', order_id:'order_http', amount:10000, currency:'INR', status:'captured' });
     }
     if (url.hostname !== 'owner-db-fixture.invalid') return originalFetch(input, init);
+    if (url.pathname === '/auth/v1/user') {
+      return new Headers(init?.headers).get('authorization') === 'Bearer '+operatorToken
+        ? Response.json({id:operator,email:'billing@example.test'}) : new Response(null,{status:401});
+    }
+    if (url.pathname.endsWith('/owner_profiles')) return Response.json((await owner.query('select * from owner_profiles where user_id=$1',[operator])).rows);
+    if (url.pathname.endsWith('/owner_role_permissions')) return Response.json([{permission_key:'billing.manage'}]);
+    if (url.pathname.endsWith('/products')) return Response.json((await owner.query('select * from products')).rows);
+    if (url.pathname.endsWith('/product_modules') || url.pathname.endsWith('/product_features')) return Response.json([]);
+    if (url.pathname.endsWith('/customer_products')) return Response.json((await owner.query('select * from customer_products where customer_id=$1 and product_id=$2',
+      [url.searchParams.get('customer_id')?.slice(3),url.searchParams.get('product_id')?.slice(3)])).rows);
+    if (url.pathname.endsWith('/subscription_sync_outbox') && !init?.method) return Response.json((await owner.query(
+      'select revision::text,tenant_id,state from subscription_sync_outbox where customer_id=$1 and product_id=$2 order by revision desc limit 1',
+      [url.searchParams.get('customer_id')?.slice(3),url.searchParams.get('product_id')?.slice(3)])).rows);
+    if (url.pathname.endsWith('/rpc/requeue_stale_subscription')) {
+      const a=JSON.parse(String(init?.body));
+      return Response.json((await owner.query('select requeue_stale_subscription($1,$2,$3,$4,$5,$6) as ok',
+        [a.p_revision,a.p_customer,a.p_product,a.p_tenant,a.p_remote,a.p_actor])).rows[0].ok);
+    }
     if (url.pathname.endsWith('/payment_transactions')) {
       return Response.json((await owner.query('select * from payment_transactions where provider_order_id=$1',
         [url.searchParams.get('provider_order_id')?.slice(3)])).rows);
@@ -129,6 +149,8 @@ try {
   const { rows: [plan] } = await owner.query(`select p.id,p.product_id from plans p join products r on r.id=p.product_id
     where r.product_code='engage_stay' and p.name='Basic'`);
   await owner.query("insert into customers(id,customer_code,company_name,email) values($1,'HTTP-CI','Synthetic HTTP','http@example.test')", [customer]);
+  await owner.query('insert into auth.users(id) values($1)',[operator]);
+  await owner.query("insert into owner_profiles(user_id,email,full_name,role_key,must_change_password) values($1,'billing@example.test','Synthetic Billing','owner',false)",[operator]);
   await owner.query("insert into tenants(id,customer_id,name,slug) values($1,$2,'Synthetic','http-ci')", [tenant, customer]);
   await owner.query('insert into customer_products(customer_id,product_id,tenant_id) values($1,$2,$3)', [customer, plan.product_id, tenant]);
   await stay.query("insert into property(id,name,code) values(9001,'Synthetic HTTP','http-ci')");
@@ -179,6 +201,15 @@ try {
   assert.equal((await compare(randomUUID(), secret)).status, 409);
   const deliveredRevision = (await owner.query('select revision::text from subscription_sync_outbox')).rows[0].revision;
   assert.deepEqual(await (await compare(tenant, secret)).json(), {revision:deliveredRevision});
+  await stay.query("update engagestay_managed_workspace set subscription_revision=0,status='suspended' where property_id=9001");
+  const reconcile = (id = customer, token = operatorToken) => originalFetch(ownerOrigin + '/api/billing/customers/' + id + '/reconcile-subscription?productCode=engage_stay',
+    {method:'POST',headers:{Authorization:'Bearer '+token}});
+  assert.equal((await reconcile(customer,randomUUID())).status,401);
+  assert.equal((await reconcile(randomUUID())).status,404);
+  assert.deepEqual(await (await reconcile()).json(),{outcome:'requeued'});
+  assert.deepEqual(await (await deliver()).json(),{outcome:'DELIVERED'});
+  assert.deepEqual(await (await compare(tenant,secret)).json(),{revision:deliveredRevision});
+  assert.deepEqual(await (await reconcile()).json(),{outcome:'current'});
   assert.equal((await originalFetch(ownerOrigin + '/api/billing/subscription-delivery/' + deliveredRevision + '/recover?productCode=engage_stay', {method:'POST'})).status, 401);
   assert.equal((await access()).status, 200);
   assert.equal((await stay.query('select owner_tenant_id from engagestay_managed_workspace where property_id=9001')).rows[0].owner_tenant_id, tenant);
