@@ -7,6 +7,7 @@ declare
   plan uuid;
   s uuid;
   renewed uuid;
+  claim record;
   expiry timestamptz;
 begin
   if current_database() <> 'owner_test' or current_user <> 'owner_test' then
@@ -44,5 +45,12 @@ begin
   update subscriptions set status='SUSPENDED' where id=s;
   if (select count(*) from subscription_sync_outbox where subscription_id=s and subscription_status='SUSPENDED') <> 1
      then raise exception 'Suspension was not enqueued exactly once'; end if;
+  select * into strict claim from claim_stay_subscription_delivery();
+  if claim.customer <> c or claim.tenant <> t or claim.attempt <> 1 then
+    raise exception 'Incorrect delivery claim';
+  end if;
+  if (select count(*) from subscription_sync_outbox where subscription_id=s and attempts=1 and next_attempt_at>now()) <> 1 then
+    raise exception 'Delivery lease was not persisted';
+  end if;
 end $$;
 rollback;

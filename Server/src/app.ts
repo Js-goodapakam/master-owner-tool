@@ -39,6 +39,46 @@ app.use(
 
 app.use(express.json({ limit: '12mb', verify: (request, _response, buffer) => { (request as any).rawBody = Buffer.from(buffer); } }));
 
+app.post('/internal/subscriptions/deliver', async (q, r) => {
+  if (!hasOwnerServiceAuthorization(q)) return r.status(401).json({ error: 'SERVICE_AUTH_REQUIRED' });
+  const origin = process.env.ENGAGE_STAY_API_ORIGIN;
+  const token = process.env.ENGAGE_OWNER_SERVICE_TOKEN;
+  if (!origin || !token || !supabaseConfigured()) return r.status(503).json({ error: 'DELIVERY_NOT_CONFIGURED' });
+  try {
+    const target = new URL(origin);
+    if (target.protocol !== 'https:' && process.env.NODE_ENV !== 'test') return r.status(503).json({ error: 'DELIVERY_NOT_CONFIGURED' });
+    const claim = await supabaseAdmin('/rest/v1/rpc/claim_stay_subscription_delivery', { method: 'POST', body: '{}' });
+    if (!claim.ok) return r.status(502).json({ error: 'DELIVERY_CLAIM_FAILED' });
+    const [job] = await claim.json();
+    if (!job) return r.json({ outcome: 'idle' });
+    let error: string | null = 'transport';
+    let permanent = false;
+    try {
+      const response = await fetch(new URL('/api/internal/managed-workspaces/' + encodeURIComponent(job.customer), target), {
+        method: 'POST', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+        redirect: 'error', signal: AbortSignal.timeout(10000),
+        body: JSON.stringify({ action: 'sync_subscription', productCode: 'engage_stay', tenantId: job.tenant,
+          revision: job.revision, plan: job.plan, subscriptionStatus: job.status, expiresAt: job.expiry }),
+      });
+      if (response.ok) {
+        const ack = await response.json();
+        error = ack.revision === job.revision && ['applied', 'duplicate', 'stale'].includes(ack.outcome) ? null : 'invalid_ack';
+      } else {
+        permanent = [400, 409].includes(response.status);
+        error = 'receiver_' + response.status;
+      }
+    } catch { /* Retry transport failures after releasing the lease. */ }
+    const state = !error ? 'DELIVERED' : permanent || job.attempt >= 8 ? 'DEAD' : 'PENDING';
+    const saved = await supabaseAdmin(`/rest/v1/subscription_sync_outbox?revision=eq.${job.revision}&attempts=eq.${job.attempt}&state=eq.PENDING`, {
+      method: 'PATCH', headers: { Prefer: 'return=representation' },
+      body: JSON.stringify({ state, last_error: error, delivered_at: error ? null : new Date().toISOString(),
+        next_attempt_at: new Date(Date.now() + Math.min(3600, 15 * 2 ** job.attempt) * 1000).toISOString() }),
+    });
+    if (!saved.ok || !(await saved.json()).length) return r.status(502).json({ error: 'DELIVERY_ACK_NOT_SAVED' });
+    return r.json({ outcome: state });
+  } catch { return r.status(502).json({ error: 'DELIVERY_UNAVAILABLE' }); }
+});
+
 // Supabase privileged operations are server-only. Never expose these keys to the browser.
 const roleKeys: Record<string, string> = {
   Owner: 'owner',
