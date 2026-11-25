@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { randomUUID } from 'node:crypto';
+import { createHmac, randomUUID } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import test from 'node:test';
 
@@ -52,6 +52,38 @@ test('real PostgREST denies unprivileged billing records and permits service acc
     assert.ok([401,403].includes(result.status),'Private billing grants deny reads');
   }
   assert.equal((await call(path,{service:true})).status,200);
+});
+test('real Auth rejects an expired correctly signed local JWT and an invalid signature', async () => {
+  assert.ok(local.JWT_SECRET && session?.access_token);
+  const [header, payload] = session.access_token.split('.');
+  const claims = JSON.parse(Buffer.from(payload,'base64url'));
+  const encode = value => Buffer.from(JSON.stringify(value)).toString('base64url');
+  const make = (expiry, signingKey) => {
+    const data = header+'.'+encode({...claims,exp:expiry});
+    return data+'.'+createHmac('sha256',signingKey).update(data).digest('base64url');
+  };
+  assert.equal((await call('/auth/v1/user',{token:session.access_token})).status,200);
+  for (const token of [make(claims.iat-3600,local.JWT_SECRET),make(claims.exp,randomUUID())]) {
+    assert.ok([401,403].includes((await call('/auth/v1/user',{token})).status));
+  }
+});
+test('real PostgREST RLS denies authenticated reads and mutations on operational tenant tables', async () => {
+  const a = randomUUID(), b = randomUUID();
+  sql(['-c',`insert into customers(id,customer_code,company_name,email)
+     values ('${a}','CI-A','Synthetic A','a@example.test'), ('${b}','CI-B','Synthetic B','b@example.test');
+     insert into tenants(customer_id,name,slug) values ('${a}','Synthetic A','ci-a'), ('${b}','Synthetic B','ci-b');`]);
+  const path = '/rest/v1/tenants?customer_id=eq.'+b;
+  const serviceRead = await call(path,{service:true});
+  assert.equal(serviceRead.status,200);
+  assert.equal((await serviceRead.json()).length,1);
+  for (const token of [undefined,session.access_token]) {
+    const read = await call(path,{token});
+    if (read.ok) assert.deepEqual(await read.json(),[]);
+    else assert.ok([401,403].includes(read.status));
+    const change = await call(path,{token,method:'PATCH',body:{name:'Forbidden change'}});
+    assert.ok([204,401,403].includes(change.status));
+  }
+  assert.equal((await (await call(path,{service:true})).json())[0].name,'Synthetic B');
 });
 test('real private Storage permits service round-trip and denies anonymous/authenticated access', async () => {
   assert.ok(session?.access_token);
