@@ -29,6 +29,34 @@ for (const file of readdirSync(directory).filter(n=>/^\d+_.*\.sql$/.test(n)).sor
 const email = randomUUID()+'@example.com';
 const password = randomUUID();
 let session;
+test('public signup delivers a confirmation link to the isolated Mailpit inbox', async () => {
+  const inboxEmail = randomUUID()+'@example.com';
+  const inbox = new URL(local.MAILPIT_URL || local.INBUCKET_URL || 'http://127.0.0.1:54324');
+  assert.ok(['127.0.0.1','localhost'].includes(inbox.hostname));
+  const signup = await call('/auth/v1/signup',{method:'POST',body:{email:inboxEmail,password}});
+  assert.ok(signup.ok,'Public synthetic signup');
+  const mailbox = path => fetch(new URL(path,inbox),{redirect:'error',signal:AbortSignal.timeout(5000)});
+  let message;
+  for (let attempt=0; attempt<20 && !message; attempt++) {
+    const response = await mailbox('/api/v1/messages');
+    assert.ok(response.ok,'Mailpit inbox API');
+    message = (await response.json()).messages?.find(item => item.To?.some(recipient => recipient.Address===inboxEmail));
+    if (!message) await new Promise(resolve=>setTimeout(resolve,500));
+  }
+  assert.ok(message,'Synthetic signup email delivered');
+  const mail = await (await mailbox('/api/v1/message/'+encodeURIComponent(message.ID))).json();
+  const link = /https?:\/\/[^\s"<]+\/auth\/v1\/verify\?[^\s"<]+/.exec((mail.Text || '')+' '+(mail.HTML || ''));
+  assert.ok(link,'Confirmation link present');
+  const confirmation = new URL(link[0].replaceAll('&amp;','&'));
+  assert.equal(confirmation.origin,new URL(local.API_URL).origin);
+  const token = confirmation.searchParams.get('token');
+  assert.ok(token,'Confirmation token present');
+  const verified = await call('/auth/v1/verify',{method:'POST',body:{type:'signup',token_hash:token}});
+  assert.ok(verified.ok,'Mail confirmation accepted');
+  assert.ok((await call('/auth/v1/token?grant_type=password',{method:'POST',body:{email:inboxEmail,password}})).ok);
+  const invalid = await call('/auth/v1/verify',{method:'POST',body:{type:'signup',token_hash:randomUUID()}});
+  assert.ok([400,401,403,422].includes(invalid.status),'Invalid confirmation denied');
+});
 test('real GoTrue verifies signup token, logs in and rotates refresh token', async () => {
   const link = await call('/auth/v1/admin/generate_link',{method:'POST',service:true,body:{type:'signup',email,password}});
   assert.ok(link.ok,'Generate local signup confirmation');
