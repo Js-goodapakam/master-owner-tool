@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - codex/p0-05b-checkout
   pull_request:
     branches:
       - main
@@ -48,3 +49,5 @@ jobs:
         run: npm test
       - name: Apply isolated database migrations
         run: npm run db:migrate
+      - name: Exercise verified capture in disposable PostgreSQL
+        run: psql "$DATABASE_URL" -X -v ON_ERROR_STOP=1 -f Database/tests/verified-payment.sql
