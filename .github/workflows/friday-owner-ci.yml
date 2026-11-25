@@ -55,7 +55,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: Js-goodapakam/friday-desk-server
-          ref: 99fffbc132c3c3120364d48644aca0779ada9cbf
+          ref: 3d313fad15913a8160496e0f66da8b29f6a7af69
           path: engage-stay
       - name: Prepare and test disposable Engage Stay database
         if: github.ref == 'refs/heads/codex/p0-05b-checkout'
@@ -85,7 +85,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: Js-goodapakam/friday-desk-server
-          ref: 99fffbc132c3c3120364d48644aca0779ada9cbf
+          ref: 3d313fad15913a8160496e0f66da8b29f6a7af69
           path: engage-stay
       - run: npm ci && npm run build -w @friday/shared && npm ci --ignore-scripts --prefix engage-stay
       - name: Initialize isolated stack and probe real services
