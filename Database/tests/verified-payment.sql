@@ -6,6 +6,7 @@ declare
   p uuid;
   plan uuid;
   s uuid;
+  renewed uuid;
   expiry timestamptz;
 begin
   if current_database() <> 'owner_test' or current_user <> 'owner_test' then
@@ -32,7 +33,8 @@ begin
   if (select expires_at from subscriptions where id=s) <> expiry or
      (select status from payment_transactions where provider_order_id='order_ci_2') <> 'CREATED'
      then raise exception 'Failed capture did not roll back'; end if;
-  if activate_verified_checkout('order_ci_2','pay_ci_2',10000,'INR') <> s or
+  renewed := activate_verified_checkout('order_ci_2','pay_ci_2',10000,'INR');
+  if renewed <> s or
      (select expires_at from subscriptions where id=s) <> expiry + interval '1 month'
      then raise exception 'Renewal failed'; end if;
 end $$;
