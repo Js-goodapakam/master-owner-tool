@@ -41,6 +41,12 @@ async function verifyStayBrowser(stayOrigin, customerEmail) {
       const origin='http://127.0.0.1:5173';
       const errors=[];
       page.on('pageerror',error=>errors.push(error.message));
+      const alerts=[];
+      page.on('dialog',async dialog=>{
+        if(dialog.type()==='confirm'){await dialog.accept();return;}
+        alerts.push(dialog.message());
+        await dialog.dismiss();
+      });
       await page.route('**/*',route=>new URL(route.request().url()).origin===origin?route.continue():route.abort());
       await page.goto(origin);
       await page.locator('#fl-email').fill(customerEmail);
@@ -77,9 +83,12 @@ async function verifyStayBrowser(stayOrigin, customerEmail) {
         await editor.getByLabel('Check-in date *',{exact:true}).fill(date.format(today));
         await editor.getByLabel('Check-out date *',{exact:true}).fill(date.format(new Date(+today+86400000)));
         await editor.getByLabel('Advance paid',{exact:true}).fill('3500');
+        await editor.getByLabel('Room *',{exact:true}).selectOption('BROWSER-101');
         const reserved=workspaceSave();
         await editor.getByRole('button',{name:'Create reservation',exact:true}).click();
-        assert.equal((await reserved).status(),200);
+        assert.equal((await reserved.catch(error=>{
+          throw new Error('Reservation submit did not save: '+[...alerts,...errors].join('; '),{cause:error});
+        })).status(),200);
         await editor.waitFor({state:'hidden'});
         const frontDesk=page.getByRole('button',{name:'Front Desk',exact:true});
         await frontDesk.click();
@@ -89,7 +98,6 @@ async function verifyStayBrowser(stayOrigin, customerEmail) {
         await page.getByRole('heading',{name:'Guests',exact:true}).waitFor();
         await frontDesk.click();
         const checkedOut=workspaceSave();
-        page.once('dialog',dialog=>dialog.accept());
         await page.getByRole('button',{name:'Check out',exact:true}).click();
         assert.equal((await checkedOut).status(),200);
         await page.getByRole('heading',{name:'Guests',exact:true}).waitFor();
