@@ -37,7 +37,7 @@ async function verifyStayBrowser(stayOrigin, customerEmail) {
   try {
     browser = await chromium.launch();
     for (const viewport of [{width:1440,height:900},{width:390,height:844}]) {
-      const page = await browser.newPage({viewport,reducedMotion:'reduce'});
+      const page = await browser.newPage({viewport,reducedMotion:'reduce',timezoneId:'Asia/Kolkata'});
       const origin='http://127.0.0.1:5173';
       const errors=[];
       page.on('pageerror',error=>errors.push(error.message));
@@ -60,9 +60,42 @@ async function verifyStayBrowser(stayOrigin, customerEmail) {
         await page.getByRole('button',{name:'Add room',exact:true}).click();
         assert.equal((await saved).status(),200);
         await page.getByText('Room BROWSER-101',{exact:true}).waitFor();
-        await page.getByRole('button',{name:'Housekeeping',exact:true}).click();
-        const marked = page.waitForResponse(response =>
+        const workspaceSave = () => page.waitForResponse(response =>
           response.url().endsWith('/workspace') && response.request().method()==='PUT');
+        await page.getByRole('button',{name:'Dashboard',exact:true}).click();
+        await page.getByRole('button',{name:'New reservation',exact:true}).first().click();
+        const editor=page.locator('.reservation-modal');
+        await editor.getByLabel('First name *',{exact:true}).fill('Synthetic');
+        await editor.getByLabel('Last name *',{exact:true}).fill('Browser Guest');
+        await editor.getByLabel('Email *',{exact:true}).fill('browser-guest@example.com');
+        await editor.locator('.reservation-phone-input').fill('9000000000');
+        await editor.locator('#kyc-attachment-input').setInputFiles({
+          name:'synthetic.pdf',mimeType:'application/pdf',buffer:Buffer.from('%PDF-1.4\nSynthetic CI fixture'),
+        });
+        const date=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Kolkata'});
+        const today=new Date();
+        await editor.getByLabel('Check-in date *',{exact:true}).fill(date.format(today));
+        await editor.getByLabel('Check-out date *',{exact:true}).fill(date.format(new Date(+today+86400000)));
+        await editor.getByLabel('Advance paid',{exact:true}).fill('3500');
+        const reserved=workspaceSave();
+        await editor.getByRole('button',{name:'Create reservation',exact:true}).click();
+        assert.equal((await reserved).status(),200);
+        await editor.waitFor({state:'hidden'});
+        const frontDesk=page.getByRole('button',{name:'Front Desk',exact:true});
+        await frontDesk.click();
+        const checkedIn=workspaceSave();
+        await page.getByRole('button',{name:'Check in',exact:true}).click();
+        assert.equal((await checkedIn).status(),200);
+        await page.getByRole('heading',{name:'Guests',exact:true}).waitFor();
+        await frontDesk.click();
+        const checkedOut=workspaceSave();
+        page.once('dialog',dialog=>dialog.accept());
+        await page.getByRole('button',{name:'Check out',exact:true}).click();
+        assert.equal((await checkedOut).status(),200);
+        await page.getByRole('heading',{name:'Guests',exact:true}).waitFor();
+        await page.getByRole('button',{name:'Housekeeping',exact:true}).click();
+        await page.getByText('Dirty',{exact:true}).waitFor();
+        const marked = workspaceSave();
         await page.getByRole('button',{name:'Mark clean',exact:true}).click();
         assert.equal((await marked).status(),200);
         await page.getByRole('button',{name:'Mark inspected',exact:true}).waitFor();
@@ -70,7 +103,7 @@ async function verifyStayBrowser(stayOrigin, customerEmail) {
       assert.deepEqual(errors,[]);
       await page.close();
     }
-    console.log('Chromium verified PMS login, property dashboard and room setup at desktop and mobile widths');
+    console.log('Chromium verified desktop and mobile property access, and desktop room setup, booking, checkout and housekeeping');
   } finally {
     await browser?.close();
     await new Promise(resolve=>frontend.httpServer.close(resolve));
