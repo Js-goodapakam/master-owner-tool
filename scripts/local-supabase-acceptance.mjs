@@ -36,7 +36,7 @@ async function verifyStayBrowser(stayOrigin, customerEmail) {
   let browser;
   try {
     browser = await chromium.launch();
-    for (const viewport of [{width:1440,height:900},{width:390,height:844}]) {
+    for (const viewport of [{width:1440,height:900},{width:820,height:1180},{width:390,height:844}]) {
       const page = await browser.newPage({viewport,reducedMotion:'reduce',timezoneId:'Asia/Kolkata'});
       const origin='http://127.0.0.1:5173';
       const errors=[];
@@ -58,6 +58,7 @@ async function verifyStayBrowser(stayOrigin, customerEmail) {
       if(viewport.width<900)await page.locator('.mobile-menu-toggle').click();
       await page.getByRole('button',{name:'Rooms',exact:true}).click();
       await page.getByRole('heading',{name:'Add room',exact:true}).waitFor();
+      assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth+1),true);
       if(viewport.width>=900){
         await page.getByLabel('Room number').fill('BROWSER-101');
         await page.getByLabel('Room type').fill('Standard');
@@ -68,6 +69,10 @@ async function verifyStayBrowser(stayOrigin, customerEmail) {
         await page.getByText('Room BROWSER-101',{exact:true}).waitFor();
         const workspaceSave = () => page.waitForResponse(response =>
           response.url().endsWith('/workspace') && response.request().method()==='PUT');
+        await page.getByLabel('Room number').fill('BROWSER-102');
+        await page.getByLabel('Room type').fill('Standard');
+        const [secondRoom]=await Promise.all([workspaceSave(),page.getByRole('button',{name:'Add room',exact:true}).click()]);
+        assert.equal(secondRoom.status(),200);
         await page.getByRole('button',{name:'Dashboard',exact:true}).click();
         await page.getByRole('button',{name:'New reservation',exact:true}).first().click();
         const editor=page.locator('.reservation-modal');
@@ -93,6 +98,24 @@ async function verifyStayBrowser(stayOrigin, customerEmail) {
         });
         assert.equal(reserved.status(),200);
         await editor.waitFor({state:'hidden'});
+        await page.getByRole('button',{name:'Reservations',exact:true}).click();
+        const editButton=page.getByRole('button',{name:/^Edit reservation /});
+        await editButton.click();
+        const edit=page.getByRole('dialog');
+        await edit.locator('label:has-text("Room") select').selectOption('BROWSER-102');
+        await edit.getByLabel('Nightly rate').fill('3400');
+        const [reassigned]=await Promise.all([workspaceSave(),edit.getByRole('button',{name:'Save reservation'}).click()]);
+        assert.equal(reassigned.status(),200);
+        const reassignedBooking=(await reassigned.json()).state.reservations[0];
+        assert.equal(reassignedBooking.room,'BROWSER-102');
+        assert.equal(reassignedBooking.rate,3400);
+        await page.reload();
+        await page.locator('.pw-table-property').first().click();
+        await page.getByRole('button',{name:'Reservations',exact:true}).click();
+        await editButton.click();
+        assert.equal(await edit.locator('label:has-text("Room") select').inputValue(),'BROWSER-102');
+        await page.keyboard.press('Escape');
+        await edit.waitFor({state:'hidden'});
         const frontDesk=page.getByRole('button',{name:'Front Desk',exact:true});
         await frontDesk.click();
         const checkedIn=workspaceSave();
@@ -313,7 +336,7 @@ test('real local Supabase identity reaches Owner onboarding and the assigned Sta
     const initial=await readWorkspace();
     assert.equal(initial.managed,true);
     assert.ok(initial.modules.includes('operations'));
-    if(process.argv[4])assert.equal(initial.state.rooms.find(room=>room.number==='BROWSER-101')?.housekeepingStatus,'Clean');
+    if(process.argv[4])assert.equal(initial.state.rooms.find(room=>room.number==='BROWSER-102')?.housekeepingStatus,'Clean');
     const saveWorkspace=async (version,changes,status=200)=> (await request(stayOrigin,workspacePath,status,{
       method:'PUT',headers:{Cookie:cookie},body:{version,state:{property:{id:property.property_id},...changes}},
     })).json();
@@ -333,6 +356,17 @@ test('real local Supabase identity reaches Owner onboarding and the assigned Sta
     const checkedOut=await readWorkspace();
     assert.equal(checkedOut.state.reservations[0].status,'Checked Out');
     assert.equal(checkedOut.state.reservations[0].paid,200);
+    const first={...booking,id:'CI-RACE-A'};
+    const second={...booking,id:'CI-RACE-B'};
+    const competing=await Promise.all([first,second].map(candidate=>fetch(stayOrigin+workspacePath,{
+      method:'PUT',headers:{Cookie:cookie,'Content-Type':'application/json'},
+      body:JSON.stringify({version:checkedOut.version,state:{property:{id:property.property_id},reservations:[candidate]}}),
+    })));
+    assert.deepEqual(competing.map(response=>response.status).sort(),[200,409]);
+    const winner=await readWorkspace();
+    const cancelled=await saveWorkspace(winner.version,{reservations:[{...winner.state.reservations[0],status:'Cancelled'}]});
+    const rebooked=await saveWorkspace(cancelled.version,{reservations:[...cancelled.state.reservations,{...booking,id:'CI-REBOOK'}]});
+    assert.deepEqual(rebooked.state.reservations.map(record=>record.status),['Cancelled','Confirmed']);
     const unrelated=sql(['-qAtc',`with p as (insert into property(name,code) values ('Unrelated','CI-UNRELATED') returning id),
       w as (insert into engagestay_managed_workspace(property_id,customer_id,status,plan,modules)
       select id,gen_random_uuid(),'active','basic',array['operations'] from p returning property_id)
