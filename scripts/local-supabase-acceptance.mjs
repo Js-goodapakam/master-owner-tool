@@ -109,6 +109,10 @@ async function verifyStayBrowser(stayOrigin, customerEmail) {
         const reassignedBooking=(await reassigned.json()).state.reservations[0];
         assert.equal(reassignedBooking.room,'BROWSER-102');
         assert.equal(reassignedBooking.rate,3400);
+        await edit.waitFor({state:'hidden'});
+        await page.getByRole('button',{name:'Calendar',exact:true}).click();
+        await page.getByRole('heading',{name:'Calendar',exact:true}).waitFor();
+        await page.getByRole('option',{name:/BROWSER-102/}).waitFor({state:'attached'});
         await page.reload();
         await page.locator('.pw-table-property').first().click();
         await page.getByRole('button',{name:'Reservations',exact:true}).click();
@@ -127,6 +131,14 @@ async function verifyStayBrowser(stayOrigin, customerEmail) {
         await page.getByRole('button',{name:'Check out',exact:true}).click();
         assert.equal((await checkedOut).status(),200);
         await page.getByRole('heading',{name:'Guests',exact:true}).waitFor();
+        await page.getByText('Synthetic Browser Guest',{exact:true}).click();
+        await page.getByRole('button',{name:'Edit details',exact:true}).click();
+        await page.getByLabel('First name',{exact:true}).fill('Updated');
+        const [guestSaved]=await Promise.all([workspaceSave(),page.getByRole('button',{name:'Save guest',exact:true}).click()]);
+        assert.equal(guestSaved.status(),200);
+        assert.equal((await guestSaved.json()).state.guests[0].name,'Updated Browser Guest');
+        await page.getByRole('button',{name:'Stay History',exact:true}).click();
+        await page.getByText('Checked Out',{exact:true}).first().waitFor();
         await page.getByRole('button',{name:'Housekeeping',exact:true}).click();
         await page.getByText('Dirty',{exact:true}).waitFor();
         const marked = workspaceSave();
