@@ -98,11 +98,15 @@ if (table === 'owner_role_permissions') return ok([{ permission_key: 'customer.v
       const incoming = body(init);
       const existing = synthetic.signups.find(item => item.idempotency_key === incoming.idempotency_key);
       if (existing) return ok([]);
-      const row = { id: `signup-${synthetic.signups.length + 1}`, status: 'NEW', ...incoming };
+      const row = { id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', status: 'NEW', ...incoming };
       synthetic.signups.push(row); return ok([row], 201);
     }
     if (init?.method === 'PATCH') { const row = synthetic.signups.find(item => item.id === id); if (row) Object.assign(row, body(init)); return ok(row ? [row] : []); }
-    let rows = synthetic.signups; if (id) rows = rows.filter(item => item.id === id); return ok(rows);
+    let rows = synthetic.signups;
+    if (id) rows = rows.filter(item => item.id === id);
+    const product = query.get('product_code')?.replace('eq.', '');
+    if (product) rows = rows.filter(item => item.product_code === product);
+    return ok(rows);
   }
   if (table === 'onboarding_sessions') {
     const signupId = query.get('signup_request_id')?.replace('eq.', ''); const id = query.get('id')?.replace('eq.', '');
@@ -164,6 +168,13 @@ beforeAll(async () => {
 afterAll(async () => { await new Promise<void>(resolve => server.close(() => resolve())); vi.unstubAllGlobals(); });
 
 describe('isolated Owner control-plane API harness', () => {
+  it('accepts only the service credential on the expiry worker', async () => {
+    const path = '/api/internal/subscriptions/evaluate-expiry';
+    expect((await request(path,'owner-token',{method:'POST'})).status).toBe(401);
+    const result = await request(path,process.env.ENGAGE_OWNER_SERVICE_TOKEN!,{method:'POST'});
+    expect(result.status).toBe(200);
+    expect(await result.json()).toMatchObject({expired:0});
+  });
   it('activates a trial, rejects duplicate activation, changes plan and preserves customer identity', async () => {
     const create = await request('/api/subscriptions?productCode=engage_stay', 'owner-token', { method: 'POST', body: JSON.stringify({ customerId, planId: basicPlan, status: 'TRIAL', startsAt: '2026-11-19T00:00:00.000Z', expiresAt: '2026-12-19T00:00:00.000Z' }) });
     expect(create.status).toBe(201); const trial = await create.json() as { id: string };
@@ -222,6 +233,11 @@ describe('isolated Owner control-plane API harness', () => {
     const duplicate = await originalFetch(base + '/api/integrations/engagestay/signup', { method: 'POST', headers: { authorization: 'Bearer synthetic-service-token-for-tests-only', 'idempotency-key': 'signup-synthetic-001', 'content-type': 'application/json' }, body: JSON.stringify(payload) });
     expect(duplicate.status).toBe(202); expect(synthetic.signups).toHaveLength(1);
     const signupId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+    const wrongProduct = await request('/api/onboarding?productCode=engage_fit', 'owner-token', {
+      method: 'POST', body: JSON.stringify({ signupRequestId:signupId,step:7,data:{environment:'Trial'} }),
+    });
+    expect(wrongProduct.status).toBe(404);
+    expect(synthetic.onboarding).toHaveLength(0);
     for (let step = 1; step <= 7; step++) {
       const saved = await request('/api/onboarding?productCode=engage_stay', 'owner-token', { method: 'POST', body: JSON.stringify({ signupRequestId: signupId, step, data: { step, environment: 'Trial' } }) });
       expect(saved.status).toBe(200);

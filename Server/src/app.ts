@@ -548,7 +548,7 @@ app.get('/api/auth/password-status', authenticate, (q, r) => {
 // This one endpoint performs its own constant-time service-token authorization.
 // All other /api routes retain the standard authenticated Owner session guard.
 app.use('/api', (req, res, next) => {
-  if (req.path === '/integrations/engagestay/signup' && req.method === 'POST') {
+  if (req.method === 'POST' && ['/integrations/engagestay/signup','/internal/subscriptions/evaluate-expiry'].includes(req.path)) {
     return next();
   }
   return authenticate(req, res, next);
@@ -1075,6 +1075,13 @@ app.post('/api/onboarding', authorize('customer.create'), (q, r) => {
 
   if (supabaseConfigured()) return void (async () => {
     const signupRequestId = typeof q.body.signupRequestId === 'string' && /^[0-9a-f-]{36}$/i.test(q.body.signupRequestId) ? q.body.signupRequestId : null;
+    if (signupRequestId) {
+      const product = await requireProductContext(q,r);
+      if (!product) return;
+      const signup = await supabaseAdmin(`rest/v1/signup_requests?select=id&id=eq.${signupRequestId}&product_code=eq.${product.code}&limit=1`);
+      if (!signup.ok) return r.status(502).json({error:'SIGNUP_LOOKUP_FAILED'});
+      if (!(await signup.json()).length) return r.status(404).json({error:'SIGNUP_REQUEST_NOT_FOUND'});
+    }
     const clientPayload = q.body.data && typeof q.body.data === 'object' ? q.body.data : {};
     const environment = clientPayload?.environment === 'Live' ? 'Live' : 'Trial';
     const systemAccountCode = signupRequestId ? await reserveTenantAccountCode(signupRequestId, environment) : null;
@@ -1559,8 +1566,9 @@ app.post('/api/internal/subscriptions/evaluate-expiry', async (q, r) => {
       if (!source.ok) throw new Error('Could not lock an expiring subscription.');
       const current = (await source.json() as Array<any>)[0];
       if (!current) continue; // another worker already processed it
-      const changed = await supabaseAdmin(`rest/v1/subscriptions?id=eq.${encodeURIComponent(item.id)}&status=in.(TRIAL,ACTIVE)`, { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ status: 'EXPIRED' }) });
+      const changed = await supabaseAdmin(`rest/v1/subscriptions?id=eq.${encodeURIComponent(item.id)}&status=in.(TRIAL,ACTIVE)&expires_at=lte.${encodeURIComponent(now.toISOString())}`, { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ status: 'EXPIRED' }) });
       if (!changed.ok) throw new Error('Could not expire a subscription.');
+      if (!(await changed.json()).length) continue;
       await Promise.all([
         supabaseAdmin(`rest/v1/customers?id=eq.${encodeURIComponent(current.customer_id)}`, { method: 'PATCH', body: JSON.stringify({ status: 'SUSPENDED', updated_at: now.toISOString() }) }),
         supabaseAdmin(`rest/v1/customer_products?customer_id=eq.${encodeURIComponent(current.customer_id)}&product_id=eq.${encodeURIComponent(current.product_id)}`, { method: 'PATCH', body: JSON.stringify({ status: 'SUSPENDED' }) }),

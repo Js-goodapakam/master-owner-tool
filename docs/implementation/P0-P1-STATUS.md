@@ -2,6 +2,8 @@
 
 ## Zero-cost validation and release gates
 
+- P0-07A repository audit and release checklist are tracked in [release readiness](P0-07A-RELEASE-READINESS.md).
+
 Release status: **NOT READY — HOSTED ACCEPTANCE BLOCKED**.
 
 - P0-05 isolated payment recovery and cross-service delivery passed with synthetic gateway responses.
