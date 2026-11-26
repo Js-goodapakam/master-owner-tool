@@ -70,6 +70,27 @@ jobs:
           npx --no-install tsx Server/src/db/subscription-http.acceptance.ts
           ENGAGE_TEST_DATABASE_URL= ENGAGE_TEST_DATABASE_ID= npm test --prefix engage-stay
 
+      - name: Rehearse historical Owner upgrade and backup restoration
+        if: github.ref == 'refs/heads/codex/p0-05b-checkout'
+        run: bash Database/tests/upgrade-restore.sh
+      - name: Check out pinned Stay staging frontend
+        if: github.ref == 'refs/heads/codex/p0-05b-checkout'
+        uses: actions/checkout@v4
+        with:
+          repository: Js-goodapakam/friday-desk-client
+          ref: a4a440f5edc0627f46ef7a293d65be7809ed741a
+          path: engage-stay-client
+      - name: Verify and build Stay routing artifact
+        if: github.ref == 'refs/heads/codex/p0-05b-checkout'
+        working-directory: engage-stay-client
+        env:
+          STAY_STAGING_API_ORIGIN: https://engage-stay-staging.vercel.app
+        run: |
+          npm ci
+          node --test scripts/staging-routing.test.mjs
+          npm run build
+          node scripts/staging-routing.mjs "$RUNNER_TEMP/stay-staging-artifact"
+
   local-supabase:
     if: github.ref == 'refs/heads/codex/p0-05b-checkout'
     runs-on: ubuntu-latest
