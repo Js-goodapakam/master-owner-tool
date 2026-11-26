@@ -1,6 +1,13 @@
 # Engagehubs P0/P1 implementation status
 
-Last verified: 2026-11-24
+## Zero-cost validation and release gates
+
+Release status: **NOT READY — HOSTED ACCEPTANCE BLOCKED**.
+
+- P0-05 isolated payment recovery and cross-service delivery passed with synthetic gateway responses.
+- P0-06A passed real local Supabase acceptance in disposable CI. It covered Auth, Mailpit, PostgREST and private Storage, seven-step onboarding, identity-linked PMS access, duplicate provisioning and existing-session suspension. See [local Supabase CI](https://github.com/Js-goodapakam/master-owner-tool/actions/runs/45595336285).
+- P0-06B remains **BLOCKED**. The intended Supabase organization is Free with two active production projects. The zero-dollar creation quote does not establish two available Free slots or creation permission. Friday AI Vercel commercial-use plan eligibility and included usage headroom are unconfirmed.
+- P0-07 final production configuration review, release acceptance and approval remain **NOT RUN**. See [hosted acceptance gates](SUPABASE-STAGING-REQUIREMENTS.md).
 
 | ID | Priority | Status | Evidence / next action |
 | --- | --- | --- | --- |

@@ -1,5 +1,24 @@
 # Dedicated Supabase staging requirements
 
+## Hosted acceptance gates
+
+| Requirement | Status | Dependency |
+| --- | --- | --- |
+| Two dedicated hosted Supabase staging projects | BLOCKED | EngageHubs organization Owner or Admin must confirm two available Free slots and project-creation permission at zero cost. |
+| Separate commercial-use-compatible staging deployments | BLOCKED | Friday AI billing admin must confirm eligible plan, sufficient included usage and zero incremental charges. |
+| Hosted migrations, RLS and service-role checks | NOT RUN | Isolated hosted databases, reviewed migrations and synthetic role fixtures. |
+| Hosted Auth, email and OAuth callbacks | NOT RUN | Isolated Auth, synthetic inboxes and staging-only Google and Microsoft app registrations. |
+| Hosted private Storage checks | NOT RUN | Isolated private bucket and synthetic documents. |
+| Razorpay Test Mode and approved pricing | BLOCKED | Staging-only API and webhook credentials and approved tax-inclusive plan amounts. |
+| Real Test Mode order, capture and webhook checks | NOT RUN | Configured test credentials, pricing and staging webhook endpoint. |
+| Hosted signup-to-checkout journey | NOT RUN | Both deployed applications and all hosted acceptance dependencies. |
+| Final production deployment review and sign-off | NOT RUN | Hosted evidence, migration and rollback review, monitoring and backup verification, and explicit release approval. |
+
+Continue using the existing isolated CI workflows. The fixture stack uses
+loopback database and API URLs, temporary Supabase configuration and synthetic
+credentials. The Supabase job tears down its containers and volumes at exit.
+Keep production, shared Preview and live payment credentials outside these jobs.
+
 The GitHub Actions PostgreSQL 16 jobs use disposable containers and synthetic
 data. They do not validate Supabase Auth, Storage, service-role behaviour, or
 Supabase RLS in a hosted environment. Those checks require a separate staging
