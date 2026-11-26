@@ -53,8 +53,11 @@ snapshot() {
 }
 before="$(snapshot "$source_db")"
 [[ "$before" == *ES-TR-000101-26* && "$before" == *pay_restore_fixture* ]]
-pg_dump --format=custom --file="$backup_dir/owner.dump" "$source_db"
-pg_restore --exit-on-error --single-transaction --dbname="$restore_db" "$backup_dir/owner.dump"
+mapfile -t postgres_services < <(docker ps --filter ancestor=postgres:16-alpine --filter publish=5432 --format '{{.ID}}')
+[[ "${#postgres_services[@]}" == 1 ]]
+postgres_service="${postgres_services[0]}"
+docker exec "$postgres_service" pg_dump --format=custom --username=owner_test engage_upgrade_source >"$backup_dir/owner.dump"
+docker exec -i "$postgres_service" pg_restore --exit-on-error --single-transaction --username=owner_test --dbname=engage_upgrade_restore <"$backup_dir/owner.dump"
 [[ "$(snapshot "$restore_db")" == "$before" ]]
 foreign_keys="select count(*) from pg_constraint where contype='f' and connamespace='public'::regnamespace"
 baseline_fk="$(query "$source_db" -c "$foreign_keys")"
