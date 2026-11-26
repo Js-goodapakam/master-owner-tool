@@ -2,6 +2,15 @@
 
 ## Hosted acceptance gates
 
+For the Stay frontend, build the reviewed staging-routing branch with
+`npm ci` and `npm run build`. Set `STAY_STAGING_API_ORIGIN` to
+`https://engage-stay-staging.vercel.app` after verifying that host belongs to
+the dedicated staging backend. Run `node --test scripts/staging-routing.test.mjs`
+and `node scripts/staging-routing.mjs <new-artifact-directory>`. This produces
+an isolated deployment artifact with a same-origin API rewrite and leaves the
+repository Vercel config untouched. The supported hostname is intentionally
+exact. A different staging hostname requires a reviewed allowlist update.
+
 | Requirement | Status | Dependency |
 | --- | --- | --- |
 | Two dedicated hosted Supabase staging projects | BLOCKED | EngageHubs organization Owner or Admin must confirm two available Free slots and project-creation permission at zero cost. |

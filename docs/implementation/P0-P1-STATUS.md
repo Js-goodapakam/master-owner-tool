@@ -3,6 +3,7 @@
 ## Zero-cost validation and release gates
 
 - P0-07A repository audit and release checklist are tracked in [release readiness](P0-07A-RELEASE-READINESS.md).
+- The offline Owner upgrade/restore rehearsal and Stay frontend staging artifact passed their dedicated [integrated CI steps](https://github.com/Js-goodapakam/master-owner-tool/actions/runs/45798969794/job/139836864334). Hosted proxy, production-equivalent upgrade and restore evidence remain outstanding.
 
 Release status: **NOT READY — HOSTED ACCEPTANCE BLOCKED**.
 
