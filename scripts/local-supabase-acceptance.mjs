@@ -47,14 +47,17 @@ async function verifyStayBrowser(stayOrigin, customerEmail) {
       await page.locator('#fl-password').fill(password);
       await page.getByRole('button',{name:'Sign in',exact:true}).click();
       await page.locator('.pw-table-property').first().click({timeout:30000});
-      await page.getByRole('heading',{name:'Dashboard',exact:true}).waitFor();
+      await page.locator('h1.fd-title').waitFor();
       if(viewport.width<900)await page.locator('.mobile-menu-toggle').click();
       await page.getByRole('button',{name:'Rooms',exact:true}).click();
       await page.getByRole('heading',{name:'Add room',exact:true}).waitFor();
       if(viewport.width>=900){
         await page.getByLabel('Room number').fill('BROWSER-101');
         await page.getByLabel('Room type').fill('Standard');
+        const saved = page.waitForResponse(response =>
+          response.url().endsWith('/workspace') && response.request().method()==='PUT');
         await page.getByRole('button',{name:'Add room',exact:true}).click();
+        assert.equal((await saved).status(),200);
         await page.getByText('Room BROWSER-101',{exact:true}).waitFor();
       }
       assert.deepEqual(errors,[]);
@@ -259,13 +262,14 @@ test('real local Supabase identity reaches Owner onboarding and the assigned Sta
     const initial=await readWorkspace();
     assert.equal(initial.managed,true);
     assert.ok(initial.modules.includes('operations'));
+    if(process.argv[4])assert.ok(initial.state.rooms.some(room=>room.number==='BROWSER-101'));
     const saveWorkspace=async (version,changes,status=200)=> (await request(stayOrigin,workspacePath,status,{
       method:'PUT',headers:{Cookie:cookie},body:{version,state:{property:{id:property.property_id},...changes}},
     })).json();
     const booking={id:'CI-BOOKING',room:'101',guestId:'CI-GUEST',arrival:'2030-06-10',departure:'2030-06-12',
       status:'Confirmed',rate:100,paid:200};
     const allocated=await saveWorkspace(initial.version,{
-      rooms:[{number:'101',type:'Standard',floor:'1',capacity:2}],
+      rooms:[...(initial.state.rooms || []),{number:'101',type:'Standard',floor:'1',capacity:2}],
       guests:[{id:'CI-GUEST',name:'Synthetic Guest'}],
       reservations:[booking],
     });
