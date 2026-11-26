@@ -108,7 +108,18 @@ jobs:
           repository: Js-goodapakam/friday-desk-server
           ref: 4017532d6e5e9e2e2638415794154bc1d997c56b
           path: engage-stay
+      - uses: actions/checkout@v4
+        with:
+          repository: Js-goodapakam/friday-desk-client
+          ref: 01e1852688d475f577d64e5960283868667db1ce
+          path: engage-stay-client
       - run: npm ci && npm run build -w @friday/shared && npm ci --ignore-scripts --prefix engage-stay
+      - name: Install isolated browser and build Stay frontend
+        run: |
+          npm ci --prefix engage-stay-client
+          npm run build --prefix engage-stay-client
+          npm install --prefix "$RUNNER_TEMP/pms-browser" --no-save playwright@1.56.1
+          "$RUNNER_TEMP/pms-browser/node_modules/.bin/playwright" install --with-deps chromium
       - name: Initialize isolated stack and probe real services
         run: |
           set -euo pipefail
@@ -122,4 +133,4 @@ jobs:
             grep -Ei 'error|not found|unhealthy' /tmp/local-supabase-start.log | cut -c1-180 || true
             exit 1
           fi
-          node --import "$GITHUB_WORKSPACE/node_modules/tsx/dist/loader.mjs" "$GITHUB_WORKSPACE/scripts/local-supabase-acceptance.mjs" "$GITHUB_WORKSPACE" "$GITHUB_WORKSPACE/engage-stay"
+          PMS_BROWSER_ROOT="$RUNNER_TEMP/pms-browser" node --import "$GITHUB_WORKSPACE/node_modules/tsx/dist/loader.mjs" "$GITHUB_WORKSPACE/scripts/local-supabase-acceptance.mjs" "$GITHUB_WORKSPACE" "$GITHUB_WORKSPACE/engage-stay" "$GITHUB_WORKSPACE/engage-stay-client"
