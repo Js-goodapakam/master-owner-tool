@@ -48,8 +48,7 @@ snapshot() {
     (select jsonb_agg(jsonb_build_array(t.account_code,o.payload,p.provider_payment_id,p.amount_minor))
      from customers c join tenants t on t.customer_id=c.id join onboarding_sessions o on o.customer_id=c.id
      join customer_products a on a.tenant_id=t.id join subscriptions s on s.customer_id=c.id and s.product_id=a.product_id
-     join payment_transactions p on p.subscription_id=s.id),
-    (select count(*) from pg_constraint where contype='f' and connamespace='public'::regnamespace)
+     join payment_transactions p on p.subscription_id=s.id)
   )"
 }
 before="$(snapshot "$source_db")"
@@ -57,6 +56,9 @@ before="$(snapshot "$source_db")"
 pg_dump --format=custom --file="$backup_dir/owner.dump" "$source_db"
 pg_restore --exit-on-error --single-transaction --dbname="$restore_db" "$backup_dir/owner.dump"
 [[ "$(snapshot "$restore_db")" == "$before" ]]
+foreign_keys="select count(*) from pg_constraint where contype='f' and connamespace='public'::regnamespace"
+baseline_fk="$(query "$source_db" -c "$foreign_keys")"
+[[ "$(query "$restore_db" -c "$foreign_keys")" == "$baseline_fk" ]]
 
 query "$source_db" -c "insert into tenants(customer_id,name,slug,account_code)
   values ('10000000-0000-4000-8000-000000000002','Duplicate synthetic','duplicate-fixture','ES-TR-000101-26')"
@@ -72,6 +74,7 @@ for attempt in 1 2; do
   query "$restore_db" --single-transaction -f Database/migrations/019_tenant_account_codes.sql
 done
 [[ "$(snapshot "$restore_db")" == "$before" ]]
+[[ "$(query "$restore_db" -c "$foreign_keys")" == "$((baseline_fk+1))" ]]
 [[ "$(query "$restore_db" -c "select indisunique from pg_index where indexrelid='public.tenants_account_code_unique'::regclass")" == t ]]
 [[ "$(query "$restore_db" -c "select proacl::text not like '%{=X%' from pg_proc where oid='public.reserve_tenant_account_code(uuid,text)'::regprocedure")" == t ]]
 code="$(query "$restore_db" -c "select reserve_tenant_account_code('10000000-0000-4000-8000-000000000004','Trial')")"
