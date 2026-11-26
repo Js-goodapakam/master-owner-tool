@@ -60,6 +60,12 @@ async function verifyStayBrowser(stayOrigin, customerEmail) {
         await page.getByRole('button',{name:'Add room',exact:true}).click();
         assert.equal((await saved).status(),200);
         await page.getByText('Room BROWSER-101',{exact:true}).waitFor();
+        await page.getByRole('button',{name:'Housekeeping',exact:true}).click();
+        const marked = page.waitForResponse(response =>
+          response.url().endsWith('/workspace') && response.request().method()==='PUT');
+        await page.getByRole('button',{name:'Mark clean',exact:true}).click();
+        assert.equal((await marked).status(),200);
+        await page.getByRole('button',{name:'Mark inspected',exact:true}).waitFor();
       }
       assert.deepEqual(errors,[]);
       await page.close();
@@ -263,7 +269,7 @@ test('real local Supabase identity reaches Owner onboarding and the assigned Sta
     const initial=await readWorkspace();
     assert.equal(initial.managed,true);
     assert.ok(initial.modules.includes('operations'));
-    if(process.argv[4])assert.ok(initial.state.rooms.some(room=>room.number==='BROWSER-101'));
+    if(process.argv[4])assert.equal(initial.state.rooms.find(room=>room.number==='BROWSER-101')?.housekeepingStatus,'Clean');
     const saveWorkspace=async (version,changes,status=200)=> (await request(stayOrigin,workspacePath,status,{
       method:'PUT',headers:{Cookie:cookie},body:{version,state:{property:{id:property.property_id},...changes}},
     })).json();
