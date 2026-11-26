@@ -83,7 +83,8 @@ async function verifyStayBrowser(stayOrigin, customerEmail) {
         await editor.getByLabel('Check-in date *',{exact:true}).fill(date.format(today));
         await editor.getByLabel('Check-out date *',{exact:true}).fill(date.format(new Date(+today+86400000)));
         await editor.getByLabel('Advance paid',{exact:true}).fill('3500');
-        await editor.getByLabel('Room *',{exact:true}).selectOption('BROWSER-101');
+        await editor.locator('label:has(> span:text-is("Room *")) select').selectOption('BROWSER-101');
+        await editor.getByText('synthetic.pdf',{exact:true}).waitFor();
         const reserved=workspaceSave();
         await editor.getByRole('button',{name:'Create reservation',exact:true}).click();
         assert.equal((await reserved.catch(error=>{
