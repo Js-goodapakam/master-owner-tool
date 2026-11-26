@@ -46,6 +46,7 @@ async function verifyStayBrowser(stayOrigin, customerEmail) {
       await page.locator('#fl-email').fill(customerEmail);
       await page.locator('#fl-password').fill(password);
       await page.getByRole('button',{name:'Sign in',exact:true}).click();
+      await page.getByRole('button',{name:'Continue to workspace'}).click({timeout:30000});
       await page.locator('.pw-table-property').first().click({timeout:30000});
       await page.locator('h1.fd-title').waitFor();
       if(viewport.width<900)await page.locator('.mobile-menu-toggle').click();
