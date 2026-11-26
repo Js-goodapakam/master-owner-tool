@@ -87,7 +87,7 @@ async function verifyStayBrowser(stayOrigin, customerEmail) {
         await editor.getByText('synthetic.pdf',{exact:true}).waitFor();
         const [reserved]=await Promise.all([
           workspaceSave(),
-          editor.getByRole('button',{name:'Create reservation',exact:true}).press('Enter',{timeout:5000}),
+          editor.getByRole('button',{name:'Create Reservation',exact:true}).press('Enter',{timeout:5000}),
         ]).catch(error=>{
           throw new Error('Reservation submit did not save: '+[...alerts,...errors].join('; '),{cause:error});
         });
