@@ -55,7 +55,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: Js-goodapakam/friday-desk-server
-          ref: 3d313fad15913a8160496e0f66da8b29f6a7af69
+          ref: 4017532d6e5e9e2e2638415794154bc1d997c56b
           path: engage-stay
       - name: Prepare and test disposable Engage Stay database
         if: github.ref == 'refs/heads/codex/p0-05b-checkout'
@@ -78,7 +78,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: Js-goodapakam/friday-desk-client
-          ref: a4a440f5edc0627f46ef7a293d65be7809ed741a
+          ref: 01e1852688d475f577d64e5960283868667db1ce
           path: engage-stay-client
       - name: Verify and build Stay routing artifact
         if: github.ref == 'refs/heads/codex/p0-05b-checkout'
@@ -87,7 +87,7 @@ jobs:
           STAY_STAGING_API_ORIGIN: https://engage-stay-staging.vercel.app
         run: |
           npm ci
-          node --test scripts/staging-routing.test.mjs
+          node --test src/core/*.test.js scripts/staging-routing.test.mjs
           npm run build
           node scripts/staging-routing.mjs "$RUNNER_TEMP/stay-staging-artifact"
 
@@ -106,7 +106,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: Js-goodapakam/friday-desk-server
-          ref: 3d313fad15913a8160496e0f66da8b29f6a7af69
+          ref: 4017532d6e5e9e2e2638415794154bc1d997c56b
           path: engage-stay
       - run: npm ci && npm run build -w @friday/shared && npm ci --ignore-scripts --prefix engage-stay
       - name: Initialize isolated stack and probe real services
