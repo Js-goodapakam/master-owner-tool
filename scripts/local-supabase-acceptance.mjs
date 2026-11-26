@@ -209,7 +209,30 @@ test('real local Supabase identity reaches Owner onboarding and the assigned Sta
     const pms=await request(stayOrigin,'/api/auth/supabase/session',200,{body:{},token:confirmedCustomer.access_token});
     const cookie=pms.headers.get('set-cookie')?.split(';')[0];
     assert.ok(cookie);
-    await request(stayOrigin,'/api/properties/'+property.property_id+'/workspace',200,{headers:{Cookie:cookie}});
+    const workspacePath='/api/properties/'+property.property_id+'/workspace';
+    const readWorkspace=async()=> (await request(stayOrigin,workspacePath,200,{headers:{Cookie:cookie}})).json();
+    const initial=await readWorkspace();
+    assert.equal(initial.managed,true);
+    assert.ok(initial.modules.includes('operations'));
+    const saveWorkspace=async (version,changes,status=200)=> (await request(stayOrigin,workspacePath,status,{
+      method:'PUT',headers:{Cookie:cookie},body:{version,state:{property:{id:property.property_id},...changes}},
+    })).json();
+    const booking={id:'CI-BOOKING',room:'101',guestId:'CI-GUEST',arrival:'2030-06-10',departure:'2030-06-12',
+      status:'Confirmed',rate:100,paid:200};
+    const allocated=await saveWorkspace(initial.version,{
+      rooms:[{number:'101',type:'Standard',floor:'1',capacity:2}],
+      guests:[{id:'CI-GUEST',name:'Synthetic Guest'}],
+      reservations:[booking],
+    });
+    await saveWorkspace(initial.version,{reservations:[]},409);
+    await saveWorkspace(allocated.version,{reservations:[booking,{...booking,id:'CI-CONFLICT',status:'Modified'}]},409);
+    await saveWorkspace(allocated.version,{rooms:[]},400);
+    assert.equal((await readWorkspace()).version,allocated.version);
+    const checkedIn=await saveWorkspace(allocated.version,{reservations:[{...booking,status:'Checked In'}]});
+    await saveWorkspace(checkedIn.version,{reservations:[{...booking,status:'Checked Out'}]});
+    const checkedOut=await readWorkspace();
+    assert.equal(checkedOut.state.reservations[0].status,'Checked Out');
+    assert.equal(checkedOut.state.reservations[0].paid,200);
     const unrelated=sql(['-qAtc',`with p as (insert into property(name,code) values ('Unrelated','CI-UNRELATED') returning id),
       w as (insert into engagestay_managed_workspace(property_id,customer_id,status,plan,modules)
       select id,gen_random_uuid(),'active','basic',array['operations'] from p returning property_id)
