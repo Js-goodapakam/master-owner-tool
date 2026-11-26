@@ -85,11 +85,13 @@ async function verifyStayBrowser(stayOrigin, customerEmail) {
         await editor.getByLabel('Advance paid',{exact:true}).fill('3500');
         await editor.locator('label:has(> span:text-is("Room *")) select').selectOption('BROWSER-101');
         await editor.getByText('synthetic.pdf',{exact:true}).waitFor();
-        const reserved=workspaceSave();
-        await editor.getByRole('button',{name:'Create reservation',exact:true}).click();
-        assert.equal((await reserved.catch(error=>{
+        const [reserved]=await Promise.all([
+          workspaceSave(),
+          editor.getByRole('button',{name:'Create reservation',exact:true}).press('Enter',{timeout:5000}),
+        ]).catch(error=>{
           throw new Error('Reservation submit did not save: '+[...alerts,...errors].join('; '),{cause:error});
-        })).status(),200);
+        });
+        assert.equal(reserved.status(),200);
         await editor.waitFor({state:'hidden'});
         const frontDesk=page.getByRole('button',{name:'Front Desk',exact:true});
         await frontDesk.click();
