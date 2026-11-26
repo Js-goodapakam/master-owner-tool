@@ -78,7 +78,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: Js-goodapakam/friday-desk-client
-          ref: 11036055092d0774211b80eb6e013ea57d660892
+          ref: ae4d4ba25288a2b97e9a499231e9667b486fc423
           path: engage-stay-client
       - name: Verify and build Stay routing artifact
         if: github.ref == 'refs/heads/codex/p0-05b-checkout'
@@ -111,7 +111,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: Js-goodapakam/friday-desk-client
-          ref: 11036055092d0774211b80eb6e013ea57d660892
+          ref: ae4d4ba25288a2b97e9a499231e9667b486fc423
           path: engage-stay-client
       - run: npm ci && npm run build -w @friday/shared && npm ci --ignore-scripts --prefix engage-stay
       - name: Install isolated browser and build Stay frontend
