@@ -22,6 +22,50 @@ const owner = process.argv[2];
 assert.ok(owner,'Supply the absolute Owner checkout path');
 const { readdirSync } = await import('node:fs');
 const { join } = await import('node:path');
+const { pathToFileURL } = await import('node:url');
+
+async function verifyStayBrowser(stayOrigin, customerEmail) {
+  const clientRoot = process.argv[4];
+  if (!clientRoot) return;
+  const { preview } = await import(pathToFileURL(join(clientRoot,'node_modules','vite','dist','node','index.js')));
+  const { chromium } = createRequire(join(process.env.PMS_BROWSER_ROOT,'package.json'))('playwright');
+  const frontend = await preview({
+    root: clientRoot,
+    preview: {host:'127.0.0.1',port:5173,strictPort:true,proxy:{'/api':stayOrigin}},
+  });
+  let browser;
+  try {
+    browser = await chromium.launch();
+    for (const viewport of [{width:1440,height:900},{width:390,height:844}]) {
+      const page = await browser.newPage({viewport,reducedMotion:'reduce'});
+      const origin='http://127.0.0.1:5173';
+      const errors=[];
+      page.on('pageerror',error=>errors.push(error.message));
+      await page.route('**/*',route=>new URL(route.request().url()).origin===origin?route.continue():route.abort());
+      await page.goto(origin);
+      await page.locator('#fl-email').fill(customerEmail);
+      await page.locator('#fl-password').fill(password);
+      await page.getByRole('button',{name:'Sign in',exact:true}).click();
+      await page.locator('.pw-table-property').first().click({timeout:30000});
+      await page.getByRole('heading',{name:'Dashboard',exact:true}).waitFor();
+      if(viewport.width<900)await page.locator('.mobile-menu-toggle').click();
+      await page.getByRole('button',{name:'Rooms',exact:true}).click();
+      await page.getByRole('heading',{name:'Add room',exact:true}).waitFor();
+      if(viewport.width>=900){
+        await page.getByLabel('Room number').fill('BROWSER-101');
+        await page.getByLabel('Room type').fill('Standard');
+        await page.getByRole('button',{name:'Add room',exact:true}).click();
+        await page.getByText('Room BROWSER-101',{exact:true}).waitFor();
+      }
+      assert.deepEqual(errors,[]);
+      await page.close();
+    }
+    console.log('Chromium verified PMS login, property dashboard and room setup at desktop and mobile widths');
+  } finally {
+    await browser?.close();
+    await new Promise(resolve=>frontend.httpServer.close(resolve));
+  }
+}
 const directory = join(owner,'Database','migrations');
 for (const file of readdirSync(directory).filter(n=>/^\d+_.*\.sql$/.test(n)).sort()) {
   try { sql(['-f',join(directory,file)]); }
@@ -206,6 +250,7 @@ test('real local Supabase identity reaches Owner onboarding and the assigned Sta
     assert.equal(duplicate.property_id,property.property_id);
     const identity=sql(['-Atc',`select auth_user_id from friday_auth_identity where property_id=${Number(property.property_id)}`]).toString().trim();
     assert.equal(identity,uuid);
+    await verifyStayBrowser(stayOrigin,customerEmail);
     const pms=await request(stayOrigin,'/api/auth/supabase/session',200,{body:{},token:confirmedCustomer.access_token});
     const cookie=pms.headers.get('set-cookie')?.split(';')[0];
     assert.ok(cookie);
