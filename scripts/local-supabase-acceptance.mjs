@@ -141,10 +141,10 @@ async function verifyStayBrowser(stayOrigin, customerEmail) {
         await page.getByText('Checked Out',{exact:true}).first().waitFor();
         await page.getByRole('button',{name:'Housekeeping',exact:true}).click();
         await page.getByText('Dirty',{exact:true}).waitFor();
-        const marked = workspaceSave();
-        await page.getByRole('button',{name:'Mark clean',exact:true}).click();
-        assert.equal((await marked).status(),200);
-        await page.getByRole('button',{name:'Mark inspected',exact:true}).waitFor();
+        const usedRoom=page.locator('.room-tile').filter({hasText:'Room BROWSER-102'});
+        const [marked]=await Promise.all([workspaceSave(),usedRoom.getByRole('button',{name:'Mark clean',exact:true}).click()]);
+        assert.equal(marked.status(),200);
+        await usedRoom.getByRole('button',{name:'Mark inspected',exact:true}).waitFor();
       }
       assert.deepEqual(errors,[]);
       await page.close();
