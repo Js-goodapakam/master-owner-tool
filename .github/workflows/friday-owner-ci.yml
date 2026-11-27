@@ -55,7 +55,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: Js-goodapakam/friday-desk-server
-          ref: 4017532d6e5e9e2e2638415794154bc1d997c56b
+          ref: c0f2856f2d9bccfa857d16f55f126354c1f18090
           path: engage-stay
       - name: Prepare and test disposable Engage Stay database
         if: github.ref == 'refs/heads/codex/p0-05b-checkout'
@@ -106,7 +106,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: Js-goodapakam/friday-desk-server
-          ref: 4017532d6e5e9e2e2638415794154bc1d997c56b
+          ref: c0f2856f2d9bccfa857d16f55f126354c1f18090
           path: engage-stay
       - uses: actions/checkout@v4
         with:
