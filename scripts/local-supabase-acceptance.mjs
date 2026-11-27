@@ -72,41 +72,75 @@ async function verifyStayBrowser(stayOrigin, customerEmail) {
         await page.getByLabel('Room number').fill('BROWSER-102');
         await page.getByLabel('Room type').fill('Standard');
         const [secondRoom]=await Promise.all([workspaceSave(),page.getByRole('button',{name:'Add room',exact:true}).click()]);
-        assert.equal(secondRoom.status(),200);
-        await page.getByRole('button',{name:'Dashboard',exact:true}).click();
-        await page.getByRole('button',{name:'New reservation',exact:true}).first().click();
-        const editor=page.locator('.reservation-modal');
-        await editor.getByLabel('First name *',{exact:true}).fill('Synthetic');
-        await editor.getByLabel('Last name *',{exact:true}).fill('Browser Guest');
-        await editor.getByLabel('Email *',{exact:true}).fill('browser-guest@example.com');
-        await editor.locator('.reservation-phone-input').fill('9000000000');
-        await editor.locator('#kyc-attachment-input').setInputFiles({
-          name:'synthetic.pdf',mimeType:'application/pdf',buffer:Buffer.from('%PDF-1.4\nSynthetic CI fixture'),
-        });
-        const date=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Kolkata'});
-        const today=new Date();
-        await editor.getByLabel('Check-in date *',{exact:true}).fill(date.format(today));
-        await editor.getByLabel('Check-out date *',{exact:true}).fill(date.format(new Date(+today+86400000)));
-        await editor.getByLabel('Advance paid',{exact:true}).fill('3500');
-        await editor.locator('label:has(> span:text-is("Room *")) select').selectOption('BROWSER-101');
-        await editor.getByText('synthetic.pdf',{exact:true}).waitFor();
-        const [reserved]=await Promise.all([
-          workspaceSave(),
-          editor.getByRole('button',{name:'Create Reservation',exact:true}).press('Enter',{timeout:5000}),
-        ]).catch(error=>{
-          throw new Error('Reservation submit did not save: '+[...alerts,...errors].join('; '),{cause:error});
-        });
-        assert.equal(reserved.status(),200);
-        await editor.waitFor({state:'hidden'});
+        async function book(lastName, expectConflict=false) {
+          assert.equal(secondRoom.status(),200);
+          await page.getByRole('button',{name:'Dashboard',exact:true}).click();
+          await page.getByRole('button',{name:'New reservation',exact:true}).first().click();
+          const editor=page.locator('.reservation-modal');
+          await editor.getByLabel('First name *',{exact:true}).fill('Synthetic');
+          await editor.getByLabel('Last name *',{exact:true}).fill(lastName);
+          await editor.getByLabel('Email *',{exact:true}).fill(lastName.toLowerCase().replaceAll(' ','-')+'@example.com');
+          await editor.locator('.reservation-phone-input').fill('9000000000');
+          await editor.locator('#kyc-attachment-input').setInputFiles({
+            name:'synthetic.pdf',mimeType:'application/pdf',buffer:Buffer.from('%PDF-1.4\nSynthetic CI fixture'),
+          });
+          const date=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Kolkata'});
+          const today=new Date();
+          await editor.getByLabel('Check-in date *',{exact:true}).fill(date.format(today));
+          await editor.getByLabel('Check-out date *',{exact:true}).fill(date.format(new Date(+today+86400000)));
+          await editor.getByLabel('Advance paid',{exact:true}).fill('3500');
+          await editor.locator('label:has(> span:text-is("Room *")) select').selectOption('BROWSER-101');
+          await editor.getByText('synthetic.pdf',{exact:true}).waitFor();
+          if (expectConflict) {
+            await editor.getByRole('button',{name:'Create Reservation',exact:true}).press('Enter');
+            await editor.getByRole('button',{name:'Create Reservation',exact:true}).waitFor();
+            assert.match(alerts.pop(),/overlapping stay/);
+            return;
+          }
+          const [reserved]=await Promise.all([
+            workspaceSave(),
+            editor.getByRole('button',{name:'Create Reservation',exact:true}).press('Enter',{timeout:5000}),
+          ]).catch(error=>{
+            throw new Error('Reservation submit did not save: '+[...alerts,...errors].join('; '),{cause:error});
+          });
+          assert.equal(reserved.status(),200);
+          await editor.waitFor({state:'hidden'});
+          return (await reserved.json()).state.reservations.at(-1);
+        }
+        const abandoned=await book('Cancelled Guest');
+        await book('Overlap Guest',true);
+        await page.locator('.reservation-modal').locator('.reservation-modal-close').click();
+        const calendar=page.getByRole('button',{name:'Calendar',exact:true});
+        const reservationsNav=page.getByRole('button',{name:'Reservations',exact:true});
+        await calendar.click();
+        const calendarSearch=page.getByPlaceholder('Search guests, rooms, reservations...');
+        await calendarSearch.fill(abandoned.id);
+        const guestEvent=page.getByText('Synthetic Cancelled Guest',{exact:true});
+        await guestEvent.first().waitFor();
+        await reservationsNav.click();
+        await page.getByRole('button',{name:'Edit reservation '+abandoned.id,exact:true}).click();
+        const cancellation=page.getByRole('dialog');
+        await cancellation.locator('label:has-text("Booking status") select').selectOption('Cancelled');
+        const [cancelled]=await Promise.all([workspaceSave(),cancellation.getByRole('button',{name:'Save reservation'}).click()]);
+        assert.equal(cancelled.status(),200);
+        await cancellation.waitFor({state:'hidden'});
+        await page.reload();
+        await page.locator('.pw-table-property').first().click();
+        await calendar.click();
+        await calendarSearch.fill(abandoned.id);
+        assert.equal(await guestEvent.count(),0);
+        await page.getByLabel('Status filter').selectOption('Cancelled');
+        await guestEvent.first().waitFor();
+        const booked=await book('Browser Guest');
         await page.getByRole('button',{name:'Reservations',exact:true}).click();
-        const editButton=page.getByRole('button',{name:/^Edit reservation /});
+        const editButton=page.getByRole('button',{name:'Edit reservation '+booked.id,exact:true});
         await editButton.click();
         const edit=page.getByRole('dialog');
         await edit.locator('label:has-text("Room") select').selectOption('BROWSER-102');
         await edit.getByLabel('Nightly rate').fill('3400');
         const [reassigned]=await Promise.all([workspaceSave(),edit.getByRole('button',{name:'Save reservation'}).click()]);
         assert.equal(reassigned.status(),200);
-        const reassignedBooking=(await reassigned.json()).state.reservations[0];
+        const reassignedBooking=(await reassigned.json()).state.reservations.find(record=>record.id===booked.id);
         assert.equal(reassignedBooking.room,'BROWSER-102');
         assert.equal(reassignedBooking.rate,3400);
         await edit.waitFor({state:'hidden'});
@@ -136,7 +170,7 @@ async function verifyStayBrowser(stayOrigin, customerEmail) {
         await page.getByLabel('First name',{exact:true}).fill('Updated');
         const [guestSaved]=await Promise.all([workspaceSave(),page.getByRole('button',{name:'Save guest',exact:true}).click()]);
         assert.equal(guestSaved.status(),200);
-        assert.equal((await guestSaved.json()).state.guests[0].name,'Updated Browser Guest');
+        assert.equal((await guestSaved.json()).state.guests.find(guest=>guest.id===booked.guestId).name,'Updated Browser Guest');
         await page.getByRole('button',{name:'Stay History',exact:true}).click();
         await page.getByText('Checked Out',{exact:true}).first().waitFor();
         await page.getByRole('button',{name:'Housekeeping',exact:true}).click();
