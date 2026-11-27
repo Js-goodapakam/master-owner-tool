@@ -211,6 +211,26 @@ async function verifyStayBrowser(stayOrigin, customerEmail) {
         await staffEdit.locator('label:has-text("Role") select').selectOption('MANAGER');
         await staffEdit.getByRole('button',{name:'Save changes'}).click();
         await staffRow.getByText('MANAGER',{exact:true}).waitFor();
+        const manager=await browser.newPage();
+        try {
+          await manager.route('**/*',route=>new URL(route.request().url()).origin===origin?route.continue():route.abort());
+          await manager.goto(origin);
+          await manager.locator('#fl-email').fill(staffEmail);
+          await manager.locator('#fl-password').fill(staffPassword);
+          await manager.getByRole('button',{name:'Sign in',exact:true}).click();
+          await manager.getByRole('button',{name:'Continue to workspace'}).click();
+          const properties=await manager.request.get(origin+'/api/properties');
+          assert.equal(properties.status(),200);
+          assert.equal((await properties.json()).properties.length,1);
+          await manager.locator('.pw-table-property').first().click();
+          await manager.getByRole('button',{name:'Users & Roles',exact:true}).click();
+          await manager.getByRole('row').filter({hasText:staffEmail}).waitFor();
+          assert.equal(await manager.getByRole('button',{name:/Create Staff/}).count(),0);
+          const denied=await manager.request.post(origin+'/api/owner/staff',{data:{}});
+          assert.equal(denied.status(),403);
+        } finally {
+          await manager.close();
+        }
         await page.reload();
         await page.locator('.pw-table-property').first().click();
         await team.click();
@@ -351,7 +371,8 @@ test('real local Supabase identity reaches Owner onboarding and the assigned Sta
   sql(['-c',`create table property(id integer generated always as identity primary key,name text not null,code text unique,
     city text,country text,timezone text,"createdAt" timestamptz,"updatedAt" timestamptz);
     create table "user"(id integer generated always as identity primary key,"propertyId" integer references property(id),
-    name text,email text unique,role text,"isActive" boolean,"createdAt" timestamptz,"updatedAt" timestamptz);`]);
+    name text,email text unique,phone text,role text,"isActive" boolean,"createdAt" timestamptz,"updatedAt" timestamptz);
+    create table friday_staff_profile(user_id integer primary key references "user"(id),payload text not null);`]);
   for (const name of ['auth.sql','property-access.sql','managed-workspace.sql','sample-workspaces.sql']) {
     sql(['-f',join(stayRoot,'sql',name)]);
   }
