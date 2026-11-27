@@ -24,6 +24,66 @@ const { readdirSync } = await import('node:fs');
 const { join } = await import('node:path');
 const { pathToFileURL } = await import('node:url');
 
+async function runOwnerWizard(ownerOrigin, operatorEmail, customerEmail) {
+  const { preview } = await import(pathToFileURL(join(owner,'node_modules','vite','dist','node','index.js')));
+  const { chromium } = createRequire(join(process.env.PMS_BROWSER_ROOT,'package.json'))('playwright');
+  const origin='http://127.0.0.1:5175';
+  const frontend=await preview({root:join(owner,'Client'),preview:{
+    host:'127.0.0.1',port:5175,strictPort:true,proxy:{'/api':ownerOrigin},
+  }});
+  let browser;
+  try {
+    browser=await chromium.launch();
+    const page=await browser.newPage({viewport:{width:1440,height:900},reducedMotion:'reduce'});
+    await page.route('**/*',route=>new URL(route.request().url()).origin===origin?route.continue():route.abort());
+    await page.goto(origin);
+    await page.getByLabel('Identifier').fill(operatorEmail);
+    await page.getByLabel('Access Key',{exact:true}).fill(password);
+    await page.locator('button[type="submit"]').click();
+    const openWizard=async()=>{
+      await page.getByRole('button',{name:'Enter Engage Stay',exact:true}).click();
+      await page.getByRole('button',{name:'New Onboarding',exact:true}).click();
+      await page.getByRole('row').filter({hasText:customerEmail}).getByRole('button',{name:'Proceed'}).click();
+    };
+    await openWizard();
+    const next=page.getByRole('button',{name:'Save & continue'});
+    await next.click();
+    await page.getByText('Complete the business name, email, mobile number, and assigned team member.',{exact:true}).waitFor();
+    await page.getByPlaceholder('Assign onboarding owner').fill('CI Owner');
+    await next.click();
+    await page.getByRole('button',{name:/Trial Environment/}).waitFor();
+    await page.reload();
+    await openWizard();
+    assert.equal(await page.getByPlaceholder('Assign onboarding owner').inputValue(),'CI Owner');
+    await next.click();
+    await page.getByRole('button',{name:/Trial Environment/}).waitFor();
+    await next.click();
+    await page.getByPlaceholder('e.g. Acme Hospitality').fill('Local CI Tenant');
+    await next.click();
+    await page.getByPlaceholder('Full name',{exact:true}).fill('CI Admin');
+    await page.locator('label:has-text("Administrator Email") input').fill(customerEmail);
+    await next.click();
+    await page.locator('.fo-module-option').filter({hasText:'operations'}).getByRole('checkbox').check();
+    await page.locator('.fo-module-option').filter({hasText:'finance'}).getByRole('checkbox').check();
+    await next.click();
+    await page.locator('label:has-text("Provisioning Status") select').selectOption('Ready');
+    await next.click();
+    const submit=page.getByRole('button',{name:'Create onboarding record'});
+    const [response]=await Promise.all([
+      page.waitForResponse(r=>new URL(r.url()).pathname==='/api/customers'&&r.request().method()==='POST'),
+      submit.click(),
+    ]);
+    assert.equal(response.status(),201);
+    await page.getByText('Onboarding record created and added to the Owner workflow.',{exact:true}).waitFor();
+    assert.equal(await submit.isDisabled(),true);
+    console.log('Chromium verified Owner wizard validation, save and resume, and customer creation');
+    return response.json();
+  } finally {
+    await browser?.close();
+    await new Promise(resolve=>frontend.httpServer.close(resolve));
+  }
+}
+
 async function verifyStayBrowser(stayOrigin, customerEmail) {
   const clientRoot = process.argv[4];
   if (!clientRoot) return;
@@ -460,9 +520,13 @@ test('real local Supabase identity reaches Owner onboarding and the assigned Sta
     const customerEmail=confirmedCustomer.user.email;
     const uuid=confirmedCustomer.user.id;
     const {id:signupRequestId}=await (await request(ownerOrigin,'/api/integrations/engagestay/signup',202,{
-      token:shared,headers:{'Idempotency-Key':uuid},body:{source:'email',externalUserId:uuid,email:customerEmail,requestedLifecycle:'TRIAL'},
+      token:shared,headers:{'Idempotency-Key':uuid},body:{source:'email',externalUserId:uuid,email:customerEmail,requestedLifecycle:'TRIAL',organizationName:'Local CI Hotel',phone:'+919000000000'},
     })).json();
     const scope='?productCode=engage_stay';
+    let created;
+    if(process.argv[4]) {
+      created=await runOwnerWizard(ownerOrigin,operatorEmail,customerEmail);
+    } else {
     let sessionId;
     for (let step=1; step<=7; step++) {
       const saved=await (await request(ownerOrigin,'/api/onboarding'+scope,200,{token:operatorToken,
@@ -474,10 +538,11 @@ test('real local Supabase identity reaches Owner onboarding and the assigned Sta
     const resumed=await (await request(ownerOrigin,'/api/onboarding/signup/'+signupRequestId+scope,200,{token:operatorToken})).json();
     assert.equal(resumed.current_step,7);
     assert.equal(resumed.payload.marker,7);
-    const created=await (await request(ownerOrigin,'/api/customers'+scope,201,{token:operatorToken,body:{
+    created=await (await request(ownerOrigin,'/api/customers'+scope,201,{token:operatorToken,body:{
       signupRequestId,product:'engage_stay',companyName:'Local CI Hotel',legalName:'Local CI Hotel',email:customerEmail,
       city:'Bengaluru',industry:'Hospitality',accountOwner:'CI Owner',tenantName:'Local CI Tenant',
     }})).json();
+    }
     const provisionPath='/api/customers/'+created.id+'/engagestay'+scope;
     const operation={token:operatorToken,headers:{'Idempotency-Key':'local-ci-provision'},body:{action:'approve',adminName:'CI Admin',plan:'premium',modules:['operations','finance']}};
     const property=await (await request(ownerOrigin,provisionPath,200,operation)).json();
