@@ -81,7 +81,8 @@ async function runOwnerWizard(ownerOrigin, operatorEmail, customerEmail) {
     await page.getByText('Onboarding record created and added to the Owner workflow.',{exact:true}).waitFor();
     assert.equal(await submit.isDisabled(),true);
     console.log('Chromium verified Owner wizard validation, save and resume, and customer creation');
-    return response.json();
+    const created = await response.json();
+    return created;
   } finally {
     await browser?.close();
     await new Promise(resolve=>frontend.httpServer.close(resolve));
