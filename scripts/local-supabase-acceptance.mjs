@@ -366,10 +366,14 @@ async function verifyStayBrowser(stayOrigin, customerEmail) {
         await page.getByRole('button',{name:'Edit reservation '+annexBooking.id,exact:true}).waitFor();
         assert.equal(await editButton.count(),0);
       } else {
-        for (const [navigation, column] of [['Finance','Balance'],['Users & Roles','Staff member']]) {
+        for (const [navigation, table, column] of [
+          ['Finance','.finance-table','Balance'],
+          ['Users & Roles','.oi-staff-table','Staff member'],
+        ]) {
           await page.locator('.mobile-menu-toggle').click();
           await page.getByRole('button',{name:navigation,exact:true}).click();
-          await page.getByRole('columnheader',{name:column,exact:true}).waitFor();
+          await page.getByRole('heading',{name:navigation,exact:true}).waitFor();
+          await page.locator(table+' th').filter({hasText:column}).first().waitFor({state:'attached'});
           assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth+1),true,navigation+' page overflow');
         }
       }
