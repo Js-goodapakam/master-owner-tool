@@ -218,6 +218,16 @@ async function verifyStayBrowser(stayOrigin, customerEmail) {
         await staffRow.getByRole('button',{name:'Delete user'}).click();
         await page.getByRole('button',{name:'Confirm Delete'}).click();
         await staffRow.getByText('Inactive',{exact:true}).waitFor();
+        await page.getByRole('button',{name:/All properties/}).click();
+        await page.getByRole('button',{name:'Open CI Assigned Annex',exact:true}).click();
+        await page.locator('h1.fd-title').waitFor();
+        await page.getByRole('button',{name:'Rooms',exact:true}).click();
+        await page.getByText('Room ANNEX-201',{exact:true}).waitFor();
+        assert.equal(await page.getByText('Room BROWSER-102',{exact:true}).count(),0);
+        await page.reload();
+        await page.getByRole('button',{name:'Open CI Assigned Annex',exact:true}).click();
+        await page.getByRole('button',{name:'Rooms',exact:true}).click();
+        await page.getByText('Room ANNEX-201',{exact:true}).waitFor();
       }
       assert.deepEqual(errors,[]);
       await page.close();
@@ -412,6 +422,18 @@ test('real local Supabase identity reaches Owner onboarding and the assigned Sta
     assert.equal(duplicate.property_id,property.property_id);
     const identity=sql(['-Atc',`select auth_user_id from friday_auth_identity where property_id=${Number(property.property_id)}`]).toString().trim();
     assert.equal(identity,uuid);
+    sql(['-c',`with p as (
+      insert into property(name,code) values ('CI Assigned Annex','CI-ANNEX') returning id
+    ), w as (
+      insert into engagestay_managed_workspace(property_id,customer_id,status,plan,modules)
+      select id,gen_random_uuid(),'active','basic',array['operations'] from p returning property_id
+    ), s as (
+      insert into engagestay_workspace_state(property_id,state)
+      select property_id,'{"rooms":[{"number":"ANNEX-201","type":"Standard","capacity":2}]}'::jsonb from w
+    )
+    insert into friday_property_access(user_id,property_id)
+    select i.user_id,w.property_id from friday_auth_identity i cross join w
+    where i.property_id=${Number(property.property_id)}`]);
     await verifyStayBrowser(stayOrigin,customerEmail);
     const pms=await request(stayOrigin,'/api/auth/supabase/session',200,{body:{},token:confirmedCustomer.access_token});
     const cookie=pms.headers.get('set-cookie')?.split(';')[0];
