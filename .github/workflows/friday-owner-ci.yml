@@ -45,6 +45,8 @@ jobs:
         run: npm run build
       - name: Lint all workspaces
         run: npm run lint
+      - name: Validate hosted staging targets without network access
+        run: node --test scripts/check-hosted-staging.test.mjs
       - name: Run backend tests
         run: npm test
       - name: Apply isolated database migrations
