@@ -72,7 +72,7 @@ async function verifyStayBrowser(stayOrigin, customerEmail) {
         await page.getByLabel('Room number').fill('BROWSER-102');
         await page.getByLabel('Room type').fill('Standard');
         const [secondRoom]=await Promise.all([workspaceSave(),page.getByRole('button',{name:'Add room',exact:true}).click()]);
-        async function book(lastName, expectConflict=false) {
+        async function book(lastName, expectConflict=false, room='BROWSER-101') {
           assert.equal(secondRoom.status(),200);
           await page.getByRole('button',{name:'Dashboard',exact:true}).click();
           await page.getByRole('button',{name:'New reservation',exact:true}).first().click();
@@ -89,7 +89,7 @@ async function verifyStayBrowser(stayOrigin, customerEmail) {
           await editor.getByLabel('Check-in date *',{exact:true}).fill(date.format(today));
           await editor.getByLabel('Check-out date *',{exact:true}).fill(date.format(new Date(+today+86400000)));
           await editor.getByLabel('Advance paid',{exact:true}).fill(lastName==='Browser Guest'?'3000':'3500');
-          await editor.locator('label:has(> span:text-is("Room *")) select').selectOption('BROWSER-101');
+          await editor.locator('label:has(> span:text-is("Room *")) select').selectOption(room);
           await editor.getByText('synthetic.pdf',{exact:true}).waitFor();
           if (expectConflict) {
             await editor.getByRole('button',{name:'Create Reservation',exact:true}).press('Enter');
@@ -156,6 +156,7 @@ async function verifyStayBrowser(stayOrigin, customerEmail) {
         await edit.waitFor({state:'hidden'});
         await page.getByRole('button',{name:'Finance',exact:true}).click();
         const collection=page.getByRole('row').filter({hasText:booked.id});
+        await collection.getByText('Partial',{exact:true}).waitFor();
         await collection.getByRole('button',{name:'Collect',exact:true}).click();
         assert.equal(await page.getByLabel('Amount received').inputValue(),'400');
         await page.getByLabel('Reference / Transaction ID').fill('CI-GUEST-PAYMENT');
@@ -165,6 +166,35 @@ async function verifyStayBrowser(stayOrigin, customerEmail) {
         assert.equal(paidReservation.paid,3400);
         assert.equal(paidReservation.paymentReference,'CI-GUEST-PAYMENT');
         await collection.getByText('Paid',{exact:true}).waitFor();
+        const invoices=page.getByRole('button',{name:'Invoices',exact:true});
+        await invoices.click();
+        await page.getByRole('button',{name:/Generate Invoice/}).click();
+        const invoiceEditor=page.getByRole('dialog',{name:'Generate Invoice'});
+        assert.equal(await invoiceEditor.evaluate(dialog=>dialog.contains(document.activeElement)),true);
+        await invoiceEditor.getByRole('button',{name:'Create Invoice',exact:true}).click();
+        await invoiceEditor.getByText('Select a reservation to bill.',{exact:true}).waitFor();
+        await invoiceEditor.locator('label:has-text("Reservation") select').selectOption(booked.id);
+        const [issued]=await Promise.all([
+          workspaceSave(),invoiceEditor.getByRole('button',{name:'Create Invoice',exact:true}).click(),
+        ]);
+        assert.equal(issued.status(),200);
+        const invoice=(await issued.json()).state.invoices[0];
+        assert.equal(invoice.reservationId,booked.id);
+        assert.equal(invoice.status,'Partially Paid');
+        assert.equal(invoice.paid,3400);
+        assert.ok(invoice.balance>0);
+        await page.getByRole('dialog',{name:invoice.number}).waitFor();
+        await page.keyboard.press('Escape');
+        await page.reload();
+        await page.locator('.pw-table-property').first().click();
+        await invoices.click();
+        const viewInvoice=page.getByRole('row').filter({hasText:invoice.number}).getByRole('button',{name:'View',exact:true});
+        await viewInvoice.click();
+        const preview=page.getByRole('dialog',{name:invoice.number});
+        await preview.waitFor();
+        await page.keyboard.press('Escape');
+        await preview.waitFor({state:'hidden'});
+        assert.equal(await viewInvoice.evaluate(button=>button===document.activeElement),true);
         const frontDesk=page.getByRole('button',{name:'Front Desk',exact:true});
         await frontDesk.click();
         const checkedIn=workspaceSave();
@@ -248,10 +278,19 @@ async function verifyStayBrowser(stayOrigin, customerEmail) {
         await page.getByRole('button',{name:'Rooms',exact:true}).click();
         await page.getByText('Room ANNEX-201',{exact:true}).waitFor();
         assert.equal(await page.getByText('Room BROWSER-102',{exact:true}).count(),0);
+        assert.equal(await invoices.count(),0);
+        const annexBooking=await book('Annex Guest',false,'ANNEX-201');
+        await reservationsNav.click();
+        await page.getByRole('button',{name:'Edit reservation '+annexBooking.id,exact:true}).waitFor();
+        assert.equal(await editButton.count(),0);
+        await calendar.click();
+        await calendarSearch.fill(annexBooking.id);
+        await page.getByText('Synthetic Annex Guest',{exact:true}).first().waitFor();
         await page.reload();
         await annex.click();
-        await page.getByRole('button',{name:'Rooms',exact:true}).click();
-        await page.getByText('Room ANNEX-201',{exact:true}).waitFor();
+        await reservationsNav.click();
+        await page.getByRole('button',{name:'Edit reservation '+annexBooking.id,exact:true}).waitFor();
+        assert.equal(await editButton.count(),0);
       }
       assert.deepEqual(errors,[]);
       await page.close();
