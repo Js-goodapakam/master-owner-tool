@@ -238,14 +238,18 @@ async function verifyStayBrowser(stayOrigin, customerEmail) {
         await staffRow.getByRole('button',{name:'Delete user'}).click();
         await page.getByRole('button',{name:'Confirm Delete'}).click();
         await staffRow.getByText('Inactive',{exact:true}).waitFor();
-        await page.getByRole('button',{name:/All properties/}).click();
-        await page.getByRole('button',{name:'Open CI Assigned Annex',exact:true}).click();
+        await page.locator('.property-return').click();
+        const availableProperties=await page.request.get(origin+'/api/properties');
+        assert.equal(availableProperties.status(),200);
+        assert.ok((await availableProperties.json()).properties.some(property=>property.code==='CI-ANNEX'),'Annex membership reaches the portfolio');
+        const annex=page.locator('.pw-table-property').filter({hasText:'CI Assigned Annex'});
+        await annex.click();
         await page.locator('h1.fd-title').waitFor();
         await page.getByRole('button',{name:'Rooms',exact:true}).click();
         await page.getByText('Room ANNEX-201',{exact:true}).waitFor();
         assert.equal(await page.getByText('Room BROWSER-102',{exact:true}).count(),0);
         await page.reload();
-        await page.getByRole('button',{name:'Open CI Assigned Annex',exact:true}).click();
+        await annex.click();
         await page.getByRole('button',{name:'Rooms',exact:true}).click();
         await page.getByText('Room ANNEX-201',{exact:true}).waitFor();
       }
