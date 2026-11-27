@@ -113,7 +113,7 @@ jobs:
           repository: Js-goodapakam/friday-desk-client
           ref: de1994fd645ad546cae758ca3bb80cb7e68ac46e
           path: engage-stay-client
-      - run: npm ci && npm run build -w @friday/shared && npm ci --ignore-scripts --prefix engage-stay
+      - run: npm ci && npm run build -w @friday/shared && npm run build -w @friday/web && npm ci --ignore-scripts --prefix engage-stay
       - name: Install isolated browser and build Stay frontend
         run: |
           npm ci --prefix engage-stay-client
