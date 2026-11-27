@@ -2,6 +2,8 @@
 
 ## Zero-cost validation and release gates
 
+- [P0-09 external integration readiness](P0-09-INTEGRATION-READINESS.md) tracks provider contracts, staging setup and remaining hosted acceptance.
+
 - P0-08 managed workspace rendering, room creation and allocation validation are tracked in [core integration](P0-08-CORE-INTEGRATION.md). The full browser journey and hosted acceptance remain outstanding.
 
 - P0-07A repository audit and release checklist are tracked in [release readiness](P0-07A-RELEASE-READINESS.md).

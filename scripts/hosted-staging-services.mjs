@@ -60,14 +60,14 @@ for (const app of ['OWNER', 'STAY']) {
 
 for (const [provider, expectedHost] of [['google','accounts.google.com'],['microsoft','login.microsoftonline.com']]) {
   const path = '/api/auth/social/'+provider;
-  const start = await send(env.STAGING_STAY_BACKEND_ORIGIN, path);
+  const publicOrigin = env.STAGING_STAY_PUBLIC_API_ORIGIN || env.STAGING_STAY_BACKEND_ORIGIN;
+  const start = await send(publicOrigin, path);
   assert.equal(start.status, 302, provider + ' OAuth start');
   const location = new URL(start.headers.get('location'));
   assert.equal(location.hostname, expectedHost, provider + ' OAuth provider origin');
   assert.ok(location.searchParams.get('state'), provider + ' OAuth state');
-  const publicOrigin = env.STAGING_STAY_PUBLIC_API_ORIGIN || env.STAGING_STAY_BACKEND_ORIGIN;
   assert.equal(location.searchParams.get('redirect_uri'), new URL(path+'/callback', publicOrigin).href);
-  const invalid = await send(env.STAGING_STAY_BACKEND_ORIGIN, path+'/callback?state=invalid&code=invalid');
+  const invalid = await send(publicOrigin, path+'/callback?state=invalid&code=invalid');
   assert.equal(invalid.status, 400, provider + ' invalid callback state');
   console.log(provider + ' hosted OAuth redirect and invalid-state checks passed');
 }

@@ -1,0 +1,29 @@
+# P0-09 External integration readiness
+
+Production remains **NOT READY — HOSTED ACCEPTANCE BLOCKED**. No provider account or hosted resource was provisioned.
+
+| Integration | Repository state | Required external evidence |
+| --- | --- | --- |
+| Booking.com | Owner registry and sample mappings available. Direct adapter blocked. | Connectivity approval, a scoped machine account, authorized property and pricing model, and certification for Rates & Availability and Reservations. [Connectivity portal](https://developers.booking.com/connectivity/home) · [Certification](https://developers.booking.com/connectivity/docs/going_live) |
+| Airbnb | Owner registry and sample mappings available. Direct adapter blocked. | Partner/API authorization, data security review, approved scopes and test listing. Obtain the partner specifications before writing the transport. [Software Partner program](https://news.airbnb.com/announcing-our-2025-preferred-software-partners) |
+| Expedia Group | Owner registry and sample mappings available. Direct adapter blocked. | Lodging Connectivity Hub enrollment, authorized property, test credentials and certified Availability & Rates and booking workflows. [Connectivity Hub](https://developers.expediagroup.com/supply/lodging) |
+| Channex | Encrypted Owner credential configuration and read-only credential check. Property mapping, ARI and bookings delivery remain missing. | Approved staging account and property-limited key. Verify mapped property, room types, rate plans and booking revisions independently of the credential probe. [API credentials](https://docs.channex.io/application-documentation/api-key-access) · [PMS and certification](https://docs.channex.io/) |
+| Go-MMT, Agoda, SiteMinder | Registry entries only. | Partner approval and contract or verified provider-specific access before adapter implementation. |
+| Razorpay | Server checkout pricing, orders, raw-body webhook verification, transactional activation, recovery and entitlement delivery. Isolated tests use synthetic gateway data. | Approved prices, Test Mode key pair and separate webhook secret. |
+| Supabase | Local CI covers Auth, identity linking, PostgREST and private Storage. Hosted preflight checks project separation. | Two dedicated staging projects and staging keys, synthetic identities, hosted confirmation, RLS and private Storage verification. |
+| Google and Microsoft | Stay OAuth routes construct callbacks and verify state. | Staging-only client IDs and secrets, authorized test accounts and registered redirect URIs. |
+
+## OTA adapter contracts to satisfy after provider approval
+
+For each provider store the authorized connection and credential reference separately from external property, room-type and rate-plan IDs. Resolve property ownership on the server before mapping or delivering events. Require all mapping dimensions for publishing and leave unmapped bookings in review. Never infer scope from an incoming provider property identifier alone.
+
+- **Booking.com**. Use Connectivity room and rate plan mappings, certify the property's pricing model with Rates & Availability, and use the approved Reservations retrieval and acknowledgement lifecycle. Test create, modify and cancel, including replay after acknowledgement loss.
+- **Airbnb**. Bind the approved listing and permitted capabilities to the property connection. Implement the provider-defined availability, pricing and reservation lifecycle only when the scope and schemas are issued. iCal calendar data cannot establish acceptance for rates or reservation mutations.
+- **Expedia Group**. Bind lodging property, room and rate products to Availability & Rates and the approved booking notification/retrieval flow. Verify revisions and acknowledgement under the selected lodging contract.
+
+Across adapters, require a durable connection-scoped event identity and revision. Apply a change and record its event atomically before acknowledgement. Reconcile missed or conflicting revisions with the provider's approved retrieval capability. Back off on provider throttling/timeouts, retain per-item results for partial batch failures, park denied credentials until corrected, and audit correlation IDs and outcomes without storing secrets or raw guest payloads in logs. Required sandbox cases include cross-property mapping denial, replays, out-of-order cancellation, partial ARI delivery and recovery. No fabricated provider payloads or transport endpoints were added.
+
+## Staging execution
+
+- **Razorpay**. Configure Owner backend `RAZORPAY_KEY_ID` with a `rzp_test_` key, `RAZORPAY_KEY_SECRET`, and independent `RAZORPAY_WEBHOOK_SECRET`. Load approved INR integer minor-unit, tax-inclusive price rows for the exact plan and billing period. Register the HTTPS Owner backend path `/webhooks/razorpay` for `payment.captured`. Validate the approved test capture against its order, signed delivery, repeated event handling, exactly one activation and entitlement revision, and reconciliation after temporary delivery failure. Supply existing operator-generated fixture IDs and amount to the read-only hosted runner. [Razorpay testing guidance](https://razorpay.com/blog/payment-gateway-testing)
+- **Supabase/OAuth**. Use the existing [staging runbook](SUPABASE-STAGING-REQUIREMENTS.md). Keep Stay `PUBLIC_API_ORIGIN` equal to the public staging origin used by the smoke runner. Register `/api/auth/social/google/callback` and `/api/auth/social/microsoft/callback` on that origin. Configure the matching `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`, `MICROSOFT_OAUTH_CLIENT_ID` and `MICROSOFT_OAUTH_CLIENT_SECRET` on the Stay backend. Verify the frontend rewrite, provider consent and return, verified identity mapping, logged-out denial and dedicated private Storage behavior. The redirect probe alone covers callback construction and invalid-state denial.

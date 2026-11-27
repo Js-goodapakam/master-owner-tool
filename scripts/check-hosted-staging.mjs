@@ -37,6 +37,15 @@ export function checkHostedStaging(env) {
     }
     origins.add(service.origin);
   }
+  if (env.STAGING_STAY_PUBLIC_API_ORIGIN) {
+    const key = 'STAGING_STAY_PUBLIC_API_ORIGIN';
+    const edge = parse(env, key);
+    if (edge.protocol !== 'https:' || edge.href !== edge.origin + '/' || edge.username ||
+        edge.password || productionHosts.has(edge.hostname) ||
+        edge.origin === new URL(env.STAGING_OWNER_BACKEND_ORIGIN).origin) {
+      throw new Error(key + ' must identify the dedicated Stay staging public origin');
+    }
+  }
   if (!/^rzp_test_[a-zA-Z0-9_]+$/.test(env.RAZORPAY_KEY_ID || '')) throw new Error('A Razorpay Test Mode key ID is required');
 }
 

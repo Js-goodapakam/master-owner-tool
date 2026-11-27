@@ -13,6 +13,7 @@ const targets = {
 };
 test('accepts distinct project-matched staging configuration', () => {
   assert.doesNotThrow(() => checkHostedStaging(targets));
+  assert.doesNotThrow(() => checkHostedStaging({...targets,STAGING_STAY_PUBLIC_API_ORIGIN:'https://stay-front-staging.example.test'}));
 });
 test('rejects missing, production, duplicated or mismatched targets and live keys', () => {
   assert.throws(() => checkHostedStaging({}));
@@ -22,5 +23,12 @@ test('rejects missing, production, duplicated or mismatched targets and live key
     STAGING_STAY_DATABASE_URL: targets.STAGING_OWNER_DATABASE_URL,
     STAGING_STAY_BACKEND_ORIGIN: 'https://app-engagestay.vercel.app',
     RAZORPAY_KEY_ID: 'rzp_live_fixture',
+    STAGING_STAY_PUBLIC_API_ORIGIN: 'https://app-engagestay.vercel.app',
   })) assert.throws(() => checkHostedStaging({ ...targets, [key]: value }), undefined, key);
+});
+test('rejects non-HTTPS, credential-bearing and non-origin OAuth targets', () => {
+  for (const origin of ['http://stay-staging.example.test','https://person@stay-staging.example.test',
+    'https://stay-staging.example.test/api',targets.STAGING_OWNER_BACKEND_ORIGIN]) {
+    assert.throws(() => checkHostedStaging({...targets,STAGING_STAY_PUBLIC_API_ORIGIN:origin}));
+  }
 });

@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { createCipheriv, createDecipheriv, createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import { authenticate, authorize } from './auth.js';
 import { otaProviders, otaProviderIds } from './otaCatalog.js';
+import { verifyChannexCredential } from './otaVerification.js';
 import { createLocalDemoSession, isLocalDemoEnabled, isLoopbackRequest } from './localAuth.js';
 import { expiredSubscriptions } from './subscriptionLifecycle.js';
 import { createRazorpayOrder, verifyRazorpayWebhookSignature } from './razorpay.js';
@@ -1945,15 +1946,8 @@ app.post('/api/integrations/ota/:providerId/verify', authorize('configuration.ma
       return r.status(409).json({ message: 'Mark partner access as approved after receiving the Channex account.' });
     }
     const key = decryptOtaCredential(row.credential_ciphertext);
-    const base = row.environment === 'production' ? 'https://app.channex.io' : 'https://staging.channex.io';
-    // Fixed trusted hosts: no caller-controlled URL or arbitrary outbound request.
-    const check = await fetch(base + '/api/v1/properties', {
-      headers: { 'user-api-key': key, accept: 'application/json' },
-      signal: AbortSignal.timeout(8000), cache: 'no-store',
-    });
-    const success = check.ok;
+    const { success, lastError } = await verifyChannexCredential(row.environment, key);
     const status = success ? 'VERIFIED' : 'FAILED';
-    const lastError = success ? null : 'Channex API authentication failed (HTTP ' + check.status + ').';
     const now = new Date().toISOString();
     const update = await supabaseAdmin('rest/v1/owner_ota_integrations?product_id=eq.' + encodeURIComponent(product.id) + '&provider_id=eq.channex', {
       method: 'PATCH', headers: { Prefer: 'return=minimal' },
@@ -1964,8 +1958,8 @@ app.post('/api/integrations/ota/:providerId/verify', authorize('configuration.ma
     return r.json({ verified: success, connectionStatus: status, message: success
       ? 'Channex API credentials verified. Individual OTA mappings are not yet connected.'
       : lastError });
-  } catch (error) {
-    console.error('Channex credential test failed:', error);
+  } catch {
+    console.error('Channex verification could not load or persist its configuration.');
     return r.status(502).json({ message: 'Channex credential verification could not be completed. Verify the key, network access, and encryption configuration.' });
   }
 });
