@@ -88,7 +88,7 @@ async function verifyStayBrowser(stayOrigin, customerEmail) {
           const today=new Date();
           await editor.getByLabel('Check-in date *',{exact:true}).fill(date.format(today));
           await editor.getByLabel('Check-out date *',{exact:true}).fill(date.format(new Date(+today+86400000)));
-          await editor.getByLabel('Advance paid',{exact:true}).fill('3500');
+          await editor.getByLabel('Advance paid',{exact:true}).fill(lastName==='Browser Guest'?'3000':'3500');
           await editor.locator('label:has(> span:text-is("Room *")) select').selectOption('BROWSER-101');
           await editor.getByText('synthetic.pdf',{exact:true}).waitFor();
           if (expectConflict) {
@@ -154,6 +154,17 @@ async function verifyStayBrowser(stayOrigin, customerEmail) {
         assert.equal(await edit.locator('label:has-text("Room") select').inputValue(),'BROWSER-102');
         await page.keyboard.press('Escape');
         await edit.waitFor({state:'hidden'});
+        await page.getByRole('button',{name:'Finance',exact:true}).click();
+        const collection=page.getByRole('row').filter({hasText:booked.id});
+        await collection.getByRole('button',{name:'Collect',exact:true}).click();
+        assert.equal(await page.getByLabel('Amount received').inputValue(),'400');
+        await page.getByLabel('Reference / Transaction ID').fill('CI-GUEST-PAYMENT');
+        const [paymentSaved]=await Promise.all([workspaceSave(),page.getByRole('button',{name:'Save Payment',exact:true}).click()]);
+        assert.equal(paymentSaved.status(),200);
+        const paidReservation=(await paymentSaved.json()).state.reservations.find(record=>record.id===booked.id);
+        assert.equal(paidReservation.paid,3400);
+        assert.equal(paidReservation.paymentReference,'CI-GUEST-PAYMENT');
+        await collection.getByText('Paid',{exact:true}).waitFor();
         const frontDesk=page.getByRole('button',{name:'Front Desk',exact:true});
         await frontDesk.click();
         const checkedIn=workspaceSave();
@@ -366,7 +377,7 @@ test('real local Supabase identity reaches Owner onboarding and the assigned Sta
       city:'Bengaluru',industry:'Hospitality',accountOwner:'CI Owner',tenantName:'Local CI Tenant',
     }})).json();
     const provisionPath='/api/customers/'+created.id+'/engagestay'+scope;
-    const operation={token:operatorToken,headers:{'Idempotency-Key':'local-ci-provision'},body:{action:'approve',adminName:'CI Admin',plan:'basic',modules:['operations']}};
+    const operation={token:operatorToken,headers:{'Idempotency-Key':'local-ci-provision'},body:{action:'approve',adminName:'CI Admin',plan:'premium',modules:['operations','finance']}};
     const property=await (await request(ownerOrigin,provisionPath,200,operation)).json();
     const duplicate=await (await request(ownerOrigin,provisionPath,200,operation)).json();
     assert.equal(duplicate.idempotentReplay,true);
