@@ -54,6 +54,7 @@ async function runOwnerWizard(ownerOrigin, operatorEmail, customerEmail) {
     await page.getByRole('button',{name:/Trial Environment/}).waitFor();
     await page.reload();
     await openWizard();
+    await page.waitForFunction(()=>document.querySelector('input[placeholder="Assign onboarding owner"]')?.value==='CI Owner');
     assert.equal(await page.getByPlaceholder('Assign onboarding owner').inputValue(),'CI Owner');
     await next.click();
     await page.getByRole('button',{name:/Trial Environment/}).waitFor();
