@@ -392,6 +392,53 @@ async function verifyStayBrowser(stayOrigin, customerEmail) {
         await reservationsNav.click();
         await page.getByRole('button',{name:'Edit reservation '+annexBooking.id,exact:true}).waitFor();
         assert.equal(await editButton.count(),0);
+        const deniedFolio=await page.request.put(annexWorkspace,{data:{
+          version:annexState.version,folioOperation:{id:randomUUID(),reservationId:annexBooking.id,kind:'open',reference:'Room'},
+        }});
+        assert.equal(deniedFolio.status(),403);
+        await page.locator('.property-return').click();
+        await page.locator('.pw-table-property').first().click();
+        const folioBooking=await book('Folio Guest');
+        const folios=page.getByRole('button',{name:'Guest folios',exact:true});
+        await folios.click();
+        const selectFolio=page.locator('label:has-text("Reservation") select');
+        await selectFolio.selectOption(folioBooking.id);
+        const [opened]=await Promise.all([workspaceSave(),page.getByRole('button',{name:'Open folio'}).click()]);
+        assert.equal(opened.status(),200);
+        async function entry(kind, amount, reference) {
+          await page.locator('label:has-text("Folio operation") select').selectOption(kind);
+          if(amount!==null)await page.getByLabel('Amount (INR)',{exact:true}).fill(String(amount));
+          await page.getByLabel('Reference',{exact:true}).fill(reference);
+          const [response]=await Promise.all([workspaceSave(),page.getByRole('button',{name:'Save folio entry'}).click()]);
+          assert.equal(response.status(),200);
+          return response.json();
+        }
+        await entry('charge',1000,'Extra service');
+        await entry('payment',200,'FOLIO-PARTIAL');
+        const issuedFolio=await entry('issue',null,'Folio invoice');
+        const linkedInvoice=issuedFolio.state.invoices.find(row=>row.reservationId===folioBooking.id);
+        assert.equal(linkedInvoice.total,4500);
+        assert.equal(linkedInvoice.balance,800);
+        await invoices.click();
+        await page.getByRole('row').filter({hasText:linkedInvoice.number}).getByRole('button',{name:'View',exact:true}).click();
+        const linkedPreview=page.getByRole('dialog',{name:linkedInvoice.number});
+        await linkedPreview.getByLabel('Payment amount').fill('800');
+        await linkedPreview.getByLabel('Payment reference').fill('FOLIO-FINAL');
+        const [settledFolio]=await Promise.all([workspaceSave(),linkedPreview.getByRole('button',{name:'Record guest payment'}).click()]);
+        assert.equal(settledFolio.status(),200);
+        await linkedPreview.getByRole('status').filter({hasText:/^Paid/}).waitFor();
+        await page.keyboard.press('Escape');
+        await folios.click();
+        await selectFolio.selectOption(folioBooking.id);
+        await entry('adjust',100,'Service credit');
+        const refunded=await entry('refund',100,'FOLIO-REFUND');
+        assert.equal(refunded.state.invoices.find(row=>row.id===linkedInvoice.id).paid,4500);
+        assert.equal(refunded.state.reservations.find(row=>row.id===folioBooking.id).paid,4400);
+        await page.reload();
+        await page.locator('.pw-table-property').first().click();
+        await folios.click();
+        await selectFolio.selectOption(folioBooking.id);
+        await page.getByRole('table',{name:'Folio history'}).getByText('FOLIO-REFUND',{exact:true}).waitFor();
       } else {
         for (const [navigation, table, column] of [
           ['Finance','.finance-table','Balance'],
