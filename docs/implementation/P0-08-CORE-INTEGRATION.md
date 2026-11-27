@@ -29,6 +29,13 @@ different persistence model and cannot establish managed-property acceptance.
 
 ## Before hosted staging
 
+### P0-08C isolated acceptance
+
+- The managed calendar keeps cancelled stays out of its default month and agenda views. Staff can explicitly select Cancelled to inspect history.
+- The Chromium journey now asserts cancellation persistence across reload, rejection of an overlapping booking, rebooking the released room, and recording a synthetic guest payment against the reservation balance. Guest payment recording uses the PMS workspace API and does not send a gateway request.
+- Staff assertions cover creating a branch account, editing its role, reloading it and deactivating it. The property-switching fixture has a separate managed workspace and grants the synthetic administrator explicit access. It checks that room records do not carry over after navigation or reload.
+- Invoice and full folio acceptance, staff-session permission denial, and the Owner wizard browser path still require dedicated coverage. The signup intake checks the Supabase project hostname in addition to HTTPS, so loopback TLS alone cannot satisfy it. The local workflow leaves the production validation unchanged.
+
 1. Complete browser-driven signup, Owner onboarding and reservation-to-checkout on isolated services.
 2. Accept managed housekeeping, finance, cancellation, reassignment, staff and role workflows.
 3. Extend keyboard, error-state and responsive verification beyond login, dashboard and rooms.
