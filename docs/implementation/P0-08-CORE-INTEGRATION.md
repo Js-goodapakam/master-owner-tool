@@ -39,6 +39,13 @@ different persistence model and cannot establish managed-property acceptance.
 - A separate managed folio with adjustable charges and refunds remains open. The sample folio engine and simulated labels are retained for sample workspaces.
 - Public signup still requires a genuine hosted Supabase project and approved HTTPS origins. Hosted Razorpay Test Mode requires approved pricing and test credentials. OTA acceptance requires an authorized provider sandbox. Production promotion remains subject to hosted acceptance and explicit approval.
 
+## Managed guest folio policy
+
+- The managed finance workspace records room charges, an opening balance for existing reservation receipts, service charges, credit adjustments, payments, and refunds in integer paise. Corrections are separate entries. Managed invoice settlement appends a receipt to the same folio and preserves pre-existing invoice settlement behavior.
+- A folio invoice records final charge amounts without adding a new tax calculation. Once issued, charge changes remain in the folio and leave the issued invoice intact. The invoice can accept payments only while it reconciles with that folio. Existing invoices stay on the legacy settlement path.
+- Cancelled and no-show stays permit credit corrections and eligible refunds. Refunds require an administrator, sufficient net receipts, and a credit balance. Until reversal documents are supported, use the folio history to reconcile post-issue credits against the original invoice. Managed checkout rejects an outstanding folio balance.
+- Browser acceptance exercises room opening, service charge, partial payment, invoice, final settlement, credit and offline refund, reload, and finance entitlement denial. This is guest billing only. Manual assistive technology and contrast review and hosted acceptance remain open.
+
 ## Before hosted staging
 
 ### P0-08C isolated acceptance
