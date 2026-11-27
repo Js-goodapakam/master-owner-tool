@@ -61,6 +61,9 @@ async function runOwnerWizard(ownerOrigin, operatorEmail, customerEmail) {
     await next.click();
     await page.getByPlaceholder('e.g. Acme Hospitality').fill('Local CI Tenant');
     await next.click();
+    await page.getByRole('alert').filter({hasText:'for Engage Stay, a city'}).waitFor();
+    await page.getByLabel('Property city *',{exact:true}).fill('Bengaluru');
+    await next.click();
     await page.getByPlaceholder('Full name',{exact:true}).fill('CI Admin');
     await page.locator('label:has-text("Administrator Email") input').fill(customerEmail);
     await next.click();

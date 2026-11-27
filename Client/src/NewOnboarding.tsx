@@ -51,6 +51,7 @@ function OnboardingWizard({ signup, onBackToQueue }: { signup: SignupRequestRow;
   const [trialEnd, setTrialEnd] = useState(() => addDays(today(), 14));
   const [validationError, setValidationError] = useState('');
   const [tenantName, setTenantName] = useState('');
+  const [city, setCity] = useState('');
   const [tenantId, setTenantId] = useState('');
   const [appUrl, setAppUrl] = useState('');
   const [adminName, setAdminName] = useState('');
@@ -69,7 +70,7 @@ function OnboardingWizard({ signup, onBackToQueue }: { signup: SignupRequestRow;
     if (!session?.payload) return; const saved = session.payload;
     setStep(Math.max(0, Math.min(6, Number(session.current_step || 1) - 1)));
     setRequest(old => ({ ...old, businessName: saved.companyName || old.businessName, email: saved.email || old.email, mobile: saved.phone || old.mobile }));
-    setIndustry(saved.industry || 'Hospitality'); setProduct(saved.product || 'Engage Stay'); setDeployment(saved.deployment || 'Shared'); setEnvironment(saved.environment || 'Trial'); setTrialStart(saved.trialStart || today()); setTrialEnd(saved.trialEnd || addDays(today(),14)); setTenantName(saved.tenantName || ''); setAppUrl(saved.appUrl || ''); setAdminName(saved.adminName || ''); setAdminEmail(saved.adminEmail || ''); setModules(Array.isArray(saved.modules) ? saved.modules : []); setAssignedOwner(saved.accountOwner || ''); setProvisioning(saved.provisioning || 'Not Started'); setNotes(saved.notes || '');
+    setIndustry(saved.industry || 'Hospitality'); setProduct(saved.product || 'Engage Stay'); setDeployment(saved.deployment || 'Shared'); setEnvironment(saved.environment || 'Trial'); setTrialStart(saved.trialStart || today()); setTrialEnd(saved.trialEnd || addDays(today(),14)); setTenantName(saved.tenantName || ''); setCity(saved.city || ''); setAppUrl(saved.appUrl || ''); setAdminName(saved.adminName || ''); setAdminEmail(saved.adminEmail || ''); setModules(Array.isArray(saved.modules) ? saved.modules : []); setAssignedOwner(saved.accountOwner || ''); setProvisioning(saved.provisioning || 'Not Started'); setNotes(saved.notes || '');
   }).catch(() => undefined); }, [signup.id]);
 
   const trialDays = useMemo(() => {
@@ -82,7 +83,7 @@ function OnboardingWizard({ signup, onBackToQueue }: { signup: SignupRequestRow;
   const canContinue = () => {
     if (step === 0) return Boolean(request.businessName.trim() && request.email.trim() && request.mobile.trim() && assignedOwner.trim());
     if (step === 1) return Boolean(product && environment && (environment === 'Live' || (validDate(trialStart) && validDate(trialEnd) && trialEnd > trialStart)));
-    if (step === 2) return Boolean(tenantName.trim() && tenantId.trim());
+    if (step === 2) return Boolean(tenantName.trim() && tenantId.trim() && (product !== 'Engage Stay' || city.trim().length >= 2));
     if (step === 3) return Boolean(adminName.trim() && adminEmail.trim());
     if (step === 4) return modules.length > 0;
     if (step === 5) return provisioning === 'Ready';
@@ -92,7 +93,7 @@ function OnboardingWizard({ signup, onBackToQueue }: { signup: SignupRequestRow;
     companyName: request.businessName, legalName: request.businessName,
     email: request.email, phone: request.mobile,
     industry: ['Hospitality', 'Real Estate', 'Fitness', 'Sales'].includes(industry) ? industry : 'Sales',
-    accountOwner: assignedOwner, city: '', country: 'India', product, environment, deployment,
+    accountOwner: assignedOwner, city: city.trim(), country: 'India', product, environment, deployment,
     tenantName, tenantId, appUrl, adminName, adminEmail, modules, provisioning, notes,
     trialStart: environment === 'Trial' ? trialStart : null,
     trialEnd: environment === 'Trial' ? trialEnd : null, signupRequestId: signup.id,
@@ -105,7 +106,7 @@ function OnboardingWizard({ signup, onBackToQueue }: { signup: SignupRequestRow;
           : trialEnd <= trialStart ? 'Trial expiry must be after the start date.'
           : 'Select a product and environment.'
         : step === 0 ? 'Complete the business name, email, mobile number, and assigned team member.'
-        : step === 2 ? 'Enter a workspace name. If the tenant ID has not loaded, return to the signup list and reopen this request.'
+        : step === 2 ? 'Enter a workspace name and, for Engage Stay, a city. If the tenant ID has not loaded, return to the signup list and reopen this request.'
         : step === 3 ? 'Enter the administrator name and email address.'
         : step === 4 ? 'Select at least one product module.'
         : step === 5 ? 'Confirm the provisioning status is Ready.'
@@ -148,7 +149,7 @@ function OnboardingWizard({ signup, onBackToQueue }: { signup: SignupRequestRow;
           <CompactDatePicker label="Trial Expiry Date" value={trialEnd} min={trialStart} strictAfterMin
             onChange={date => { setTrialEnd(date); setValidationError(''); }}/>
         </div><div className="fo-trial-duration"><span>Calculated trial duration</span><b>{trialDays === null ? 'Select valid start and expiry dates' : `${trialDays} ${trialDays === 1 ? 'day' : 'days'}`}</b></div></div>}<div className="fo-form-grid fo-single-row"><label>Deployment Model<select value={deployment} onChange={e => setDeployment(e.target.value)}><option>Shared</option><option>Dedicated</option></select></label></div></div>}
-      {step === 2 && <div className="fo-section"><div className="fo-section-title"><div><h3>Tenant configuration</h3><p>Define the tenant identity and workspace destination.</p></div></div><div className="fo-form-grid"><label>Tenant / Workspace Name *<input value={tenantName} onChange={e => setTenantName(e.target.value)} placeholder="e.g. Acme Hospitality"/></label><label>Unique Tenant ID *<input value={tenantId} readOnly aria-readonly="true" placeholder="Generating ID…" title="Generated by the Owner Tool; cannot be edited"/><small className="fo-generated-id-help">Generated by the Owner Tool for this product and environment. It cannot be edited.</small></label><label>Application URL<input value={appUrl} onChange={e => setAppUrl(e.target.value)} placeholder="https://customer.example.com"/></label><label>Region<select defaultValue="India" ><option>India</option><option>Singapore</option><option>United Kingdom</option><option>United States</option><option>Other</option></select></label></div><div className="fo-notice"><Building2 size={18}/><span>Tenant creation should be confirmed by the provisioning service before activation.</span></div></div>}
+      {step === 2 && <div className="fo-section"><div className="fo-section-title"><div><h3>Tenant configuration</h3><p>Define the tenant identity and workspace destination.</p></div></div><div className="fo-form-grid"><label>Tenant / Workspace Name *<input value={tenantName} onChange={e => setTenantName(e.target.value)} placeholder="e.g. Acme Hospitality"/></label>{product === 'Engage Stay' && <label>Property city *<input value={city} maxLength={100} onChange={e => setCity(e.target.value)}/></label>}<label>Unique Tenant ID *<input value={tenantId} readOnly aria-readonly="true" placeholder="Generating ID…" title="Generated by the Owner Tool; cannot be edited"/><small className="fo-generated-id-help">Generated by the Owner Tool for this product and environment. It cannot be edited.</small></label><label>Application URL<input value={appUrl} onChange={e => setAppUrl(e.target.value)} placeholder="https://customer.example.com"/></label><label>Region<select defaultValue="India" ><option>India</option><option>Singapore</option><option>United Kingdom</option><option>United States</option><option>Other</option></select></label></div><div className="fo-notice"><Building2 size={18}/><span>Tenant creation should be confirmed by the provisioning service before activation.</span></div></div>}
       {step === 3 && <div className="fo-section"><div className="fo-section-title"><div><h3>Customer administrator</h3><p>Set up the initial administrator and access invitation.</p></div></div><div className="fo-form-grid"><label>Administrator Name *<input value={adminName} onChange={e => setAdminName(e.target.value)} placeholder="Full name"/></label><label>Administrator Email *<input type="email" value={adminEmail} onChange={e => setAdminEmail(e.target.value)} placeholder="admin@company.com"/></label><label>Access Role<select defaultValue="Customer Admin"><option>Customer Admin</option><option>Tenant Admin</option></select></label><label>Invitation Status<select defaultValue="Not Sent"><option>Not Sent</option><option>Ready to Send</option></select></label></div><div className="fo-notice"><ShieldCheck size={18}/><span>Use a secure invitation flow. Do not enter a password manually.</span></div></div>}
       {step === 4 && <div className="fo-section"><div className="fo-section-title"><div><h3>Product configuration</h3><p>Select the modules required for this customer. Availability depends on the selected product.</p></div></div><div className="fo-module-options">{['operations','finance','inventory','communications'].map(m => <label key={m} className="fo-module-option"><input type="checkbox" checked={modules.includes(m)} onChange={() => toggleModule(m)}/><span><b>{m}</b><small>Enable this module for the Engage Stay tenant</small></span></label>)}</div></div>}
       {step === 5 && <div className="fo-section"><div className="fo-section-title"><div><h3>Infrastructure and deployment</h3><p>Track environment readiness. Fields can be adapted to your hosting architecture.</p></div></div><div className="fo-form-grid"><label>Hosting Target<select defaultValue={deployment}><option>Shared</option><option>Dedicated</option></select></label><label>Provisioning Status<select value={provisioning} onChange={e => setProvisioning(e.target.value)}><option>Not Started</option><option>In Progress</option><option>Ready</option><option>Failed</option></select></label><label>Domain / URL<input value={appUrl} onChange={e => setAppUrl(e.target.value)} placeholder="Customer application URL"/></label><label>SSL Status<select defaultValue="Pending"><option>Pending</option><option>Configured</option><option>Not Required</option></select></label></div><div className="fo-notice"><Server size={18}/><span>Production deployment must pass the required health and security checks before activation.</span></div></div>}
