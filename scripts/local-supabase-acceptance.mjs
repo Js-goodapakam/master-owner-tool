@@ -331,7 +331,8 @@ async function verifyStayBrowser(stayOrigin, customerEmail) {
         await page.locator('.property-return').click();
         const availableProperties=await page.request.get(origin+'/api/properties');
         assert.equal(availableProperties.status(),200);
-        assert.ok((await availableProperties.json()).properties.some(property=>property.code==='CI-ANNEX'),'Annex membership reaches the portfolio');
+        const annexProperty=(await availableProperties.json()).properties.find(property=>property.code==='CI-ANNEX');
+        assert.ok(annexProperty,'Annex membership reaches the portfolio');
         const annex=page.locator('.pw-table-property').filter({hasText:'CI Assigned Annex'});
         await annex.click();
         await page.locator('h1.fd-title').waitFor();
@@ -339,6 +340,15 @@ async function verifyStayBrowser(stayOrigin, customerEmail) {
         await page.getByText('Room ANNEX-201',{exact:true}).waitFor();
         assert.equal(await page.getByText('Room BROWSER-102',{exact:true}).count(),0);
         assert.equal(await invoices.count(),0);
+        const annexWorkspace=origin+'/api/properties/'+annexProperty.id+'/workspace';
+        const readAnnex=await page.request.get(annexWorkspace);
+        assert.equal(readAnnex.status(),200);
+        const annexState=await readAnnex.json();
+        assert.equal(Object.hasOwn(annexState.state,'invoices'),false);
+        const deniedInvoice=await page.request.put(annexWorkspace,{data:{
+          version:annexState.version,state:{property:{id:annexProperty.id},invoices:[{id:'CI-DENIED'}]},
+        }});
+        assert.equal(deniedInvoice.status(),403);
         const annexBooking=await book('Annex Guest',false,'ANNEX-201');
         await reservationsNav.click();
         await page.getByRole('button',{name:'Edit reservation '+annexBooking.id,exact:true}).waitFor();
@@ -351,6 +361,13 @@ async function verifyStayBrowser(stayOrigin, customerEmail) {
         await reservationsNav.click();
         await page.getByRole('button',{name:'Edit reservation '+annexBooking.id,exact:true}).waitFor();
         assert.equal(await editButton.count(),0);
+      } else {
+        for (const [navigation, column] of [['Finance','Balance'],['Users & Roles','Staff member']]) {
+          await page.locator('.mobile-menu-toggle').click();
+          await page.getByRole('button',{name:navigation,exact:true}).click();
+          await page.getByRole('columnheader',{name:column,exact:true}).waitFor();
+          assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth+1),true,navigation+' page overflow');
+        }
       }
       assert.deepEqual(errors,[]);
       await page.close();
