@@ -256,9 +256,36 @@ async function verifyStayBrowser(stayOrigin, customerEmail) {
         await viewInvoice.click();
         const preview=page.getByRole('dialog',{name:invoice.number});
         await preview.waitFor();
+        const recordPayment=async(amount,reference)=>{
+          await preview.getByLabel('Payment amount').fill(String(amount));
+          await preview.getByLabel('Payment reference').fill(reference);
+          const [recorded]=await Promise.all([
+            workspaceSave(),preview.getByRole('button',{name:'Record guest payment'}).click(),
+          ]);
+          assert.equal(recorded.status(),200);
+          return { ...await recorded.json(), url:recorded.url(), command:recorded.request().postDataJSON() };
+        };
+        const partialInvoice=await recordPayment(50,'CI-INVOICE-PARTIAL');
+        assert.equal(partialInvoice.state.invoices[0].status,'Partially Paid');
+        assert.equal(partialInvoice.state.invoices[0].balance,120);
+        await preview.getByText(/CI-INVOICE-PARTIAL/).waitFor();
+        const settledInvoice=await recordPayment(120,'CI-INVOICE-FINAL');
+        assert.equal(settledInvoice.state.invoices[0].status,'Paid');
+        assert.equal(settledInvoice.state.invoices[0].balance,0);
+        const replay=await page.request.put(partialInvoice.url,{data:partialInvoice.command});
+        assert.equal(replay.status(),200);
+        assert.equal((await replay.json()).state.payments.filter(entry=>entry.invoiceId===invoice.id).length,2);
+        await preview.getByText(/CI-INVOICE-FINAL/).waitFor();
         await page.keyboard.press('Escape');
         await preview.waitFor({state:'hidden'});
         assert.equal(await viewInvoice.evaluate(button=>button===document.activeElement),true);
+        await page.reload();
+        await page.locator('.pw-table-property').first().click();
+        await invoices.click();
+        await viewInvoice.click();
+        await preview.getByText(/CI-INVOICE-FINAL/).waitFor();
+        await preview.getByRole('status').filter({hasText:/^Paid/}).waitFor();
+        await page.keyboard.press('Escape');
         const frontDesk=page.getByRole('button',{name:'Front Desk',exact:true});
         await frontDesk.click();
         const checkedIn=workspaceSave();
@@ -603,31 +630,32 @@ test('real local Supabase identity reaches Owner onboarding and the assigned Sta
     })).json();
     const booking={id:'CI-BOOKING',room:'101',guestId:'CI-GUEST',arrival:'2030-06-10',departure:'2030-06-12',
       status:'Confirmed',rate:100,paid:200};
+    const historicReservations=initial.state.reservations||[];
     const allocated=await saveWorkspace(initial.version,{
       rooms:[...(initial.state.rooms || []),{number:'101',type:'Standard',floor:'1',capacity:2}],
-      guests:[{id:'CI-GUEST',name:'Synthetic Guest'}],
-      reservations:[booking],
+      guests:[...(initial.state.guests||[]),{id:'CI-GUEST',name:'Synthetic Guest'}],
+      reservations:[...historicReservations,booking],
     });
     await saveWorkspace(initial.version,{reservations:[]},409);
-    await saveWorkspace(allocated.version,{reservations:[booking,{...booking,id:'CI-CONFLICT',status:'Modified'}]},409);
+    await saveWorkspace(allocated.version,{reservations:[...historicReservations,booking,{...booking,id:'CI-CONFLICT',status:'Modified'}]},409);
     await saveWorkspace(allocated.version,{rooms:[]},400);
     assert.equal((await readWorkspace()).version,allocated.version);
-    const checkedIn=await saveWorkspace(allocated.version,{reservations:[{...booking,status:'Checked In'}]});
-    await saveWorkspace(checkedIn.version,{reservations:[{...booking,status:'Checked Out'}]});
+    const checkedIn=await saveWorkspace(allocated.version,{reservations:[...historicReservations,{...booking,status:'Checked In'}]});
+    await saveWorkspace(checkedIn.version,{reservations:[...historicReservations,{...booking,status:'Checked Out'}]});
     const checkedOut=await readWorkspace();
-    assert.equal(checkedOut.state.reservations[0].status,'Checked Out');
-    assert.equal(checkedOut.state.reservations[0].paid,200);
+    assert.equal(checkedOut.state.reservations.find(row=>row.id===booking.id).status,'Checked Out');
+    assert.equal(checkedOut.state.reservations.find(row=>row.id===booking.id).paid,200);
     const first={...booking,id:'CI-RACE-A'};
     const second={...booking,id:'CI-RACE-B'};
     const competing=await Promise.all([first,second].map(candidate=>fetch(stayOrigin+workspacePath,{
       method:'PUT',headers:{Cookie:cookie,'Content-Type':'application/json'},
-      body:JSON.stringify({version:checkedOut.version,state:{property:{id:property.property_id},reservations:[candidate]}}),
+      body:JSON.stringify({version:checkedOut.version,state:{property:{id:property.property_id},reservations:[...historicReservations,candidate]}}),
     })));
     assert.deepEqual(competing.map(response=>response.status).sort(),[200,409]);
     const winner=await readWorkspace();
-    const cancelled=await saveWorkspace(winner.version,{reservations:[{...winner.state.reservations[0],status:'Cancelled'}]});
+    const cancelled=await saveWorkspace(winner.version,{reservations:winner.state.reservations.map(row=>row.id.startsWith('CI-RACE-')?{...row,status:'Cancelled'}:row)});
     const rebooked=await saveWorkspace(cancelled.version,{reservations:[...cancelled.state.reservations,{...booking,id:'CI-REBOOK'}]});
-    assert.deepEqual(rebooked.state.reservations.map(record=>record.status),['Cancelled','Confirmed']);
+    assert.deepEqual(rebooked.state.reservations.filter(record=>record.id.startsWith('CI-')).map(record=>record.status),['Cancelled','Confirmed']);
     const unrelated=sql(['-qAtc',`with p as (insert into property(name,code) values ('Unrelated','CI-UNRELATED') returning id),
       w as (insert into engagestay_managed_workspace(property_id,customer_id,status,plan,modules)
       select id,gen_random_uuid(),'active','basic',array['operations'] from p returning property_id)

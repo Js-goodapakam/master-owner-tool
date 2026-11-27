@@ -33,6 +33,12 @@ different persistence model and cannot establish managed-property acceptance.
 - The Owner wizard now captures, validates, and persists the property city required by the Stay provisioner. The local test uses Mailpit-confirmed synthetic identity intake, drives the real Owner wizard with authenticated Chromium, and uses the existing HTTP provisioning operation before original-password PMS login.
 - Public browser signup still requires the hosted Supabase project hostname and HTTPS origins. The disposable test does not alter that boundary. Additional contrast and assistive-technology verification remain open.
 
+## P0-08E managed finance
+
+- Managed invoice previews record partial and final guest receipts through the existing workspace API. The database transaction updates the invoice and reservation totals together and preserves the recorded receipt and reference. This is offline PMS recordkeeping and does not invoke Razorpay.
+- A separate managed folio with adjustable charges and refunds remains open. The sample folio engine and simulated labels are retained for sample workspaces.
+- Public signup still requires a genuine hosted Supabase project and approved HTTPS origins. Hosted Razorpay Test Mode requires approved pricing and test credentials. OTA acceptance requires an authorized provider sandbox. Production promotion remains subject to hosted acceptance and explicit approval.
+
 ## Before hosted staging
 
 ### P0-08C isolated acceptance
