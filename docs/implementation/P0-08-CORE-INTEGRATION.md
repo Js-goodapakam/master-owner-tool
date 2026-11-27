@@ -27,6 +27,12 @@ different persistence model and cannot establish managed-property acceptance.
 | Razorpay | Existing order, signed capture, reconciliation and subscription delivery use order/payment references and tenant-scoped entitlement revisions. Isolated CI uses synthetic provider events. | Approved plan prices, authorized Test Mode keys and a staging webhook URL. Verify real test capture, webhook retries and entitlement delivery. |
 | OTA | Channel Manager and inventory UI exist. | Obtain provider authorization and sandbox credentials, then validate property, room-type and rate-plan mappings, reservation identity, replay handling and inventory reconciliation. |
 
+## P0-08D evidence and remaining coverage
+
+- Chromium invoice and two-property reservation acceptance passed in [integrated CI](https://github.com/Js-goodapakam/master-owner-tool/actions/runs/45932893376). The test records a partial reservation payment balance, settles it, creates an invoice with a balance, and reopens the invoice after a reload. It also checks that keyboard dismissal restores focus. A separate managed folio ledger and invoice settlement remain open.
+- The Owner wizard now captures, validates, and persists the property city required by the Stay provisioner. The local test uses Mailpit-confirmed synthetic identity intake, drives the real Owner wizard with authenticated Chromium, and uses the existing HTTP provisioning operation before original-password PMS login.
+- Public browser signup still requires the hosted Supabase project hostname and HTTPS origins. The disposable test does not alter that boundary. Additional contrast and assistive-technology verification remain open.
+
 ## Before hosted staging
 
 ### P0-08C isolated acceptance
