@@ -3,19 +3,19 @@
 .ota-module-heading h3{font-size:20px;line-height:1.3;margin:5px 0 7px;font-weight:700;color:var(--text-primary,#0D1B2A)}
 .ota-module-heading p{color:var(--text-secondary,#637286);font-size:13px;margin:0;max-width:800px;line-height:1.6}
 .ota-eyebrow{font-size:11px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:#778D7A}
-.ota-refresh{display:inline-flex;align-items:center;gap:7px;white-space:nowrap;background:transparent;color:inherit;border:1px solid #a0acb53b;border-radius:9px;padding:9px 12px;cursor:pointer;font:inherit;font-size:12px}
+.ota-refresh{display:inline-flex;align-items:center;gap:7px;white-space:nowrap;background:transparent;color:inherit;border:1px solid #a0acb53b;border-radius:var(--engage-control-radius);padding:9px 12px;cursor:pointer;font:inherit;font-size:12px;min-height:var(--engage-control-height);}
 .ota-summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
-.ota-summary>div{border:1px solid #9da9b72e;background:var(--card-bg,transparent);border-radius:12px;padding:14px 17px;display:flex;flex-direction:column;gap:5px}
+.ota-summary>div{border:1px solid #9da9b72e;background:var(--card-bg,transparent);border-radius:var(--engage-card-radius);padding:14px 17px;display:flex;flex-direction:column;gap:5px}
 .ota-summary strong{font-size:25px;font-variant-numeric:tabular-nums;color:inherit}
 .ota-summary span{font-size:12px;color:var(--text-secondary,#7a8696)}
 .ota-information,.ota-warning{display:flex;gap:10px;align-items:flex-start;margin:0;border:1px solid #778D7A55;background:#778D7A12;color:inherit;border-radius:9px;font-size:12px;line-height:1.6;padding:11px 13px}
 .ota-information svg,.ota-warning svg{flex-shrink:0;margin-top:1px}
 .ota-warning{border-color:#c6a57677;background:#c6a57613}
 .ota-filter-row{display:flex;flex-wrap:wrap;gap:7px}
-.ota-filter-row button{font-family:inherit;font-size:12px;padding:8px 12px;border:1px solid #9da9b744;border-radius:8px;color:inherit;background:transparent;cursor:pointer}
+.ota-filter-row button{font-family:inherit;font-size:12px;padding:8px 12px;border:1px solid #9da9b744;border-radius:var(--engage-control-radius);color:inherit;background:transparent;cursor:pointer;min-height:var(--engage-control-height);}
 .ota-filter-row button.active{background:#415A77;color:#fff;border-color:#415A77}
 .ota-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:11px}
-.ota-provider-card{text-align:left;min-height:136px;display:flex;flex-direction:column;align-items:flex-start;gap:7px;padding:15px;border-radius:12px;border:1px solid #a0acb53d;background:var(--card-bg,transparent);color:inherit;cursor:pointer;font-family:inherit;transition:border-color .15s,box-shadow .15s}
+.ota-provider-card{text-align:left;min-height:136px;display:flex;flex-direction:column;align-items:flex-start;gap:7px;padding:15px;border-radius:var(--engage-card-radius);border:1px solid #a0acb53d;background:var(--card-bg,transparent);color:inherit;cursor:pointer;font-family:inherit;transition:border-color .15s,box-shadow .15s}
 .ota-provider-card:hover,.ota-provider-card.selected{border-color:#778D7A;box-shadow:0 0 0 1px #778D7A33}
 .ota-provider-top{display:flex;width:100%;align-items:center;justify-content:space-between;gap:8px}
 .ota-provider-top strong{font-size:13px;font-weight:700}
@@ -39,7 +39,7 @@
 .ota-config-form>.ota-section-title{margin-bottom:0}
 .ota-config-form>p{margin:0 0 2px}
 .ota-config-form label{display:flex;flex-direction:column;gap:6px;font-size:12px;font-weight:600}
-.ota-config-form input,.ota-config-form select,.ota-config-form textarea{font-family:inherit;font-size:12px;padding:10px 11px;border:1px solid #9da9b761;border-radius:8px;background:var(--surface,#ffffff);color:inherit;width:100%;box-sizing:border-box;outline-offset:2px}
+.ota-config-form input,.ota-config-form select,.ota-config-form textarea{font-family:inherit;font-size:12px;padding:10px 11px;border:1px solid #9da9b761;border-radius:var(--engage-control-radius);background:var(--surface,#ffffff);color:inherit;width:100%;box-sizing:border-box;outline-offset:2px;min-height:var(--engage-control-height);}
 .ota-config-form input:disabled,.ota-config-form select:disabled,.ota-config-form textarea:disabled{opacity:.65}
 .ota-credential-note{display:flex;gap:7px;align-items:flex-start}
 .ota-credential-note svg{flex-shrink:0;margin-top:1px}
@@ -53,7 +53,7 @@
 @media(max-width:520px){.ota-summary{grid-template-columns:1fr}.ota-grid{grid-template-columns:1fr}}
 
 /* Unified Connected Integrations table: platform connection + every OTA. */
-.ota-integration-table-scroll{width:100%;overflow-x:auto;border:1px solid #a0acb52c;border-radius:13px}
+.ota-integration-table-scroll{width:100%;overflow-x:auto;border:1px solid #a0acb52c;border-radius:var(--engage-card-radius)}
 .ota-integration-table{width:100%;border-collapse:collapse;min-width:970px;font-family:var(--owner-font);color:inherit}
 .ota-integration-table thead{background:rgba(65,90,119,.045)}
 .ota-integration-table th{text-align:left;white-space:nowrap;font-size:11px;line-height:1.4;font-weight:750;text-transform:uppercase;letter-spacing:.035em;color:var(--text-secondary,#64748b);padding:16px 14px;border-bottom:1px solid #9da9b72b}
@@ -63,14 +63,14 @@
 .ota-integration-table .ota-table-row-selected td{background:rgba(119,141,122,.09)}
 .ota-sync-value{white-space:nowrap;font-variant-numeric:tabular-nums;color:var(--text-secondary,#64748b)}
 .ota-table-na{color:var(--text-secondary,#64748b)}
-.ota-connect-button{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-width:95px;padding:8px 12px;border-radius:8px;border:1px solid #415A77;background:#415A77;color:#fff;font:600 12px var(--owner-font);cursor:pointer;transition:background .15s}
+.ota-connect-button{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-width:95px;padding:8px 12px;border-radius:var(--engage-control-radius);border:1px solid #415A77;background:#415A77;color:#fff;font:600 12px var(--owner-font);cursor:pointer;transition:background .15s;min-height:var(--engage-control-height);}
 .ota-connect-button:hover{background:#0D1B2A;border-color:#0D1B2A}
 .ota-connect-button:focus-visible{outline:3px solid #778D7A;outline-offset:2px}
 .ota-table-hint{color:var(--text-secondary,#64748b);margin:12px 0 0;font-size:12px;line-height:1.6}
 .ota-setup-focus{scroll-margin-top:24px}
 .ota-detail-toolbar{display:flex;justify-content:space-between;align-items:center;gap:12px;margin:-2px 0 20px;padding-bottom:13px;border-bottom:1px solid #9da9b73d}
 .ota-detail-toolbar span{font-size:11px;color:var(--text-secondary,#64748b)}
-.ota-detail-toolbar button{display:inline-flex;align-items:center;gap:7px;border:1px solid #9da9b744;border-radius:8px;background:transparent;color:inherit;padding:7px 10px;font:600 12px var(--owner-font);cursor:pointer}
+.ota-detail-toolbar button{display:inline-flex;align-items:center;gap:7px;border:1px solid #9da9b744;border-radius:var(--engage-control-radius);background:transparent;color:inherit;padding:7px 10px;font:600 12px var(--owner-font);cursor:pointer;min-height:var(--engage-control-height);}
 .ota-detail-toolbar button:hover{border-color:#778D7A}
 
 /* Provider connection overlay is portaled to body and bounded by the live
@@ -98,8 +98,8 @@
   background:var(--owner-dash-surface,#fff);
   color:var(--owner-dash-text,#0D1B2A);
   border:1px solid var(--owner-dash-border,#dce3e9);
-  border-radius:18px;
-  box-shadow:0 28px 75px rgba(3,12,25,.34);
+  border-radius:var(--engage-modal-radius);
+  box-shadow:var(--engage-modal-shadow);
   overflow:hidden;
   outline:none;
   font-family:var(--owner-font);
@@ -118,10 +118,9 @@
 .ota-modal-head h2{margin:0 0 6px;font-size:20px!important;line-height:1.3;font-weight:700!important;color:inherit!important}
 .ota-modal-head p{margin:0;font-size:12px;line-height:1.55;color:var(--owner-dash-muted,#617083)}
 .ota-modal-close{
-  display:grid;place-items:center;flex:0 0 36px;width:36px;height:36px;
-  border:1px solid var(--owner-dash-border,#dce3e9);border-radius:9px;
-  background:transparent;color:inherit;cursor:pointer;
-}
+  display:grid;place-items:center;flex:0 0 var(--engage-control-height);width:var(--engage-control-height);height:var(--engage-control-height);
+  border:1px solid var(--owner-dash-border,#dce3e9);border-radius:var(--engage-control-radius);
+  background:transparent;color:inherit;cursor:pointer;min-height:var(--engage-control-height);}
 .ota-modal-close:hover{background:rgba(119,141,122,.13)}
 .ota-modal-body{
   padding:20px 26px 24px;
@@ -142,7 +141,7 @@
   border-top:1px solid var(--owner-dash-border,#e2e8f0);
 }
 .ota-modal-footer span{font-size:11px;line-height:1.4;color:var(--owner-dash-muted,#617083)}
-.ota-modal-footer button{font:600 12px var(--owner-font);cursor:pointer;min-width:90px;padding:9px 14px;border-radius:8px;border:1px solid var(--owner-dash-border,#dce3e9);background:var(--owner-dash-surface,#fff);color:inherit}
+.ota-modal-footer button{font:600 12px var(--owner-font);cursor:pointer;min-width:90px;padding:9px 14px;border-radius:var(--engage-control-radius);border:1px solid var(--owner-dash-border,#dce3e9);background:var(--owner-dash-surface,#fff);color:inherit;min-height:var(--engage-control-height);}
 .ota-modal-footer button:hover{border-color:#778D7A}
 .ota-modal-footer button:disabled,.ota-modal-close:disabled{opacity:.5;cursor:not-allowed}
 .ota-connection-dialog :is(button,a,input,select,textarea):focus-visible{outline:2px solid #778D7A;outline-offset:2px}
@@ -153,7 +152,7 @@
 }
 @media(max-width:760px){
   .ota-connection-overlay{padding:10px!important}
-  .ota-connection-dialog{max-height:100%;border-radius:12px}
+  .ota-connection-dialog{max-height:100%;border-radius:var(--engage-modal-radius)}
   .ota-modal-head{padding:16px}
   .ota-modal-body{padding:14px 16px}
   .ota-modal-footer{padding:12px 16px}

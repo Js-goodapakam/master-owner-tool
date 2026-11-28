@@ -247,7 +247,7 @@ body {
   max-width: 100%;
   padding: 42px 38px;
   border: 1px solid var(--fl-card-border);
-  border-radius: 17px;
+  border-radius:var(--engage-card-radius);
   background: var(--fl-card);
   box-shadow:
     0 25px 60px rgba(0, 0, 0, .28),
@@ -294,7 +294,7 @@ body {
   margin-bottom: 25px;
   padding: 0 14px;
   border: 1px solid var(--fl-field-border);
-  border-radius: 13px;
+  border-radius:var(--engage-control-radius);
   background: var(--fl-field);
   transition:
     border-color .18s,
@@ -408,7 +408,7 @@ body {
   justify-content: center;
   gap: 17px;
   border: 0;
-  border-radius: 12px;
+  border-radius:var(--engage-control-radius);
   color: #071015;
   background: linear-gradient(
     100deg,
@@ -525,12 +525,10 @@ body {
 
   .fl-field {
     height: 52px;
-    margin-bottom: 21px;
-  }
+    margin-bottom: 21px;min-height:var(--engage-control-height);}
 
   .fl-login-button {
-    height: 52px;
-  }
+    height: 52px;min-height:var(--engage-control-height);}
 }
 
 /* Keep the approved login layout readable on narrow screens. */
