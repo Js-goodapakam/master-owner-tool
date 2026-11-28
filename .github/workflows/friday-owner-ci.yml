@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - 'feature/p0-ui-quality'
   pull_request:
     branches:
       - main
@@ -11,6 +12,7 @@ on:
 
 permissions:
   contents: read
+  packages: read
 
 jobs:
   validate:
@@ -40,6 +42,8 @@ jobs:
           cache: npm
       - name: Install workspace dependencies
         run: npm ci
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Build all workspaces
         run: npm run build
       - name: Lint all workspaces

@@ -1,3 +1,4 @@
+import '@js-goodapakam/engage-design-system/styles.css';
 import React, { useEffect, useState, type ChangeEvent, type FormEvent } from 'react';
 import { createRoot } from 'react-dom/client';
 import Login from './Login';
