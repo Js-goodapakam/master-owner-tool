@@ -24,6 +24,13 @@ beforeAll(async () => {
 afterAll(async () => { await new Promise<void>(resolve => server.close(() => resolve())); });
 
 describe('isolated Owner API onboarding harness', () => {
+  it('serves the public health endpoint under the deployment API prefix', async () => {
+    for (const path of ['/api/health', '/health']) {
+      const response = await fetch(base + path);
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual({ status: 'ok', mode: 'demo' });
+    }
+  });
   const syntheticCustomer = {
     companyName: 'Synthetic Hotel',
     legalName: 'Synthetic Hotel Private Limited',

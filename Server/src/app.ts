@@ -319,7 +319,7 @@ async function recordPlatformAudit(
   if (!response.ok) throw new Error('The requested operation succeeded but its audit record could not be written.');
 }
 
-app.get('/health', (_q, r) =>
+app.get(['/health', '/api/health'], (_q, r) =>
   r.json({
     status: 'ok',
     mode: process.env.DATABASE_URL ? 'database' : 'demo',

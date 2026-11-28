@@ -575,8 +575,18 @@ test('real local Supabase identity reaches Owner onboarding and the assigned Sta
     city text,country text,timezone text,"createdAt" timestamptz,"updatedAt" timestamptz);
     create table "user"(id integer generated always as identity primary key,"propertyId" integer references property(id),
     name text,email text unique,phone text,role text,"isActive" boolean,"createdAt" timestamptz,"updatedAt" timestamptz);
-    create table friday_staff_profile(user_id integer primary key references "user"(id),payload text not null);`]);
-  for (const name of ['auth.sql','property-access.sql','managed-workspace.sql','sample-workspaces.sql']) {
+    create table guest(id integer primary key);
+    create table reservation(id integer primary key);
+    create table payment(id integer primary key);
+    create table room(id integer primary key);
+    create table "roomType"(id integer primary key);
+    create table "serviceRequest"(id integer primary key);
+    create table "teleCMIUserMapping"(id integer primary key);
+    create table "callLog"(id integer primary key);
+    grant select, insert, update, delete on property, guest, reservation, "user",
+      payment, room, "roomType", "serviceRequest", "teleCMIUserMapping", "callLog" to anon, authenticated;`]);
+  for (const name of ['auth.sql','property-access.sql','managed-workspace.sql','sample-workspaces.sql',
+    'owner-administration.sql','legacy-browser-boundary.sql']) {
     sql(['-f',join(stayRoot,'sql',name)]);
   }
   const operatorEmail = randomUUID()+'@example.com';

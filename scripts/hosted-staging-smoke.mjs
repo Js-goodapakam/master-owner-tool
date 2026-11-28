@@ -10,7 +10,7 @@ async function request(origin, path, init = {}) {
 }
 
 const probes = [
-  ['Owner health', env.STAGING_OWNER_BACKEND_ORIGIN, '/health', 200],
+  ['Owner health', env.STAGING_OWNER_BACKEND_ORIGIN, '/api/health', 200],
   ['Stay health', env.STAGING_STAY_BACKEND_ORIGIN, '/api/health', 200],
   ['Anonymous Owner API denial', env.STAGING_OWNER_BACKEND_ORIGIN, '/api/products?productCode=engage_stay', 401],
   ['Anonymous Stay session denial', env.STAGING_STAY_BACKEND_ORIGIN, '/api/auth/session', 401],
