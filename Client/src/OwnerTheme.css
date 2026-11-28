@@ -5,7 +5,7 @@
  * preserve usability on Windows and non-Apple devices.
  */
 :root {
-  --font-family: var(--owner-font);
+  --font-family: var(--engage-font);
 }
 html, body, button, input, textarea, select, option,
 #root, #root *:not(svg):not(path):not(circle):not(rect):not(line):not(polyline):not(polygon):not(ellipse) {
@@ -16,9 +16,9 @@ html, body, button, input, textarea, select, option,
 }
 .owner-theme-toggle {
   display:inline-flex;align-items:center;justify-content:center;gap:8px;
-  min-height:39px;padding:8px 13px;white-space:nowrap;flex-shrink:0;
+  min-height:var(--engage-control-height);padding:8px 13px;white-space:nowrap;flex-shrink:0;
   color:#dce9fc;background:#152943;border:1px solid #345070;
-  border-radius:11px;cursor:pointer;font-size:12px;font-weight:660;
+  border-radius:var(--engage-control-radius);cursor:pointer;font-size:12px;font-weight:660;
   transition:background .2s,border-color .2s,color .2s;
 }
 .owner-theme-toggle svg {flex-shrink:0}

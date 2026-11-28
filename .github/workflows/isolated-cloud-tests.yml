@@ -17,6 +17,7 @@ on:
 
 permissions:
   contents: read
+  packages: read
 
 jobs:
   owner-api-isolated:
@@ -53,6 +54,8 @@ jobs:
 
       - name: Install locked dependencies
         run: npm ci --ignore-scripts
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Verify test database identity and transaction rollback
         shell: bash
