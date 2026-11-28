@@ -40,10 +40,10 @@
 }
 .shell > main.owner-modules-main > .topbar .workspace-switcher{
   display:inline-flex;align-items:center;justify-content:center;gap:7px;
-  min-height:30px;padding:4px 10px;margin:0 0 5px;
+  min-height:var(--engage-control-height);padding:4px 10px;margin:0 0 5px;
   background:rgba(40,77,141,.32)!important;
   border:1px solid rgba(96,147,222,.32)!important;
-  border-radius:8px;
+  border-radius:var(--engage-control-radius);
   color:#acd1ff!important;font-weight:700;
 }
 .shell > main.owner-modules-main > .topbar .workspace-switcher:hover{
@@ -51,8 +51,7 @@
 }
 .owner-modules-main .topbar .global-search{
   border-color:rgba(113,148,200,.24)!important;
-  border-radius:11px;background:rgba(25,42,70,.73)!important;color:#95b7e8!important;
-}
+  border-radius:var(--engage-control-radius);background:rgba(25,42,70,.73)!important;color:#95b7e8!important;min-height:var(--engage-control-height);}
 .owner-modules-main .topbar .global-search svg{color:#87a6d4!important}
 .owner-modules-main .topbar .global-search input{color:#f4f1de!important;background:transparent!important;font-family:inherit}
 .owner-modules-main .topbar .global-search input::placeholder{color:#6e85aa}
@@ -75,7 +74,7 @@
 .owner-module-hero{
   display:flex;justify-content:space-between;align-items:center;gap:20px;
   width:100%;min-height:137px;margin:0 0 18px;padding:23px 30px;
-  border:1px solid rgba(84,135,216,.34);border-radius:19px;
+  border:1px solid rgba(84,135,216,.34);border-radius:var(--engage-card-radius);
   background:radial-gradient(ellipse 55% 120% at 98% 6%,rgba(53,50,131,.46),transparent 74%),
     radial-gradient(ellipse 40% 125% at 2% 103%,rgba(21,140,188,.21),transparent 73%),
     linear-gradient(110deg,#0b1c2d,#14182e 75%,#171731);
@@ -133,7 +132,7 @@
 .owner-modules-main .owner-module-body .table-wrap,
 .owner-modules-main .owner-module-body .ua-table-wrap,
 .owner-modules-main .owner-module-body .ua-permission-wrap{
-  overflow-x:auto;max-width:100%;border:1px solid rgba(121,152,204,.15);border-radius:12px;
+  overflow-x:auto;max-width:100%;border:1px solid rgba(121,152,204,.15);border-radius:var(--engage-card-radius);
   scrollbar-color:#3a5478 #101b2d;
 }
 .owner-modules-main .owner-module-body table{width:100%;border-collapse:collapse}
@@ -182,7 +181,7 @@
   background:var(--om-field)!important;
   color:#ecf4ff!important;
   border:1px solid rgba(113,150,211,.33)!important;
-  border-radius:10px;
+  border-radius:var(--engage-control-radius);
   outline:none;
   accent-color:#3588ff;
   font-family:inherit;
@@ -198,10 +197,9 @@
 .owner-modules-main .owner-module-body select option{background:#15243b;color:#f4f5fa}
 .owner-modules-main .owner-module-body .select-wrap>svg{color:#9cb6dd}
 .owner-modules-main .owner-module-body .btn-primary{
-  border:1px solid #3e87ec!important;border-radius:9px!important;
+  border:1px solid #3e87ec!important;border-radius:var(--engage-control-radius)!important;
   background:linear-gradient(106deg,#1259d5,#2785f3)!important;color:#fff!important;
-  box-shadow:0 8px 20px rgba(23,93,214,.20)!important;
-}
+  box-shadow:0 8px 20px rgba(23,93,214,.20)!important;min-height:var(--engage-control-height);}
 .owner-modules-main .owner-module-body .btn-secondary,
 .owner-modules-main .owner-module-body .btn-ghost{
   border:1px solid rgba(109,151,220,.32)!important;
@@ -420,7 +418,7 @@
   .owner-modules-main .owner-module-body .fo-onboarding-layout{grid-template-columns:220px minmax(0,1fr)}
 }
 @media(max-width:960px){
-  .owner-modules-main .topbar .global-search{max-width:260px}
+  .owner-modules-main .topbar .global-search{max-width:260px;min-height:var(--engage-control-height);}
   .owner-modules-main .owner-module-body .fo-onboarding-layout{grid-template-columns:minmax(0,1fr)}
   .owner-modules-main .owner-module-body .fo-stepper{position:static}
   .owner-modules-main .owner-module-body .fo-stepper{max-width:100%}
@@ -437,7 +435,7 @@
   .owner-modules-main .owner-module-body .fo-form-grid,
   .owner-modules-main .owner-module-body .fo-environment-options{grid-template-columns:minmax(0,1fr)}
   .owner-modules-main .owner-module-body .customer-head{flex-wrap:wrap}
-  .owner-modules-main .topbar .global-search{display:none}
+  .owner-modules-main .topbar .global-search{display:none;min-height:var(--engage-control-height);}
   .owner-modules-main .owner-module-body .owner-user-form{grid-template-columns:minmax(0,1fr)}
 }
 @media(prefers-reduced-motion:reduce){
